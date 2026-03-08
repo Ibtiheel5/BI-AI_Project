@@ -1,7 +1,31 @@
-dataset/
-*.pt
+# Modèles IA (trop lourds pour GitHub)
 *.pth
+*.pt
 *.h5
+*.pkl
+saved_models/
+
+# Environnement Python
+venv/
+.venv/
 __pycache__/
+*.pyc
+*.pyo
+
+# Node modules
+node_modules/
+dist/
+build/
+
+# Fichiers sensibles
 .env
-.ipynb_checkpoints/
+*.env
+
+# Données
+data/
+datasets/
+*.csv
+
+# Logs
+*.log
+logs/
