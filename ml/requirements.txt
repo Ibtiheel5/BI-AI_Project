@@ -1,0 +1,23 @@
+# Deep Learning (versions disponibles)
+torch>=2.2.0
+torchvision>=0.21.0
+
+# Data Processing
+numpy>=1.26.0
+pandas>=2.0.0
+opencv-python>=4.8.0
+albumentations>=1.4.0
+Pillow>=10.0.0
+scikit-learn>=1.3.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Utils
+tqdm>=4.66.0
+pyyaml>=6.0.0
+
+# Jupyter (optionnel)
+jupyter>=1.0.0
+ipykernel>=6.27.0
