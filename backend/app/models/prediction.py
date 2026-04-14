@@ -1,12 +1,13 @@
 """
 Modèles Pydantic pour les réponses API
-Supporte N classes dynamiquement + Grad-CAM + multi-modèles
+Supporte N classes dynamiquement + Grad-CAM
 """
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
 
 class TopKEntry(BaseModel):
+    """Une entrée dans le top-K des prédictions."""
     cls: str   = Field(..., alias="class")
     probability: float
 
@@ -22,31 +23,14 @@ class PredictionResponse(BaseModel):
     probabilities: Dict[str, float]
     num_classes:   Optional[int]  = None
     top_k:         Optional[List[TopKEntry]] = None
-    gradcam_image: Optional[str] = None
-    model:         Optional[str] = None   # 'chest' | 'lung' | 'covid'
-    out_of_domain: Optional[bool]  = None  # True si image hors-domaine
-    warning:       Optional[str]   = None  # Message d'avertissement lisible
-    entropy_ratio: Optional[float] = None  # 0 = certain, 1 = totalement incertain
+    gradcam_image: Optional[str] = None   # image base64 JPEG avec heatmap
 
 
 class HealthResponse(BaseModel):
-    """Réponse du health-check (rétrocompatibilité)."""
+    """Réponse du health-check."""
     status:        str
     message:       str
     model_loaded:  Optional[bool]  = None
     num_classes:   Optional[int]   = None
     class_names:   Optional[List[str]] = None
     device:        Optional[str]   = None
-
-
-class ModelStatus(BaseModel):
-    """Statut d'un modèle individuel."""
-    loaded:      bool
-    num_classes: int
-    class_names: List[str]
-    label:       str
-
-
-class MultiModelHealthResponse(HealthResponse):
-    """Réponse étendue du health-check avec tous les modèles."""
-    models: Optional[Dict[str, Any]] = None

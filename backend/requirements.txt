@@ -1,3 +1,5 @@
+# Chemin : requirements.txt  (racine du projet)
+
 # FastAPI
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -7,6 +9,10 @@ python-multipart==0.0.6
 pydantic==2.5.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
+
+# Auth JWT  ← nouvelles dépendances
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
 # ML
 torch>=2.0.0
@@ -18,8 +24,3 @@ Pillow>=10.0.0
 
 # Utils
 aiofiles==23.2.1
-
-torch-geometric
-gudhi
-transformers
-timm

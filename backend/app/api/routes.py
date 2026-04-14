@@ -660,7 +660,7 @@ async def predict(
 
     # ── Inférence ─────────────────────────────────────────────────────────────
     try:
-        result = run_inference(image_bytes, with_gradcam=gradcam, model=model)
+        result = run_inference(image_bytes, with_gradcam=gradcam, model_key=model)
     except RuntimeError as e:
         raise HTTPException(503, detail=str(e))
     except Exception as e:
