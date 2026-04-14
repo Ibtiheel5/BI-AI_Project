@@ -1773,3 +1773,70 @@ body {
 .medical-gradient-soft {
   background: linear-gradient(135deg, var(--medical-soft) 0%, #FFFFFF 100%);
 }
+/* Ajoutez à la fin de votre index.css */
+
+/* Medical Theme Extensions */
+.medical-card {
+  background: var(--bg-surface);
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 40px -12px rgba(10, 38, 71, 0.15);
+  border: 1px solid var(--border-dim);
+}
+
+.medical-gradient {
+  background: linear-gradient(135deg, #0A2647 0%, #1B3B6F 50%, #2D5F9E 100%);
+}
+
+.medical-gradient-soft {
+  background: linear-gradient(135deg, #E5F0F8 0%, #FFFFFF 100%);
+}
+
+.medical-soft {
+  background-color: #E5F0F8;
+}
+
+.medical-gray {
+  background-color: #F5F7FA;
+}
+
+.medical-deep-blue {
+  color: #0A2647;
+}
+
+.medical-blue {
+  color: #2D5F9E;
+}
+
+.medical-text-light {
+  color: #64748B;
+}
+
+/* Doctor image animations */
+.doctor-image {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.doctor-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover);
+}

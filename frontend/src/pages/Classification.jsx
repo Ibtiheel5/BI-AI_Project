@@ -4,14 +4,19 @@ import { predict, downloadReport } from "../services/api";
 import DoctorImage from "../components/DoctorImage";
 import { MedicalIcons } from "../components/MedicalIcons";
 import ExplainableAI from "../components/ExplainableAI";
+import { useAuth } from "../context/AuthContext";
 
 export default function Classification() {
-  const [file, setFile] = useState(null);
+
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [modelKey, setModel] = useState("chest");
+  const { user, userDomains } = useAuth();
+  console.log('USER:', user);
+  console.log('DOMAINS:', user?.domains);
+  const [modelKey, setModel] = useState(() => user?.domains?.[0] || "chest");
+  const [file, setFile] = useState(null);
   const [showGradcam, setShowGradcam] = useState(false);
   const [explainText, setExplainText] = useState("");
   const [explaining, setExplaining] = useState(false);
@@ -26,41 +31,36 @@ export default function Classification() {
     xrayRoom: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format',
   };
 
-  const MODELS = [
-    { 
-      key: "chest", 
-      label: "Thorax complet", 
-      fullLabel: "Radiographie thoracique - 10 pathologies",
-      icon: <MedicalIcons.Lungs size={24} color="#2D5F9E" />,
-      accuracy: "97.3%",
-      sensitivity: "96.8%",
-      specificity: "97.9%",
-      patients: "85,000+",
-      image: "https://images.unsplash.com/photo-1576671081837-4900023a2e5a?w=400&auto=format"
-    },
-    { 
-      key: "lung", 
-      label: "Cancer pulmonaire", 
-      fullLabel: "Scanner CT - Détection lésions",
-      icon: <MedicalIcons.XRay size={24} color="#D62828" />,
-      accuracy: "94.8%",
-      sensitivity: "95.2%",
-      specificity: "94.3%",
-      patients: "42,000+",
-      image: "https://images.unsplash.com/photo-1581595219315-a187d40c3220?w=400&auto=format"
-    },
-    { 
-      key: "brain", 
-      label: "Tumeur cérébrale", 
-      fullLabel: "IRM - Classification tumorale",
-      icon: <MedicalIcons.Brain size={24} color="#6B9AC4" />,
-      accuracy: "96.2%",
-      sensitivity: "95.8%",
-      specificity: "96.7%",
-      patients: "31,000+",
-      image: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&auto=format"
-    },
-  ];
+  const ALL_MODELS = [
+  {
+    key: "chest",
+    label: "Thorax complet",
+    fullLabel: "Radiographie thoracique - 10 pathologies",
+    icon: <MedicalIcons.Lungs size={24} color="#2D5F9E" />,
+    accuracy: "97.3%", sensitivity: "96.8%", specificity: "97.9%",
+    image: "https://images.unsplash.com/photo-1576671081837-4900023a2e5a?w=400&auto=format"
+  },
+  {
+    key: "lung",
+    label: "Cancer pulmonaire",
+    fullLabel: "Scanner CT - Détection lésions",
+    icon: <MedicalIcons.XRay size={24} color="#D62828" />,
+    accuracy: "94.8%", sensitivity: "95.2%", specificity: "94.3%",
+    image: "https://images.unsplash.com/photo-1581595219315-a187d40c3220?w=400&auto=format"
+  },
+  {
+    key: "brain",
+    label: "Tumeur cérébrale",
+    fullLabel: "IRM - Classification tumorale",
+    icon: <MedicalIcons.Brain size={24} color="#6B9AC4" />,
+    accuracy: "96.2%", sensitivity: "95.8%", specificity: "96.7%",
+    image: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&auto=format"
+  },
+];
+
+// Filtre selon les domaines autorisés de l'utilisateur connecté
+const allowedKeys = user?.domains || ["chest"];
+const MODELS = ALL_MODELS.filter(m => allowedKeys.includes(m.key));
 
   const handleFile = useCallback(async (f) => {
     if (!f) return;
@@ -727,18 +727,7 @@ export default function Classification() {
                   boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                 }}
               />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.8rem', color: '#64748B', marginBottom: 4 }}>
-                  RADIOLOGUE DE GARDE
-                </div>
-                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0A2647' }}>
-                  Dr. Emma Laurent
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#00A86B', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00A86B' }} />
-                  Disponible pour consultation
-                </div>
-              </div>
+              
               <button style={{
                 padding: '8px 16px',
                 background: '#0A2647',

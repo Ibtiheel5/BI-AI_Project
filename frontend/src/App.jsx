@@ -1,27 +1,155 @@
-// App.jsx — Racine de l'application avec ThemeProvider
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+// App.jsx — COMPLET ET CORRIGÉ
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
-import Header from "./components/Header";
-import Home from "./pages/Home";
-import Classification from "./pages/Classification";
-import Pathologies from "./pages/Pathologies";
+
+// Pages
+import LoginPage           from "./pages/LoginPage";
+import RegisterPage        from "./pages/RegisterPage";
+import LandingPage         from "./pages/LandingPage";
+import MedecinDashboard    from "./pages/MedecinDashboard";
+import Classification      from "./pages/Classification";
+import Pathologies         from "./pages/Pathologies";
+import DoctorQueue         from "./pages/DoctorQueue";
+import PatientDashboard    from "./pages/PatientDashboard";
+import ConsultationRequest from "./pages/ConsultationRequest";
+import ConsultationRoom    from "./pages/ConsultationRoom";
+import AdminPage           from "./pages/AdminPage";
+import Header              from "./components/Header";
+
 import "./styles/index.css";
+
+// ── Helpers ────────────────────────────────────────────────────────
+function getDefaultRoute(user) {
+  if (!user) return "/";
+  if (user.is_admin || user.role === "Administrateur") return "/admin";
+  if (user.role === "Patient") return "/patient";
+  return "/home";
+}
+
+function ProtectedRoute({ children, roles }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role) && !user.is_admin)
+    return <Navigate to={getDefaultRoute(user)} replace />;
+  return children;
+}
+
+function RoleRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={getDefaultRoute(user)} replace />;
+}
+
+function WithHeader({ children }) {
+  return <><Header /><main>{children}</main></>;
+}
+
+// ── Routes ─────────────────────────────────────────────────────────
+function AppRoutes() {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+
+      {/* ── Page d'accueil publique ── */}
+      <Route path="/" element={
+        user ? <RoleRedirect /> : <><Header /><LandingPage /></>
+      } />
+
+      {/* ── Auth ── */}
+      <Route path="/login" element={
+        user ? <RoleRedirect /> : <LoginPage />
+      } />
+      
+      <Route path="/register" element={
+        user ? <RoleRedirect /> : <RegisterPage />
+      } />
+
+      {/* ── Médecin ── */}
+      <Route path="/home" element={
+        <ProtectedRoute roles={["Medecin"]}>
+          <WithHeader>
+            <MedecinDashboard />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/classification" element={
+        <ProtectedRoute roles={["Medecin"]}>
+          <WithHeader>
+            <Classification />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/pathologies" element={
+        <ProtectedRoute roles={["Medecin"]}>
+          <WithHeader>
+            <Pathologies />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/doctor/queue" element={
+        <ProtectedRoute roles={["Medecin"]}>
+          <WithHeader>
+            <DoctorQueue />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      {/* ── Patient ── */}
+      <Route path="/patient" element={
+        <ProtectedRoute roles={["Patient"]}>
+          <WithHeader>
+            <PatientDashboard />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/patient/consultation/new" element={
+        <ProtectedRoute roles={["Patient"]}>
+          <WithHeader>
+            <ConsultationRequest />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      {/* ── Salle partagée (patient + médecin) ── */}
+      <Route path="/consultation/:id" element={
+        <ProtectedRoute>
+          <WithHeader>
+            <ConsultationRoom />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      {/* ── Admin ── */}
+      <Route path="/admin" element={
+        <ProtectedRoute roles={["Administrateur"]}>
+          <WithHeader>
+            <AdminPage />
+          </WithHeader>
+        </ProtectedRoute>
+      } />
+
+      {/* ── Fallback ── */}
+      <Route path="*" element={
+        <Navigate to="/" replace />
+      } />
+
+    </Routes>
+  );
+}
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <div className="app">
-          <Header />
-          <main className="app-body">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/classification" element={<Classification />} />
-              <Route path="/pathologies" element={<Pathologies />} />
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
-    </ThemeProvider>
+    <BrowserRouter>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 }
