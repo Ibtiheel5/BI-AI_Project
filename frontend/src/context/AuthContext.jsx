@@ -283,20 +283,22 @@ export function AuthProvider({ children }) {
   const register = useCallback(async ({ 
     username, 
     password, 
-    fullName, 
+    fullName,
+    full_name,
     domains, 
     specialty, 
     role = "Medecin" 
   }) => {
-    console.log("📝 Registering user:", username, role);
+    const resolvedName = fullName || full_name || "";
+    console.log("📝 Registering user:", username, role, "name:", resolvedName);
     
     return authFetch("/auth/register", {
       method: "POST",
       body: JSON.stringify({
         username,
         password,
-        full_name: fullName,
-        domains,
+        full_name: resolvedName,
+        domains: domains || [],
         specialty: specialty || "",
         role,
       }),
