@@ -1,429 +1,114 @@
-// pages/DoctorDashboard.jsx
-// DASHBOARD MÉDICAL CLINIQUE - VERSION FINALE UNIFIÉE
-// Compatible avec le Header.jsx existant - Design DSE professionnel
-
-import { useState, useEffect, useCallback, useRef } from "react";
+// src/pages/DoctorDashboard.jsx
+// DASHBOARD MÉDECIN PREMIUM — Multi-onglets avec Analyse IA Réelle
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const API = "http://localhost:8000/api/v1";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ICÔNES MÉDICALES SVG PROFESSIONNELLES
-// ═══════════════════════════════════════════════════════════════════════════
-
-const MedicalIcons = {
-  Activity: ({ size = 18, color = "#0EA5E9" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M3 12H6L8 8L11 16L14 10L16 14L18 12H21" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  ),
-  
-  HeartRate: ({ size = 18, color = "#EF4444" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 21.35L10.55 20.03C5.4 15.36 2 12.27 2 8.5C2 5.41 4.42 3 7.5 3C9.24 3 10.91 3.81 12 5.08C13.09 3.81 14.76 3 16.5 3C19.58 3 22 5.41 22 8.5C22 12.27 18.6 15.36 13.45 20.03L12 21.35Z" fill={color} fillOpacity="0.9"/>
-      <path d="M7 12H9L10 9L12 15L13 12H17" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  Brain: ({ size = 18, color = "#8B5CF6" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 4C8 4 5 7 5 11C5 15 8 18 12 18C16 18 19 15 19 11C19 7 16 4 12 4Z" stroke={color} strokeWidth="1.5"/>
-      <path d="M9 10C9.5 9 10.5 9 11 10M13 10C13.5 9 14.5 9 15 10" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M10 14C11 15 13 15 14 14" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="9" cy="9" r="1" fill={color}/>
-      <circle cx="15" cy="9" r="1" fill={color}/>
-    </svg>
-  ),
-  
-  Lungs: ({ size = 18, color = "#0EA5E9" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M7 5C4 6 2 9 3 13C4 17 7 20 12 20C17 20 20 17 21 13C22 9 20 6 17 5" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M12 5V20M7 10L4 13M17 10L20 13" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  CTScan: ({ size = 18, color = "#EF4444" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="3" width="18" height="18" rx="3" stroke={color} strokeWidth="1.5"/>
-      <circle cx="12" cy="12" r="5" stroke={color} strokeWidth="1.2"/>
-      <path d="M12 7V17M7 12H17" stroke={color} strokeWidth="1" strokeDasharray="3 2"/>
-    </svg>
-  ),
-  
-  DNA: ({ size = 18, color = "#10B981" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M7 6C10 9 14 9 17 6M7 18C10 15 14 15 17 18" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M6 3L8 6M18 21L16 18M6 21L8 18M18 3L16 6" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  Clock: ({ size = 14, color = "#64748B" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.5"/>
-      <path d="M12 7V12L15 15" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  Alert: ({ size = 14, color = "#EF4444" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 9V13M12 17V17.5" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-      <path d="M12 3L2 20H22L12 3Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
-    </svg>
-  ),
-  
-  CheckCircle: ({ size = 14, color = "#10B981" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.5"/>
-      <path d="M8 12L11 15L16 9" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  Patient: ({ size = 18, color = "#0F172A" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="8" r="4" stroke={color} strokeWidth="1.5"/>
-      <path d="M5 20V19C5 15.1 8.1 12 12 12C15.9 12 19 15.1 19 19V20" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  Calendar: ({ size = 14, color = "#64748B" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="4" width="18" height="18" rx="2" stroke={color} strokeWidth="1.5"/>
-      <path d="M8 2V6M16 2V6M3 10H21" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  Video: ({ size = 14, color = "#0F172A" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="2" y="6" width="15" height="12" rx="2" stroke={color} strokeWidth="1.5"/>
-      <path d="M22 8L17 11V13L22 16V8Z" fill={color} fillOpacity="0.1" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
-    </svg>
-  ),
-  
-  Stethoscope: ({ size = 18, color = "#0F172A" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M6 6V13C6 15 8 17 12 17C16 17 18 15 18 13V6" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="6" cy="6" r="2.5" stroke={color} strokeWidth="1.5"/>
-      <circle cx="18" cy="6" r="2.5" stroke={color} strokeWidth="1.5"/>
-      <path d="M12 17V21M12 21H9M12 21H15" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  
-  TrendingUp: ({ size = 14, color = "#10B981" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M23 6L13.5 15.5L8.5 10.5L3 16" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M17 6H23V12" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  ),
-  
-  ChevronRight: ({ size = 14, color = "#64748B" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M9 18L15 12L9 6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  ),
-  
-  Search: ({ size = 14, color = "#64748B" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="11" cy="11" r="7" stroke={color} strokeWidth="1.5"/>
-      <path d="M16 16L21 21" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION MÉDICALE
 // ═══════════════════════════════════════════════════════════════════════════
 
 const STATUS_CONFIG = {
-  pending:  { label: "En attente",  color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A" },
-  accepted: { label: "Acceptée",    color: "#3B82F6", bg: "#EFF6FF", border: "#BFDBFE" },
-  analyzed: { label: "Analysée",    color: "#10B981", bg: "#ECFDF5", border: "#A7F3D0" },
-  closed:   { label: "Terminée",    color: "#6B7280", bg: "#F9FAFB", border: "#E5E7EB" },
-  rejected: { label: "Rejetée",     color: "#EF4444", bg: "#FEF2F2", border: "#FECACA" },
+  pending:  { label: "En attente",  color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A", icon: "⏳" },
+  accepted: { label: "Acceptée",    color: "#3B82F6", bg: "#EFF6FF", border: "#BFDBFE", icon: "✅" },
+  analyzed: { label: "Analysée",    color: "#10B981", bg: "#ECFDF5", border: "#A7F3D0", icon: "🧬" },
+  closed:   { label: "Terminée",    color: "#6B7280", bg: "#F9FAFB", border: "#E5E7EB", icon: "🔒" },
+  rejected: { label: "Rejetée",     color: "#EF4444", bg: "#FEF2F2", border: "#FECACA", icon: "❌" },
 };
 
 const URGENCY_CONFIG = {
-  critical: { label: "CRITIQUE", color: "#DC2626", bg: "#FEF2F2", border: "#FCA5A5", priority: 4 },
+  critical: { label: "CRITIQUE", color: "#DC2626", bg: "#FEE2E2", border: "#FCA5A5", priority: 4 },
   urgent:   { label: "URGENT",   color: "#EA580C", bg: "#FFF7ED", border: "#FDBA74", priority: 3 },
   normal:   { label: "NORMAL",   color: "#10B981", bg: "#F0FDF4", border: "#86EFAC", priority: 1 },
 };
 
 const MODEL_CONFIG = {
-  brain: { 
-    label: "IRM Cérébrale", 
-    fullLabel: "IRM - Encéphale",
-    color: "#8B5CF6", 
-    gradient: "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
-    icon: "brain",
-  },
-  lung: { 
-    label: "Scanner Thoracique", 
-    fullLabel: "TDM - Poumons",
-    color: "#EF4444", 
-    gradient: "linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)",
-    icon: "lungs",
-  },
-  chest: { 
-    label: "Radio Thoracique", 
-    fullLabel: "RX - Thorax",
-    color: "#0EA5E9", 
-    gradient: "linear-gradient(135deg, #0EA5E9 0%, #0369A1 100%)",
-    icon: "ctscan",
-  },
+  brain:  { label: "IRM Cérébrale", fullLabel: "IRM — Encéphale", color: "#7C3AED", gradient: "linear-gradient(135deg, #7C3AED, #6D28D9)", icon: "🧠", bg: "#F5F3FF" },
+  lung:   { label: "Scanner CT", fullLabel: "TDM — Poumons", color: "#DC2626", gradient: "linear-gradient(135deg, #DC2626, #B91C1C)", icon: "🔬", bg: "#FEF2F2" },
+  chest:  { label: "Radio Thoracique", fullLabel: "RX — Thorax", color: "#0369A1", gradient: "linear-gradient(135deg, #0EA5E9, #0369A1)", icon: "🫁", bg: "#F0F9FF" },
+  retina: { label: "Fond d'œil", fullLabel: "Rétinographie", color: "#0E7490", gradient: "linear-gradient(135deg, #0E7490, #0891B2)", icon: "👁️", bg: "#ECFEFF" },
+};
+
+const PREDICTION_COLORS = {
+  "Normal": "#10B981", "No Finding": "#10B981", "No_DR": "#10B981", "notumor": "#10B981",
+  "COVID": "#DC2626", "Pneumonia": "#DC2626", "Pneumothorax": "#DC2626",
+  "Edema": "#DC2626", "Mass": "#DC2626", "Malignant": "#DC2626",
+  "Glioma": "#DC2626", "Proliferate_DR": "#DC2626",
+  "Cardiomegaly": "#EA580C", "Meningioma": "#EA580C", "Emphysema": "#EA580C",
+  "Benign": "#D97706", "Nodule": "#D97706", "Mild": "#D97706", "Moderate": "#EA580C", "Severe": "#DC2626",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// COMPOSANTS CLINIQUES
+// COMPOSANTS INTERNES
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Widget de signes vitaux
-const VitalsMonitor = ({ patientName }) => {
-  const [vitals] = useState({
-    hr: 72, rr: 16, bp: "118/76", spo2: 98, temp: 37.1
-  });
-  
+function ParticlesBg() {
+  const particles = useMemo(() => Array.from({ length: 20 }, (_, i) => ({
+    id: i, x: Math.random() * 100, y: Math.random() * 100,
+    size: Math.random() * 3 + 1, duration: 10 + Math.random() * 15,
+    delay: Math.random() * 8, opacity: 0.03 + Math.random() * 0.05,
+  })), []);
   return (
-    <div style={{
-      background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
-      borderRadius: 16,
-      padding: "16px 20px",
-      marginBottom: 16,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <MedicalIcons.Activity size={16} color="#0EA5E9" />
-          <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Monitoring
-          </span>
-        </div>
-        <span style={{ fontSize: "0.6rem", color: "#64748B" }}>
-          Dernière mesure: {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-        </span>
-      </div>
-      
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-        <VitalItem icon={<MedicalIcons.HeartRate size={16} color="#EF4444" />} label="FC" value={vitals.hr} unit="bpm" />
-        <VitalItem icon={<MedicalIcons.Lungs size={16} color="#0EA5E9" />} label="FR" value={vitals.rr} unit="/min" />
-        <VitalItem label="TA" value={vitals.bp} unit="mmHg" />
-        <VitalItem label="SpO₂" value={vitals.spo2} unit="%" status="normal" />
-        <VitalItem label="Temp" value={vitals.temp} unit="°C" />
-      </div>
-      
-      {/* Mini ECG */}
-      <div style={{ marginTop: 12, height: 30, display: "flex", alignItems: "flex-end" }}>
-        <svg width="100%" height="30" viewBox="0 0 200 30" preserveAspectRatio="none">
-          <path d="M0,15 L10,15 L15,5 L20,15 L25,15 L30,15 L35,25 L40,15 L50,15 L55,15 L60,15 L65,10 L70,15 L75,15 L80,15 L85,20 L90,15 L100,15 L105,15 L110,15 L115,8 L120,15 L125,15 L130,15 L135,22 L140,15 L150,15 L155,15 L160,15 L165,12 L170,15 L175,15 L180,15 L185,18 L190,15 L200,15" 
-            stroke="#EF4444" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </div>
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+      {particles.map(p => (
+        <div key={p.id} style={{
+          position: "absolute", left: `${p.x}%`, top: `${p.y}%`,
+          width: p.size, height: p.size, borderRadius: "50%",
+          background: "#7C3AED", opacity: p.opacity,
+          animation: `floatParticle ${p.duration}s ease-in-out ${p.delay}s infinite alternate`,
+        }} />
+      ))}
     </div>
   );
-};
+}
 
-const VitalItem = ({ icon, label, value, unit }) => (
-  <div style={{ textAlign: "center" }}>
-    <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
-      {icon || <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#94A3B8" }}>{label}</span>}
-    </div>
-    <div style={{ fontSize: "1rem", fontWeight: 700, color: "white", lineHeight: 1.2 }}>
-      {value}
-    </div>
-    <div style={{ fontSize: "0.55rem", color: "#64748B", fontWeight: 600 }}>
-      {unit}
-    </div>
-  </div>
-);
-
-// Widget d'activité
-const ActivityChart = ({ data }) => {
-  const maxValue = Math.max(...data, 1);
-  const days = ["L", "M", "M", "J", "V", "S", "D"];
-  
+function StatCard({ icon, label, value, color, bg, alert, onClick, subtitle }) {
   return (
-    <div style={{
-      background: "white",
-      borderRadius: 14,
-      padding: "16px 18px",
-      border: "1px solid #E2E8F0",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <MedicalIcons.TrendingUp size={14} color="#10B981" />
-          <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Activité clinique (7j)
-          </span>
-        </div>
-        <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#10B981" }}>
-          +12%
-        </span>
-      </div>
-      
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 50 }}>
-        {data.map((value, i) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <div style={{
-              width: "100%",
-              height: `${(value / maxValue) * 100}%`,
-              minHeight: 3,
-              background: i === data.length - 1 
-                ? "linear-gradient(180deg, #8B5CF6 0%, #6D28D9 100%)" 
-                : "#CBD5E1",
-              borderRadius: 3,
-            }} />
-            <span style={{ fontSize: "0.5rem", color: "#94A3B8", fontWeight: 600 }}>
-              {days[i]}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Carte patient dans la file
-const QueueItemCard = ({ consultation, isSelected, onClick, onAccept, onReject, loading }) => {
-  const model = MODEL_CONFIG[consultation.model_key] || MODEL_CONFIG.chest;
-  const urgency = URGENCY_CONFIG[consultation.urgency] || URGENCY_CONFIG.normal;
-  const IconComponent = MedicalIcons[model.icon === "brain" ? "Brain" : model.icon === "lungs" ? "Lungs" : "CTScan"];
-  
-  const waitTime = () => {
-    if (!consultation.created_at) return "—";
-    const diff = Math.floor((Date.now() - new Date(consultation.created_at).getTime()) / 60000);
-    if (diff < 1) return "À l'instant";
-    if (diff < 60) return `${diff} min`;
-    if (diff < 1440) return `${Math.floor(diff / 60)}h`;
-    return `${Math.floor(diff / 1440)}j`;
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: isSelected 
-          ? `linear-gradient(135deg, ${model.color}08, white)` 
-          : "white",
-        borderRadius: 12,
-        padding: "14px",
-        marginBottom: 8,
-        cursor: "pointer",
-        transition: "all 0.2s",
-        border: isSelected 
-          ? `1.5px solid ${model.color}` 
-          : "1px solid #F1F5F9",
-        borderLeft: `3px solid ${urgency.color}`,
-      }}
+    <div onClick={onClick} style={{
+      background: "white", borderRadius: 16, padding: "16px 18px",
+      border: "1px solid #E2E8F0", cursor: onClick ? "pointer" : "default",
+      position: "relative", overflow: "hidden", transition: "all 0.2s",
+    }}
+      onMouseEnter={e => { if (onClick) { e.currentTarget.style.borderColor = color; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 6px 16px ${color}15`; } }}
+      onMouseLeave={e => { if (onClick) { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "none"; } }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <div style={{
-          width: 42, height: 42, borderRadius: 10,
-          background: model.gradient,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "white", flexShrink: 0,
-        }}>
-          <IconComponent size={18} color="white" />
+      <div style={{ position: "absolute", top: -20, right: -20, width: 70, height: 70, borderRadius: "50%", background: bg, opacity: 0.4 }} />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: "1.5rem" }}>{icon}</span>
+          {alert && <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#DC2626", animation: "pulse 1.5s infinite" }} />}
         </div>
-        
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0F172A" }}>
-              {consultation.patient_name || "Patient"}
-            </span>
-            <span style={{
-              padding: "2px 6px", borderRadius: 4, fontSize: "0.55rem", fontWeight: 700,
-              background: urgency.bg, color: urgency.color,
-            }}>
-              {urgency.label}
-            </span>
-          </div>
-          
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <span style={{ fontSize: "0.6rem", color: "#94A3B8", fontFamily: "monospace" }}>
-              #{String(consultation.id).padStart(4, "0")}
-            </span>
-            <span style={{ fontSize: "0.6rem", color: model.color }}>•</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <MedicalIcons.Clock size={10} color="#94A3B8" />
-              <span style={{ fontSize: "0.55rem", color: "#94A3B8" }}>{waitTime()}</span>
-            </div>
-          </div>
-          
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onAccept(consultation.id); }}
-              disabled={loading}
-              style={{
-                flex: 1, padding: "5px 8px", background: loading ? "#E2E8F0" : model.gradient,
-                border: "none", borderRadius: 6, color: "white", fontSize: "0.65rem", fontWeight: 600,
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-            >
-              Accepter
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onReject(consultation.id); }}
-              style={{
-                padding: "5px 10px", background: "white", border: "1px solid #FCA5A5",
-                borderRadius: 6, color: "#EF4444", fontSize: "0.65rem", fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Refuser
-            </button>
-          </div>
-        </div>
+        <div style={{ fontSize: "1.7rem", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 600, marginTop: 4 }}>{label}</div>
+        {subtitle && <div style={{ fontSize: "0.65rem", color: "#94A3B8", marginTop: 2 }}>{subtitle}</div>}
       </div>
     </div>
   );
-};
+}
 
-// Message clinique
-const MessageBubble = ({ message, isDoctor }) => {
-  const isMine = (isDoctor && message.sender_role === "Medecin") || 
-                 (!isDoctor && message.sender_role === "Patient");
-  
+function LoadingSpinner({ text = "Chargement..." }) {
   return (
-    <div style={{
-      display: "flex",
-      justifyContent: isMine ? "flex-end" : "flex-start",
-      marginBottom: 10,
-    }}>
-      {!isMine && (
-        <div style={{
-          width: 28, height: 28, borderRadius: "50%",
-          background: "#64748B", display: "flex", alignItems: "center", justifyContent: "center",
-          color: "white", fontSize: "0.65rem", fontWeight: 700,
-          marginRight: 8, flexShrink: 0,
-        }}>
-          {message.sender_name?.charAt(0) || "P"}
-        </div>
-      )}
-      <div style={{
-        maxWidth: "75%",
-        padding: "10px 14px",
-        borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-        background: isMine ? "#0F172A" : "white",
-        border: isMine ? "none" : "1px solid #E2E8F0",
-        color: isMine ? "white" : "#0F172A",
-        fontSize: "0.75rem",
-        lineHeight: 1.5,
-      }}>
-        {!isMine && (
-          <div style={{ fontSize: "0.55rem", color: "#94A3B8", marginBottom: 3, fontWeight: 600 }}>
-            {message.sender_name}
-          </div>
-        )}
-        {message.content}
-        <div style={{
-          fontSize: "0.5rem",
-          color: isMine ? "rgba(255,255,255,0.5)" : "#CBD5E1",
-          marginTop: 4,
-          textAlign: "right",
-        }}>
-          {new Date(message.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-        </div>
-      </div>
+    <div style={{ textAlign: "center", padding: 50 }}>
+      <div style={{ width: 40, height: 40, border: "3px solid #E2E8F0", borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 14px" }} />
+      <div style={{ color: "#94A3B8", fontSize: "0.85rem" }}>{text}</div>
     </div>
   );
-};
+}
+
+function EmptyState({ icon, title, desc, actionLabel, onAction }) {
+  return (
+    <div style={{ textAlign: "center", padding: "60px 24px", background: "linear-gradient(180deg, #FAFBFC, #F1F5F9)", borderRadius: 20, border: "1px dashed #E2E8F0" }}>
+      <div style={{ fontSize: "3.5rem", marginBottom: 16, opacity: 0.6 }}>{icon}</div>
+      <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0A2647", marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: "0.85rem", color: "#94A3B8", lineHeight: 1.6, maxWidth: 350, margin: "0 auto 20px" }}>{desc}</div>
+      {actionLabel && onAction && (
+        <button onClick={onAction} style={{ padding: "12px 28px", background: "linear-gradient(135deg, #0A2647, #1B3B6F)", border: "none", borderRadius: 12, color: "white", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 20px rgba(10,38,71,0.25)" }}>{actionLabel}</button>
+      )}
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DASHBOARD PRINCIPAL
@@ -434,8 +119,12 @@ export default function DoctorDashboard() {
   const navigate = useNavigate();
   const token = localStorage.getItem("medai-token");
 
+  // ═══════════════ STATE ═══════════════
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [queue, setQueue] = useState([]);
   const [assigned, setAssigned] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [selectedConsultation, setSelectedConsultation] = useState(null);
   const [consultationData, setConsultationData] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -446,42 +135,52 @@ export default function DoctorDashboard() {
   const [sendingMsg, setSendingMsg] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectId, setRejectId] = useState(null);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeNotes, setCloseNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [appointments, setAppointments] = useState([]);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [apptForm, setApptForm] = useState({ type: "video", scheduled_at: "", duration_minutes: 30, video_link: "", location: "", notes: "" });
 
   const messagesEndRef = useRef(null);
+  const notifRef = useRef(null);
 
-  // Fetch functions
+  // ═══════════════ FETCH ═══════════════
   const fetchQueue = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/consultations/queue`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API}/consultations/queue`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         const sorted = (data.consultations || []).sort((a, b) => {
-          const urgencyA = URGENCY_CONFIG[a.urgency]?.priority || 0;
-          const urgencyB = URGENCY_CONFIG[b.urgency]?.priority || 0;
-          if (urgencyA !== urgencyB) return urgencyB - urgencyA;
+          const uA = URGENCY_CONFIG[a.urgency]?.priority || 0;
+          const uB = URGENCY_CONFIG[b.urgency]?.priority || 0;
+          if (uA !== uB) return uB - uA;
           return new Date(b.created_at) - new Date(a.created_at);
         });
         setQueue(sorted);
       }
-    } catch (e) {}
+    } catch (e) { console.error(e); }
   }, [token]);
 
   const fetchAssigned = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/consultations/assigned`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API}/consultations/assigned`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { setAssigned((await res.json()).consultations || []); }
+    } catch (e) {}
+  }, [token]);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/consultations/notifications/me?unread_only=false`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        setAssigned(data.consultations || []);
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unread || 0);
       }
     } catch (e) {}
   }, [token]);
@@ -489,46 +188,43 @@ export default function DoctorDashboard() {
   const fetchConsultationDetails = useCallback(async (id) => {
     if (!id) return;
     try {
-      const res = await fetch(`${API}/consultations/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API}/consultations/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         setConsultationData(data.consultation);
         setMessages(data.messages || []);
         setAnalysis(data.analysis);
+        if (data.appointment) setAppointments(prev => prev.find(a => a.id === data.appointment.id) ? prev : [...prev, data.appointment]);
       }
     } catch (e) {}
   }, [token]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchQueue(), fetchAssigned()]);
+    await Promise.all([fetchQueue(), fetchAssigned(), fetchNotifications()]);
     setLoading(false);
-  }, [fetchQueue, fetchAssigned]);
+  }, [fetchQueue, fetchAssigned, fetchNotifications]);
 
+  // ═══════════════ EFFECTS ═══════════════
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => { fetchConsultationDetails(selectedConsultation); }, [selectedConsultation, fetchConsultationDetails]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchQueue();
-      fetchAssigned();
-      if (selectedConsultation) fetchConsultationDetails(selectedConsultation);
-    }, 8000);
+    const handler = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifications(false); };
+    if (showNotifications) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showNotifications]);
+  useEffect(() => {
+    const interval = setInterval(() => { fetchQueue(); fetchAssigned(); fetchNotifications(); if (selectedConsultation) fetchConsultationDetails(selectedConsultation); }, 8000);
     return () => clearInterval(interval);
-  }, [selectedConsultation, fetchQueue, fetchAssigned, fetchConsultationDetails]);
+  }, [selectedConsultation]);
 
+  // ═══════════════ ACTIONS ═══════════════
   const handleAccept = async (id) => {
     setActionLoading(`accept-${id}`);
     try {
-      await fetch(`${API}/consultations/${id}/accept`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      await loadAll();
-      setSelectedConsultation(id);
+      await fetch(`${API}/consultations/${id}/accept`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      await loadAll(); setSelectedConsultation(id); setActiveTab("consultation");
     } catch (e) {} finally { setActionLoading(null); }
   };
 
@@ -536,16 +232,9 @@ export default function DoctorDashboard() {
     if (!rejectId) return;
     setActionLoading(`reject-${rejectId}`);
     try {
-      const form = new FormData();
-      form.append("reason", rejectReason);
-      await fetch(`${API}/consultations/${rejectId}/reject`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      setShowRejectModal(false);
-      setRejectReason("");
-      setRejectId(null);
+      const form = new FormData(); form.append("reason", rejectReason);
+      await fetch(`${API}/consultations/${rejectId}/reject`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+      setShowRejectModal(false); setRejectReason(""); setRejectId(null);
       await loadAll();
       if (selectedConsultation === rejectId) setSelectedConsultation(null);
     } catch (e) {} finally { setActionLoading(null); }
@@ -553,43 +242,48 @@ export default function DoctorDashboard() {
 
   const handleRunAnalysis = async () => {
     if (!selectedConsultation || !consultationData) return;
-    setAnalysisLoading(true);
-    setTimeout(async () => {
-      try {
-        const fakeResult = {
-          prediction: "Normal",
-          confidence: 0.94,
-          probabilities: JSON.stringify({ Normal: 0.94, Pneumonia: 0.03, COVID: 0.02, Cardiomegaly: 0.01 }),
-          explain_text: "Aucune anomalie détectée. Parenchyme pulmonaire normal.",
-        };
-        const form = new FormData();
-        form.append("prediction", fakeResult.prediction);
-        form.append("confidence", String(fakeResult.confidence));
-        form.append("probabilities", fakeResult.probabilities);
-        form.append("explain_text", fakeResult.explain_text);
-        form.append("out_of_domain", "false");
-        await fetch(`${API}/consultations/${selectedConsultation}/analysis`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: form,
-        });
-        await fetchConsultationDetails(selectedConsultation);
-        await fetchAssigned();
-      } catch (e) {} finally { setAnalysisLoading(false); }
-    }, 2000);
+    setAnalysisLoading(true); setAnalysisError("");
+    try {
+      const imagePath = consultationData.image_path;
+      if (!imagePath) throw new Error("Aucune image trouvée.");
+      const imageRes = await fetch(`http://localhost:8000/${imagePath}`);
+      if (!imageRes.ok) throw new Error("Impossible de charger l'image médicale.");
+      const imageBlob = await imageRes.blob();
+      const file = new File([imageBlob], "image.jpg", { type: imageBlob.type || "image/jpeg" });
+      const formData = new FormData(); formData.append("file", file);
+      const modelKey = consultationData.model_key || "chest";
+      const predictRes = await fetch(`${API}/predict?model=${modelKey}&gradcam=true&explain=false`, { method: "POST", body: formData });
+      if (!predictRes.ok) throw new Error(`Erreur API: ${predictRes.status}`);
+      const reader = predictRes.body.getReader(); const decoder = new TextDecoder(); let predictionData = null, buffer = "";
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        buffer += decoder.decode(value, { stream: true }); const lines = buffer.split("\n"); buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim(); if (!jsonStr || jsonStr === "[DONE]") continue;
+          try { const event = JSON.parse(jsonStr); if (event.type === "prediction") predictionData = event; } catch {}
+        }
+      }
+      if (!predictionData) throw new Error("Aucune prédiction reçue.");
+      const saveForm = new FormData();
+      saveForm.append("prediction", predictionData.prediction);
+      saveForm.append("confidence", String(predictionData.confidence));
+      saveForm.append("probabilities", JSON.stringify(predictionData.probabilities || {}));
+      saveForm.append("explain_text", predictionData.warning || "");
+      saveForm.append("gradcam_b64", predictionData.gradcam_image || "");
+      saveForm.append("out_of_domain", String(predictionData.out_of_domain || false));
+      saveForm.append("warning", predictionData.warning || "");
+      await fetch(`${API}/consultations/${selectedConsultation}/analysis`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: saveForm });
+      await fetchConsultationDetails(selectedConsultation); await fetchAssigned();
+    } catch (e) { setAnalysisError(e.message); } finally { setAnalysisLoading(false); }
   };
 
   const handleSendMessage = async () => {
     if (!msgInput.trim() || !selectedConsultation) return;
     setSendingMsg(true);
     try {
-      await fetch(`${API}/consultations/${selectedConsultation}/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ content: msgInput.trim(), msg_type: "text" }),
-      });
-      setMsgInput("");
-      await fetchConsultationDetails(selectedConsultation);
+      await fetch(`${API}/consultations/${selectedConsultation}/messages`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ content: msgInput.trim(), msg_type: "text" }) });
+      setMsgInput(""); await fetchConsultationDetails(selectedConsultation);
     } catch (e) {} finally { setSendingMsg(false); }
   };
 
@@ -597,528 +291,426 @@ export default function DoctorDashboard() {
     if (!selectedConsultation) return;
     setActionLoading("close");
     try {
-      const form = new FormData();
-      form.append("doctor_notes", closeNotes);
-      await fetch(`${API}/consultations/${selectedConsultation}/close`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+      const form = new FormData(); form.append("doctor_notes", closeNotes);
+      await fetch(`${API}/consultations/${selectedConsultation}/close`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+      setShowCloseModal(false); setCloseNotes(""); await loadAll(); await fetchConsultationDetails(selectedConsultation);
+    } catch (e) {} finally { setActionLoading(null); }
+  };
+
+  const handleCreateAppointment = async () => {
+    if (!apptForm.scheduled_at || !selectedConsultation) return;
+    setActionLoading("appt");
+    try {
+      await fetch(`${API}/consultations/appointments`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ consultation_id: selectedConsultation, ...apptForm }),
       });
-      setShowCloseModal(false);
-      setCloseNotes("");
-      await loadAll();
+      setShowAppointmentModal(false);
+      setApptForm({ type: "video", scheduled_at: "", duration_minutes: 30, video_link: "", location: "", notes: "" });
       await fetchConsultationDetails(selectedConsultation);
     } catch (e) {} finally { setActionLoading(null); }
   };
 
-  const stats = {
-    queue: queue.length,
-    critical: queue.filter(c => c.urgency === "critical").length,
+  const markAllRead = async () => {
+    try {
+      await fetch(`${API}/consultations/notifications/read-all`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      setUnreadCount(0); setNotifications(n => n.map(x => ({ ...x, is_read: true })));
+    } catch (e) {}
+  };
+
+  const selectConsultation = (id) => { setSelectedConsultation(id); setActiveTab("consultation"); };
+
+  // ═══════════════ COMPUTED ═══════════════
+  const stats = useMemo(() => ({
+    queue: queue.length, critical: queue.filter(c => c.urgency === "critical").length,
     urgent: queue.filter(c => c.urgency === "urgent").length,
     accepted: assigned.filter(c => c.status === "accepted").length,
     analyzed: assigned.filter(c => c.status === "analyzed").length,
-  };
+    closed: assigned.filter(c => c.status === "closed").length,
+  }), [queue, assigned]);
 
   const canMessage = consultationData && (consultationData.status === "accepted" || consultationData.status === "analyzed");
-  const model = consultationData ? MODEL_CONFIG[consultationData.model_key] : null;
-  const ModelIcon = model ? MedicalIcons[model.icon === "brain" ? "Brain" : model.icon === "lungs" ? "Lungs" : "CTScan"] : MedicalIcons.CTScan;
+  const model = consultationData ? MODEL_CONFIG[consultationData.model_key] || MODEL_CONFIG.chest : null;
 
-  const filteredQueue = queue.filter(c => {
+  const filteredQueue = useMemo(() => queue.filter(c => {
     if (filterStatus === "critical") return c.urgency === "critical";
-    if (searchQuery) {
-      return c.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-             String(c.id).includes(searchQuery);
-    }
+    if (searchQuery) return c.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) || String(c.id).includes(searchQuery);
     return true;
-  });
+  }), [queue, filterStatus, searchQuery]);
 
-  const activityData = [4, 7, 5, 9, 6, 8, 12];
+  const formatTime = (d) => { if (!d) return ""; const diff = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (diff < 1) return "À l'instant"; if (diff < 60) return `Il y a ${diff} min`; if (diff < 1440) return `Il y a ${Math.floor(diff / 60)}h`; return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); };
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
+  const tabs = [
+    { key: "dashboard", icon: "📊", label: "Vue d'ensemble" },
+    { key: "queue", icon: "👥", label: "File d'attente", badge: queue.length },
+    { key: "consultation", icon: "💬", label: "Consultation" },
+    { key: "appointments", icon: "📅", label: "Rendez-vous" },
+    { key: "profile", icon: "👤", label: "Mon profil" },
+  ];
+
+  const NOTIF_ICONS = { new_consultation: "📋", consultation_accepted: "✅", consultation_rejected: "❌", analysis_ready: "🤖", appointment_scheduled: "📅", consultation_closed: "🔒", new_message: "💬", doctor_changed: "🔄" };
+  const userDomains = user?.domains || [];
+
+  // ═══════════════ RENDER ═══════════════
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#F1F5F9",
-      fontFamily: "'Inter', system-ui, sans-serif",
-    }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #F8FAFC, #F1F5F9)", fontFamily: "'DM Sans', 'Inter', sans-serif" }}>
+      <ParticlesBg />
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.12); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes floatParticle { 0% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-18px) translateX(8px); } 100% { transform: translateY(12px) translateX(-10px); } }
+        @keyframes alertPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+        *::-webkit-scrollbar { width: 5px; } *::-webkit-scrollbar-track { background: transparent; } *::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
       `}</style>
 
-      <div style={{ padding: "24px 32px" }}>
-        
-        {/* ═══════════════════════════════════════════════════════════
-            STATS CARDS
-            ═══════════════════════════════════════════════════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 24 }}>
-          <StatCard 
-            icon={<MedicalIcons.Patient size={18} color="#0F172A" />}
-            label="Total patients"
-            value={stats.queue + assigned.length}
-            color="#0F172A"
-          />
-          <StatCard 
-            icon={<MedicalIcons.Clock size={18} color="#F59E0B" />}
-            label="En attente"
-            value={stats.queue}
-            color="#F59E0B"
-            alert={stats.critical > 0}
-          />
-          <StatCard 
-            icon={<MedicalIcons.Alert size={18} color="#EF4444" />}
-            label="Urgents"
-            value={stats.critical + stats.urgent}
-            color="#EF4444"
-          />
-          <StatCard 
-            icon={<MedicalIcons.CheckCircle size={18} color="#3B82F6" />}
-            label="En cours"
-            value={stats.accepted}
-            color="#3B82F6"
-          />
-          <StatCard 
-            icon={<MedicalIcons.DNA size={18} color="#10B981" />}
-            label="Résultats"
-            value={stats.analyzed}
-            color="#10B981"
-          />
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════
-            MAIN GRID - 3 COLONNES
-            ═══════════════════════════════════════════════════════ */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "360px 1fr 380px",
-          gap: 20,
-        }}>
-
-          {/* COLONNE GAUCHE - FILE D'ATTENTE */}
-          <div>
-            <div style={{
-              background: "white",
-              borderRadius: 16,
-              border: "1px solid #E2E8F0",
-              overflow: "hidden",
-            }}>
-              <div style={{
-                padding: "16px 18px",
-                borderBottom: "1px solid #F1F5F9",
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <MedicalIcons.Patient size={18} color="#0F172A" />
-                  <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0F172A" }}>
-                    File d'attente
-                  </span>
-                  <span style={{
-                    padding: "2px 8px", background: "#F1F5F9", borderRadius: 20,
-                    fontSize: "0.65rem", fontWeight: 700, color: "#64748B",
-                  }}>
-                    {queue.length}
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {["all", "critical"].map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setFilterStatus(f)}
-                      style={{
-                        padding: "4px 10px", borderRadius: 6, fontSize: "0.6rem", fontWeight: 600,
-                        background: filterStatus === f ? (f === "critical" ? "#EF4444" : "#0F172A") : "transparent",
-                        color: filterStatus === f ? "white" : "#64748B",
-                        border: filterStatus === f ? "none" : "1px solid #E2E8F0",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {f === "all" ? "Tous" : "Critiques"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recherche */}
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid #F1F5F9" }}>
-                <div style={{ position: "relative" }}>
-                  <MedicalIcons.Search size={14} color="#94A3B8" />
-                  <input
-                    type="text"
-                    placeholder="Rechercher patient..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    style={{
-                      width: "100%", padding: "8px 8px 8px 28px", marginLeft: "-20px",
-                      background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8,
-                      fontSize: "0.7rem", outline: "none",
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ maxHeight: 420, overflowY: "auto", padding: "12px" }}>
-                {loading ? (
-                  <div style={{ textAlign: "center", padding: 30 }}>
-                    <div style={{ width: 28, height: 28, border: "3px solid #E2E8F0", borderTopColor: "#0F172A", borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto" }}/>
-                  </div>
-                ) : filteredQueue.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: 30 }}>
-                    <MedicalIcons.CheckCircle size={32} color="#10B981" />
-                    <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: 8 }}>
-                      File vide
-                    </div>
-                  </div>
-                ) : (
-                  filteredQueue.map(c => (
-                    <QueueItemCard
-                      key={c.id}
-                      consultation={c}
-                      isSelected={selectedConsultation === c.id}
-                      onClick={() => setSelectedConsultation(c.id)}
-                      onAccept={handleAccept}
-                      onReject={(id) => { setRejectId(id); setShowRejectModal(true); }}
-                      loading={actionLoading === `accept-${c.id}`}
-                    />
-                  ))
-                )}
+      {/* ═══════════════ HEADER ═══════════════ */}
+      <div style={{ background: "linear-gradient(135deg, #030C1A, #0A2647, #144272)", padding: "20px 32px", color: "white", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+        <div style={{ maxWidth: 1500, margin: "0 auto", position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(255,255,255,0.12)", border: "2px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
+              {user?.full_name?.charAt(0)?.toUpperCase() || "M"}
+            </div>
+            <div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>Dr. {user?.full_name || "Médecin"}</div>
+              <div style={{ fontSize: "0.72rem", opacity: 0.7, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {user?.specialty && <span>{user.specialty}</span>}
+                {userDomains.map(d => { const m = MODEL_CONFIG[d]; return m ? <span key={d} style={{ background: "rgba(255,255,255,0.12)", padding: "2px 8px", borderRadius: 6, fontSize: "0.65rem" }}>{m.icon} {m.label}</span> : null; })}
               </div>
             </div>
-
-            {/* Activité */}
-            <div style={{ marginTop: 16 }}>
-              <ActivityChart data={activityData} />
-            </div>
           </div>
-
-          {/* COLONNE CENTRALE - CONSULTATION */}
-          <div>
-            {!selectedConsultation ? (
-              <div style={{
-                background: "white", borderRadius: 16, border: "1px solid #E2E8F0",
-                padding: 48, textAlign: "center", minHeight: 500,
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              }}>
-                <MedicalIcons.Stethoscope size={48} color="#CBD5E1" />
-                <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A", marginTop: 16, marginBottom: 6 }}>
-                  Aucune consultation sélectionnée
-                </h3>
-                <p style={{ fontSize: "0.75rem", color: "#94A3B8", maxWidth: 260, lineHeight: 1.5 }}>
-                  Sélectionnez un patient dans la file d'attente
-                </p>
-
-                {assigned.length > 0 && (
-                  <div style={{ marginTop: 32, width: "100%", maxWidth: 320 }}>
-                    <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#94A3B8", marginBottom: 10, textTransform: "uppercase" }}>
-                      Consultations en cours
-                    </div>
-                    {assigned.slice(0, 3).map(c => {
-                      const m = MODEL_CONFIG[c.model_key] || MODEL_CONFIG.chest;
-                      const IconComp = MedicalIcons[m.icon === "brain" ? "Brain" : m.icon === "lungs" ? "Lungs" : "CTScan"];
-                      return (
-                        <button
-                          key={c.id}
-                          onClick={() => setSelectedConsultation(c.id)}
-                          style={{
-                            width: "100%", padding: "12px 14px", marginBottom: 6,
-                            background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10,
-                            cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 10,
-                          }}
-                        >
-                          <div style={{ width: 36, height: 36, borderRadius: 8, background: m.gradient, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <IconComp size={16} color="white" />
+          <div style={{ display: "flex", gap: 10 }}>
+            <div ref={notifRef} style={{ position: "relative" }}>
+              <button onClick={() => setShowNotifications(!showNotifications)} style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", cursor: "pointer", color: "white", position: "relative" }}>
+                🔔{unreadCount > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 10, background: "#DC2626", color: "white", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", animation: "pulse 2s infinite" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}
+              </button>
+              {showNotifications && (
+                <div style={{ position: "absolute", top: 52, right: 0, width: 380, maxHeight: 400, background: "white", borderRadius: 18, border: "1px solid #E2E8F0", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", zIndex: 200, overflow: "hidden", animation: "fadeUp 0.2s ease" }}>
+                  <div style={{ padding: "14px 18px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", background: "#FAFBFC" }}>
+                    <span style={{ fontWeight: 800, color: "#0A2647" }}>Notifications</span>
+                    {unreadCount > 0 && <button onClick={markAllRead} style={{ background: "none", border: "1px solid #E2E8F0", color: "#475569", fontSize: "0.7rem", fontWeight: 600, cursor: "pointer", borderRadius: 6, padding: "3px 10px" }}>Tout lire</button>}
+                  </div>
+                  <div style={{ overflowY: "auto", maxHeight: 340 }}>
+                    {notifications.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: "#CBD5E1" }}>Aucune notification</div> :
+                      notifications.slice(0, 10).map(n => (
+                        <div key={n.id} onClick={() => { try { const d = JSON.parse(n.data); if (d.consultation_id) { selectConsultation(d.consultation_id); setShowNotifications(false); } } catch {} }} style={{ padding: "12px 18px", borderBottom: "1px solid #F8FAFC", background: n.is_read ? "white" : "#F0F9FF", cursor: "pointer", animation: "slideIn 0.2s ease" }}>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <span>{NOTIF_ICONS[n.type] || "📌"}</span>
+                            <div style={{ flex: 1 }}><div style={{ fontWeight: 700, color: "#0A2647", fontSize: "0.8rem" }}>{n.title}</div><div style={{ fontSize: "0.7rem", color: "#64748B" }}>{n.message}</div><div style={{ fontSize: "0.6rem", color: "#CBD5E1", marginTop: 4 }}>{formatTime(n.created_at)}</div></div>
                           </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#0F172A" }}>{c.patient_name}</div>
-                            <div style={{ fontSize: "0.65rem", color: "#94A3B8" }}>#{c.id}</div>
-                          </div>
-                          <span style={{
-                            padding: "2px 8px", borderRadius: 20, fontSize: "0.55rem", fontWeight: 700,
-                            background: STATUS_CONFIG[c.status]?.bg, color: STATUS_CONFIG[c.status]?.color,
-                          }}>
-                            {STATUS_CONFIG[c.status]?.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : consultationData ? (
-              <div style={{
-                background: "white", borderRadius: 16, border: "1px solid #E2E8F0",
-                display: "flex", flexDirection: "column",
-              }}>
-                {/* Header */}
-                <div style={{
-                  padding: "18px 20px", borderBottom: "1px solid #F1F5F9",
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{
-                      width: 50, height: 50, borderRadius: 12,
-                      background: model?.gradient,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <ModelIcon size={24} color="white" />
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A" }}>
-                          {consultationData.patient_name}
-                        </h2>
-                        <span style={{ fontSize: "0.65rem", color: "#94A3B8", fontFamily: "monospace" }}>
-                          #{consultationData.id}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{
-                          padding: "2px 8px", borderRadius: 20, fontSize: "0.6rem", fontWeight: 700,
-                          background: STATUS_CONFIG[consultationData.status]?.bg,
-                          color: STATUS_CONFIG[consultationData.status]?.color,
-                        }}>
-                          {STATUS_CONFIG[consultationData.status]?.label}
-                        </span>
-                        <span style={{ fontSize: "0.65rem", color: "#64748B" }}>
-                          {model?.fullLabel}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {consultationData.status === "accepted" && (
-                      <button onClick={handleRunAnalysis} disabled={analysisLoading} style={{
-                        padding: "8px 14px", background: analysisLoading ? "#E2E8F0" : "#8B5CF6",
-                        border: "none", borderRadius: 8, color: "white", fontSize: "0.7rem", fontWeight: 600,
-                        cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
-                      }}>
-                        <MedicalIcons.DNA size={14} color="white" />
-                        Analyser
-                      </button>
-                    )}
-                    {consultationData.status === "analyzed" && (
-                      <button onClick={() => setShowCloseModal(true)} style={{
-                        padding: "8px 14px", background: "#6B7280", border: "none", borderRadius: 8,
-                        color: "white", fontSize: "0.7rem", fontWeight: 600, cursor: "pointer",
-                      }}>
-                        Clôturer
-                      </button>
-                    )}
-                    <button onClick={() => navigate(`/video/${consultationData.id}`)} style={{
-                      padding: "8px 14px", background: "#0F172A", border: "none", borderRadius: 8,
-                      color: "white", fontSize: "0.7rem", fontWeight: 600, cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
-                      <MedicalIcons.Video size={14} color="white" />
-                      Visio
-                    </button>
-                  </div>
-                </div>
-
-                {/* Monitoring */}
-                <VitalsMonitor patientName={consultationData.patient_name} />
-
-                {/* Notes */}
-                {consultationData.patient_notes && (
-                  <div style={{
-                    margin: "0 18px 14px", padding: "12px 14px",
-                    background: "#FFFBEB", borderRadius: 10, border: "1px solid #FDE68A",
-                  }}>
-                    <div style={{ fontSize: "0.6rem", fontWeight: 700, color: "#92400E", marginBottom: 4, textTransform: "uppercase" }}>
-                      Notes cliniques
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "#92400E", lineHeight: 1.5, fontStyle: "italic" }}>
-                      "{consultationData.patient_notes}"
-                    </div>
-                  </div>
-                )}
-
-                {/* Messages */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "0 18px", maxHeight: 220 }}>
-                  {messages.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 20 }}>
-                      <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-                        {canMessage ? "Aucun message" : "Messages après acceptation"}
-                      </div>
-                    </div>
-                  ) : (
-                    messages.map(m => <MessageBubble key={m.id} message={m} isDoctor={true} />)
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input */}
-                {canMessage && (
-                  <div style={{ padding: "14px 18px", borderTop: "1px solid #E2E8F0", display: "flex", gap: 8 }}>
-                    <input
-                      type="text"
-                      value={msgInput}
-                      onChange={e => setMsgInput(e.target.value)}
-                      onKeyPress={e => e.key === "Enter" && handleSendMessage()}
-                      placeholder="Message..."
-                      style={{
-                        flex: 1, padding: "10px 14px", background: "#F8FAFC",
-                        border: "1px solid #E2E8F0", borderRadius: 8,
-                        fontSize: "0.75rem", outline: "none",
-                      }}
-                    />
-                    <button
-                      onClick={handleSendMessage}
-                      disabled={!msgInput.trim() || sendingMsg}
-                      style={{
-                        padding: "0 18px", background: "#0F172A", border: "none", borderRadius: 8,
-                        color: "white", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
-                      }}
-                    >
-                      Envoyer
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <div style={{ width: 32, height: 32, border: "3px solid #E2E8F0", borderTopColor: "#0F172A", borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto" }}/>
-              </div>
-            )}
-          </div>
-
-          {/* COLONNE DROITE - ANALYSE & PLANNING */}
-          <div>
-            {/* Analyse IA */}
-            <div style={{
-              background: "white", borderRadius: 16, border: "1px solid #E2E8F0",
-              overflow: "hidden", marginBottom: 16,
-            }}>
-              <div style={{
-                padding: "16px 18px", borderBottom: "1px solid #F1F5F9",
-                display: "flex", alignItems: "center", gap: 8,
-              }}>
-                <MedicalIcons.DNA size={18} color="#8B5CF6" />
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0F172A" }}>
-                  Analyse IA
-                </span>
-                {analysis && (
-                  <span style={{
-                    marginLeft: "auto", padding: "3px 8px", borderRadius: 20,
-                    background: "#10B98115", color: "#10B981", fontSize: "0.6rem", fontWeight: 700,
-                  }}>
-                    Disponible
-                  </span>
-                )}
-              </div>
-
-              <div style={{ padding: "16px" }}>
-                {!selectedConsultation ? (
-                  <div style={{ textAlign: "center", padding: 30 }}>
-                    <MedicalIcons.DNA size={32} color="#CBD5E1" />
-                    <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: 8 }}>
-                      Sélectionnez une consultation
-                    </div>
-                  </div>
-                ) : analysis ? (
-                  <>
-                    <div style={{
-                      padding: 14, borderRadius: 12, marginBottom: 14,
-                      background: "#F0FDF4", border: "1px solid #A7F3D0",
-                    }}>
-                      <div style={{ fontSize: "0.6rem", fontWeight: 700, color: "#64748B", marginBottom: 4 }}>
-                        Diagnostic
-                      </div>
-                      <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#10B981", marginBottom: 6 }}>
-                        {analysis.prediction}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, height: 5, background: "#E2E8F0", borderRadius: 3 }}>
-                          <div style={{
-                            width: `${(analysis.confidence || 0) * 100}%`, height: "100%",
-                            background: "#10B981", borderRadius: 3,
-                          }}/>
                         </div>
-                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0F172A" }}>
-                          {((analysis.confidence || 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {analysis.explain_text && (
-                      <div style={{
-                        padding: 12, background: "#F8FAFC", borderRadius: 10,
-                        fontSize: "0.7rem", color: "#475569", lineHeight: 1.6,
-                      }}>
-                        {analysis.explain_text}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ textAlign: "center", padding: 30 }}>
-                    <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-                      {consultationData?.status === "accepted" 
-                        ? "En attente d'analyse" 
-                        : "Non disponible"}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Planning */}
-            <div style={{
-              background: "white", borderRadius: 16, border: "1px solid #E2E8F0",
-              overflow: "hidden",
-            }}>
-              <div style={{
-                padding: "16px 18px", borderBottom: "1px solid #F1F5F9",
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <MedicalIcons.Calendar size={16} color="#64748B" />
-                  <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0F172A" }}>
-                    Planning
-                  </span>
-                </div>
-                <button style={{
-                  padding: "4px 10px", background: "#0F172A", border: "none", borderRadius: 6,
-                  color: "white", fontSize: "0.6rem", fontWeight: 600, cursor: "pointer",
-                }}>
-                  + RDV
-                </button>
-              </div>
-
-              <div style={{ padding: "16px" }}>
-                <div style={{ textAlign: "center", padding: 20 }}>
-                  <MedicalIcons.Calendar size={28} color="#CBD5E1" />
-                  <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: 6 }}>
-                    Aucun rendez-vous
+                      ))}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
+            <button onClick={() => navigate("/classification")} style={{ padding: "10px 20px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 14, color: "white", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>🔬 Analyse libre</button>
           </div>
         </div>
       </div>
 
-      {/* Modals */}
+      {/* ═══════════════ TABS ═══════════════ */}
+      <div style={{ background: "white", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
+        <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", gap: 2, padding: "0 32px", overflowX: "auto" }}>
+          {tabs.map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+              padding: "14px 22px", border: "none", background: "none",
+              borderBottom: activeTab === tab.key ? "3px solid #7C3AED" : "3px solid transparent",
+              color: activeTab === tab.key ? "#7C3AED" : "#64748B",
+              fontWeight: activeTab === tab.key ? 700 : 400, fontSize: "0.85rem",
+              cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 8,
+            }}>
+              {tab.icon} {tab.label}
+              {tab.badge > 0 && <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: "0.65rem", fontWeight: 700, background: activeTab === tab.key ? "#EDE9FE" : "#F1F5F9", color: activeTab === tab.key ? "#7C3AED" : "#94A3B8" }}>{tab.badge}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══════════════ CONTENT ═══════════════ */}
+      <div style={{ maxWidth: 1500, margin: "0 auto", padding: "24px 32px", position: "relative", zIndex: 1 }}>
+
+        {/* ── TAB: DASHBOARD ── */}
+        {activeTab === "dashboard" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            {/* Alertes */}
+            {stats.critical > 0 && (
+              <div style={{ padding: "14px 18px", background: "linear-gradient(135deg, #FEF2F2, #FFF1F2)", border: "1.5px solid #FCA5A5", borderRadius: 14, marginBottom: 20, display: "flex", alignItems: "center", gap: 12, animation: "alertPulse 2s infinite" }}>
+                <span style={{ fontSize: "1.4rem" }}>🚨</span>
+                <div style={{ flex: 1 }}><div style={{ fontWeight: 800, color: "#991B1B" }}>{stats.critical} cas critique{stats.critical > 1 ? "s" : ""} en attente !</div><div style={{ fontSize: "0.78rem", color: "#B91C1C" }}>Intervention immédiate requise.</div></div>
+                <button onClick={() => { setFilterStatus("critical"); setActiveTab("queue"); }} style={{ padding: "8px 16px", background: "#DC2626", border: "none", borderRadius: 10, color: "white", fontWeight: 700, cursor: "pointer" }}>Voir →</button>
+              </div>
+            )}
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>
+              <StatCard icon="👥" label="Total patients" value={stats.queue + assigned.length} color="#0F172A" bg="#F1F5F9" />
+              <StatCard icon="⏳" label="En attente" value={stats.queue} color="#F59E0B" bg="#FFFBEB" alert={stats.critical > 0} onClick={() => setActiveTab("queue")} />
+              <StatCard icon="🚨" label="Urgents/Critiques" value={stats.critical + stats.urgent} color="#DC2626" bg="#FEF2F2" onClick={() => { setFilterStatus("critical"); setActiveTab("queue"); }} subtitle="Action requise" />
+              <StatCard icon="✅" label="En cours" value={stats.accepted} color="#3B82F6" bg="#EFF6FF" subtitle="Consultations actives" />
+              <StatCard icon="🧬" label="Résultats IA" value={stats.analyzed} color="#10B981" bg="#ECFDF5" subtitle="Analyses terminées" />
+              <StatCard icon="🔒" label="Terminés" value={stats.closed} color="#6B7280" bg="#F9FAFB" />
+            </div>
+            {/* Quick Actions */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+              {[
+                { icon: "👥", label: "File d'attente", desc: "Gérer les demandes", color: "#F59E0B", bg: "#FFFBEB", action: () => setActiveTab("queue"), badge: stats.queue },
+                { icon: "🤖", label: "Analyse IA", desc: "Lancer une analyse", color: "#7C3AED", bg: "#EDE9FE", action: () => navigate("/classification") },
+                { icon: "📅", label: "Rendez-vous", desc: "Planning & visio", color: "#3B82F6", bg: "#EFF6FF", action: () => setActiveTab("appointments") },
+                { icon: "📋", label: "Pathologies", desc: "Catalogue médical", color: "#10B981", bg: "#ECFDF5", action: () => navigate("/pathologies") },
+              ].map(a => (
+                <button key={a.label} onClick={a.action} style={{ padding: "18px", background: "white", borderRadius: 16, border: "1px solid #E2E8F0", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 14, position: "relative", transition: "all 0.2s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = a.color; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.transform = ""; }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: a.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem" }}>{a.icon}</div>
+                  <div><div style={{ fontWeight: 700, color: "#0A2647" }}>{a.label}</div><div style={{ fontSize: "0.72rem", color: "#94A3B8" }}>{a.desc}</div></div>
+                  {a.badge > 0 && <span style={{ position: "absolute", top: 10, right: 14, padding: "3px 10px", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, background: a.color, color: "white" }}>{a.badge}</span>}
+                </button>
+              ))}
+            </div>
+            {/* Cas récents */}
+            <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+              <div style={{ padding: "16px 20px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 800, color: "#0A2647" }}>📋 Dernières consultations</span>
+                <button onClick={() => setActiveTab("queue")} style={{ background: "none", border: "1px solid #E2E8F0", borderRadius: 8, color: "#7C3AED", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", padding: "5px 12px" }}>Voir tout →</button>
+              </div>
+              {loading ? <LoadingSpinner /> : assigned.length === 0 && queue.length === 0 ? <EmptyState icon="📋" title="Aucune consultation" desc="Aucun dossier en cours." /> : (
+                <div style={{ padding: "10px 16px" }}>
+                  {[...assigned.slice(0, 3), ...queue.slice(0, 2)].slice(0, 5).map(c => {
+                    const m = MODEL_CONFIG[c.model_key] || MODEL_CONFIG.chest;
+                    const st = STATUS_CONFIG[c.status] || STATUS_CONFIG.pending;
+                    return (
+                      <div key={c.id} onClick={() => selectConsultation(c.id)} style={{ padding: "12px 14px", borderRadius: 12, marginBottom: 6, background: "#F8FAFC", border: "1px solid #F1F5F9", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 42, height: 42, borderRadius: 10, background: m.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }}>{m.icon}</div>
+                        <div style={{ flex: 1 }}><div style={{ fontWeight: 700, color: "#0A2647", fontSize: "0.85rem" }}>{c.patient_name}</div><div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>#{c.id} · {m.label} · {formatTime(c.created_at)}</div></div>
+                        <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: "0.65rem", fontWeight: 700, background: st.bg, color: st.color }}>{st.icon} {st.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB: FILE D'ATTENTE ── */}
+        {activeTab === "queue" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            <div style={{ marginBottom: 20 }}><h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647" }}>👥 File d'attente</h2><p style={{ color: "#64748B" }}>Gérez les demandes de consultation entrantes</p></div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+              {["all", "critical", "urgent"].map(f => (
+                <button key={f} onClick={() => setFilterStatus(f)} style={{ padding: "8px 16px", borderRadius: 10, border: filterStatus === f ? "none" : "1px solid #E2E8F0", background: filterStatus === f ? (f === "critical" ? "#DC2626" : f === "urgent" ? "#EA580C" : "#0F172A") : "white", color: filterStatus === f ? "white" : "#64748B", fontWeight: 600, fontSize: "0.8rem", cursor: "pointer" }}>
+                  {f === "all" ? "Tous" : f === "critical" ? "Critiques" : "Urgents"} ({f === "all" ? queue.length : queue.filter(c => c.urgency === f).length})
+                </button>
+              ))}
+              <div style={{ marginLeft: "auto", position: "relative" }}>
+                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }}>🔍</span>
+                <input placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ padding: "8px 14px 8px 34px", borderRadius: 10, border: "1.5px solid #E2E8F0", fontSize: "0.8rem", width: 200 }} />
+              </div>
+            </div>
+            {loading ? <LoadingSpinner /> : filteredQueue.length === 0 ? <EmptyState icon="✅" title="File vide" desc="Aucune demande en attente." /> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filteredQueue.map(c => {
+                  const m = MODEL_CONFIG[c.model_key] || MODEL_CONFIG.chest;
+                  const ur = URGENCY_CONFIG[c.urgency] || URGENCY_CONFIG.normal;
+                  return (
+                    <div key={c.id} style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: `1.5px solid ${ur.color}30`, borderLeft: `4px solid ${ur.color}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+                      onClick={() => selectConsultation(c.id)}>
+                      <div style={{ width: 50, height: 50, borderRadius: 14, background: m.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem" }}>{m.icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700, color: "#0A2647", fontSize: "0.9rem" }}>{c.patient_name || "Patient"}</span>
+                          <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: "0.62rem", fontWeight: 700, background: ur.bg, color: ur.color }}>{ur.label}</span>
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "#94A3B8" }}>#{c.id} · {m.label} · Attente: {formatTime(c.created_at)}</div>
+                        {c.patient_notes && <div style={{ marginTop: 6, padding: "6px 10px", background: "#FFFBEB", borderRadius: 8, fontSize: "0.72rem", color: "#92400E", fontStyle: "italic" }}>"{c.patient_notes.substring(0, 100)}{c.patient_notes.length > 100 ? '...' : ''}"</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={e => { e.stopPropagation(); handleAccept(c.id); }} disabled={actionLoading === `accept-${c.id}`} style={{ padding: "8px 16px", background: "linear-gradient(135deg, #059669, #047857)", border: "none", borderRadius: 10, color: "white", fontWeight: 600, cursor: "pointer", fontSize: "0.75rem" }}>✅ Accepter</button>
+                        <button onClick={e => { e.stopPropagation(); setRejectId(c.id); setShowRejectModal(true); }} style={{ padding: "8px 16px", border: "1px solid #FCA5A5", borderRadius: 10, color: "#DC2626", fontWeight: 600, cursor: "pointer", fontSize: "0.75rem", background: "white" }}>❌ Refuser</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── TAB: CONSULTATION ── */}
+        {activeTab === "consultation" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            {!selectedConsultation ? (
+              <EmptyState icon="💬" title="Aucune consultation sélectionnée" desc="Choisissez un patient dans la file d'attente." actionLabel="Voir la file d'attente" onAction={() => setActiveTab("queue")} />
+            ) : consultationData ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
+                {/* Messages + Détails */}
+                <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                  <div style={{ padding: "16px 20px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: model?.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>{model?.icon}</div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#0A2647" }}>{consultationData.patient_name} <span style={{ fontWeight: 400, fontSize: "0.7rem", color: "#94A3B8" }}>#{consultationData.id}</span></div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{model?.fullLabel} · {STATUS_CONFIG[consultationData.status]?.icon} {STATUS_CONFIG[consultationData.status]?.label}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {consultationData.status === "accepted" && <button onClick={handleRunAnalysis} disabled={analysisLoading} style={{ padding: "7px 14px", background: analysisLoading ? "#E2E8F0" : "#7C3AED", border: "none", borderRadius: 8, color: "white", fontWeight: 600, fontSize: "0.75rem", cursor: "pointer" }}>{analysisLoading ? "🔄..." : "🤖 Analyser"}</button>}
+                      {consultationData.status === "analyzed" && <button onClick={() => setShowCloseModal(true)} style={{ padding: "7px 14px", background: "#6B7280", border: "none", borderRadius: 8, color: "white", fontWeight: 600, fontSize: "0.75rem", cursor: "pointer" }}>🔒 Clôturer</button>}
+                      <button onClick={() => setShowAppointmentModal(true)} style={{ padding: "7px 14px", background: "#3B82F6", border: "none", borderRadius: 8, color: "white", fontWeight: 600, fontSize: "0.75rem", cursor: "pointer" }}>📅 RDV</button>
+                      <button onClick={() => navigate(`/video/consultation/${consultationData.id}`)} style={{ padding: "7px 14px", background: "#0F172A", border: "none", borderRadius: 8, color: "white", fontWeight: 600, fontSize: "0.75rem", cursor: "pointer" }}>📹 Visio</button>
+                    </div>
+                  </div>
+                  {analysisError && <div style={{ margin: "8px 16px", padding: "10px", background: "#FEF2F2", borderRadius: 8, color: "#DC2626", fontSize: "0.75rem" }}>⚠️ {analysisError} <button onClick={() => setAnalysisError("")} style={{ marginLeft: 8, background: "none", border: "none", color: "#DC2626", cursor: "pointer" }}>✕</button></div>}
+                  {consultationData.patient_notes && <div style={{ margin: "8px 16px", padding: "10px", background: "#FFFBEB", borderRadius: 8, fontSize: "0.75rem", color: "#92400E", fontStyle: "italic" }}>📋 "{consultationData.patient_notes}"</div>}
+                  <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px", maxHeight: 400, minHeight: 200 }}>
+                    {messages.length === 0 ? <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>💬 {canMessage ? "Commencez la discussion" : "Messages après acceptation"}</div> :
+                      messages.map(m => {
+                        const isMine = m.sender_role === "Medecin";
+                        return (
+                          <div key={m.id} style={{ display: "flex", justifyContent: isMine ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                            <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isMine ? "#0F172A" : "white", color: isMine ? "white" : "#0A2647", border: isMine ? "none" : "1px solid #E2E8F0", fontSize: "0.8rem" }}>
+                              {!isMine && <div style={{ fontSize: "0.6rem", color: "#94A3B8", marginBottom: 2 }}>{m.sender_name}</div>}
+                              {m.content}
+                              <div style={{ fontSize: "0.55rem", color: isMine ? "rgba(255,255,255,0.4)" : "#CBD5E1", marginTop: 4, textAlign: "right" }}>{new Date(m.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    <div ref={messagesEndRef} />
+                  </div>
+                  {canMessage && (
+                    <div style={{ padding: "12px 18px", borderTop: "1px solid #E2E8F0", display: "flex", gap: 8 }}>
+                      <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendMessage()} placeholder="Écrire un message..." style={{ flex: 1, padding: "10px 14px", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: "0.8rem", outline: "none" }} />
+                      <button onClick={handleSendMessage} disabled={!msgInput.trim()} style={{ padding: "10px 18px", background: "#0F172A", border: "none", borderRadius: 10, color: "white", fontWeight: 600, cursor: "pointer" }}>Envoyer</button>
+                    </div>
+                  )}
+                  {!canMessage && <div style={{ padding: "12px", textAlign: "center", color: "#94A3B8", fontSize: "0.8rem", borderTop: "1px solid #E2E8F0" }}>💬 Acceptez la consultation pour discuter</div>}
+                </div>
+                {/* Analyse IA */}
+                <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                  <div style={{ padding: "14px 18px", borderBottom: "1px solid #F1F5F9", fontWeight: 800, color: "#0A2647" }}>🧬 Analyse IA</div>
+                  <div style={{ padding: "16px" }}>
+                    {analysisLoading ? <LoadingSpinner text="Analyse en cours..." /> : analysis ? (
+                      <div>
+                        <div style={{ padding: 14, borderRadius: 14, marginBottom: 14, background: analysis.out_of_domain ? "#FEF2F2" : "#F0FDF4", border: analysis.out_of_domain ? "1px solid #FECACA" : "1px solid #A7F3D0" }}>
+                          <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", marginBottom: 4 }}>{analysis.out_of_domain ? "⚠️ Hors domaine" : "Diagnostic"}</div>
+                          <div style={{ fontSize: "1.3rem", fontWeight: 800, color: PREDICTION_COLORS[analysis.prediction] || "#10B981", marginBottom: 6 }}>{analysis.prediction}</div>
+                          {analysis.confidence != null && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ flex: 1, height: 6, background: "#E2E8F0", borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{ width: `${(analysis.confidence || 0) * 100}%`, height: "100%", background: (analysis.confidence || 0) > 0.8 ? "#10B981" : (analysis.confidence || 0) > 0.5 ? "#F59E0B" : "#DC2626", borderRadius: 3 }} />
+                              </div>
+                              <span style={{ fontWeight: 700, color: "#0A2647" }}>{((analysis.confidence || 0) * 100).toFixed(1)}%</span>
+                            </div>
+                          )}
+                        </div>
+                        {analysis.gradcam_b64 && <img src={`data:image/jpeg;base64,${analysis.gradcam_b64}`} alt="GradCAM" style={{ width: "100%", borderRadius: 12, marginBottom: 14 }} />}
+                        {analysis.explain_text && <div style={{ padding: 10, background: "#F8FAFC", borderRadius: 8, fontSize: "0.75rem", color: "#475569", lineHeight: 1.6 }}>{analysis.explain_text}</div>}
+                      </div>
+                    ) : <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>{consultationData?.status === "accepted" ? "Cliquez « Analyser »" : "Non disponible"}</div>}
+                  </div>
+                </div>
+              </div>
+            ) : <LoadingSpinner />}
+          </div>
+        )}
+
+        {/* ── TAB: RENDEZ-VOUS ── */}
+        {activeTab === "appointments" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div><h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647" }}>📅 Rendez-vous</h2><p style={{ color: "#64748B" }}>Gérez vos rendez-vous patients</p></div>
+              {selectedConsultation && consultationData && <button onClick={() => setShowAppointmentModal(true)} style={{ padding: "10px 20px", background: "#3B82F6", border: "none", borderRadius: 12, color: "white", fontWeight: 700, cursor: "pointer" }}>+ Nouveau RDV</button>}
+            </div>
+            <EmptyState icon="📅" title="Aucun rendez-vous" desc="Planifiez des rendez-vous depuis la consultation." />
+          </div>
+        )}
+
+        {/* ── TAB: PROFIL ── */}
+        {activeTab === "profile" && (
+          <div style={{ animation: "fadeUp 0.4s ease", maxWidth: 600 }}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647", marginBottom: 20 }}>👤 Mon Profil</h2>
+            <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden" }}>
+              <div style={{ padding: "24px", borderBottom: "1px solid #E2E8F0", background: "linear-gradient(135deg, #FAFBFC, white)", display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 18, background: "linear-gradient(135deg, #7C3AED, #6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "1.5rem", fontWeight: 700 }}>{user?.full_name?.charAt(0) || "M"}</div>
+                <div><div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0A2647" }}>Dr. {user?.full_name}</div><div style={{ color: "#64748B", fontSize: "0.85rem" }}>@{user?.username} · {user?.role}</div></div>
+              </div>
+              <div style={{ padding: "20px 24px" }}>
+                {[["Spécialité", user?.specialty],["Domaines", userDomains.map(d => MODEL_CONFIG[d]?.label || d).join(", ")],["Email", user?.email || "—"],["Statut", "Actif"]].map(([l, v], i) => (
+                  <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: i < 3 ? "1px solid #F8FAFC" : "none" }}><span style={{ color: "#94A3B8", fontSize: "0.85rem" }}>{l}</span><span style={{ fontWeight: 600, color: "#0A2647" }}>{v || "—"}</span></div>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: 20, padding: "14px 18px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 14, fontSize: "0.8rem", color: "#92400E" }}>⚠️ Rappel : Les diagnostics IA sont des aides à la décision. La responsabilité finale incombe au clinicien.</div>
+          </div>
+        )}
+
+      </div>
+
+      {/* ═══════════════ MODALS ═══════════════ */}
       {showRejectModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ background: "white", borderRadius: 16, padding: 24, maxWidth: 380, width: "100%" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: 14 }}>Rejeter la consultation</h3>
-            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Raison du rejet..." rows={3} style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10, marginBottom: 16, resize: "none", fontSize: "0.75rem" }}/>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { setShowRejectModal(false); setRejectReason(""); }} style={{ flex: 1, padding: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, cursor: "pointer", fontSize: "0.75rem" }}>Annuler</button>
-              <button onClick={handleReject} style={{ flex: 1, padding: 10, background: "#EF4444", border: "none", borderRadius: 8, color: "white", fontWeight: 600, cursor: "pointer", fontSize: "0.75rem" }}>Confirmer</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: 20, padding: 28, maxWidth: 420, width: "100%" }}>
+            <h3 style={{ fontWeight: 700, marginBottom: 8 }}>❌ Rejeter #{rejectId}</h3>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Raison..." rows={3} style={{ width: "100%", padding: 12, border: "1px solid #E2E8F0", borderRadius: 12, marginBottom: 16, resize: "none" }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { setShowRejectModal(false); setRejectReason(""); }} style={{ flex: 1, padding: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, cursor: "pointer" }}>Annuler</button>
+              <button onClick={handleReject} style={{ flex: 1, padding: 10, background: "#DC2626", border: "none", borderRadius: 10, color: "white", fontWeight: 600, cursor: "pointer" }}>Rejeter</button>
             </div>
           </div>
         </div>
       )}
 
       {showCloseModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ background: "white", borderRadius: 16, padding: 24, maxWidth: 380, width: "100%" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: 14 }}>Clôturer la consultation</h3>
-            <textarea value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Notes de clôture..." rows={3} style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10, marginBottom: 16, resize: "none", fontSize: "0.75rem" }}/>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setShowCloseModal(false)} style={{ flex: 1, padding: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, cursor: "pointer", fontSize: "0.75rem" }}>Annuler</button>
-              <button onClick={handleClose} style={{ flex: 1, padding: 10, background: "#0F172A", border: "none", borderRadius: 8, color: "white", fontWeight: 600, cursor: "pointer", fontSize: "0.75rem" }}>Clôturer</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: 20, padding: 28, maxWidth: 420, width: "100%" }}>
+            <h3 style={{ fontWeight: 700, marginBottom: 8 }}>🔒 Clôturer #{selectedConsultation}</h3>
+            <textarea value={closeNotes} onChange={e => setCloseNotes(e.target.value)} placeholder="Notes..." rows={3} style={{ width: "100%", padding: 12, border: "1px solid #E2E8F0", borderRadius: 12, marginBottom: 16, resize: "none" }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowCloseModal(false)} style={{ flex: 1, padding: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, cursor: "pointer" }}>Annuler</button>
+              <button onClick={handleClose} style={{ flex: 1, padding: 10, background: "#0F172A", border: "none", borderRadius: 10, color: "white", fontWeight: 600, cursor: "pointer" }}>Clôturer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAppointmentModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: 20, padding: 28, maxWidth: 480, width: "100%" }}>
+            <h3 style={{ fontWeight: 700, marginBottom: 8 }}>📅 Planifier un RDV</h3>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Type</label>
+              <select value={apptForm.type} onChange={e => setApptForm(p => ({ ...p, type: e.target.value }))} style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10 }}>
+                <option value="video">📹 Vidéo</option><option value="in_person">🏥 Présentiel</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Date/Heure *</label>
+              <input type="datetime-local" value={apptForm.scheduled_at} onChange={e => setApptForm(p => ({ ...p, scheduled_at: e.target.value }))} style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10 }} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Durée (min)</label>
+              <input type="number" value={apptForm.duration_minutes} onChange={e => setApptForm(p => ({ ...p, duration_minutes: parseInt(e.target.value) || 30 }))} min="15" step="15" style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10 }} />
+            </div>
+            {apptForm.type === "video" ? (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Lien visio</label>
+                <input value={apptForm.video_link} onChange={e => setApptForm(p => ({ ...p, video_link: e.target.value }))} placeholder="https://meet.google.com/..." style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10 }} />
+              </div>
+            ) : (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: "0.75rem", fontWeight: 600, display: "block", marginBottom: 4 }}>Lieu</label>
+                <input value={apptForm.location} onChange={e => setApptForm(p => ({ ...p, location: e.target.value }))} placeholder="Cabinet, hôpital..." style={{ width: "100%", padding: 10, border: "1px solid #E2E8F0", borderRadius: 10 }} />
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowAppointmentModal(false)} style={{ flex: 1, padding: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, cursor: "pointer" }}>Annuler</button>
+              <button onClick={handleCreateAppointment} disabled={!apptForm.scheduled_at} style={{ flex: 1, padding: 10, background: "#3B82F6", border: "none", borderRadius: 10, color: "white", fontWeight: 600, cursor: "pointer" }}>Créer</button>
             </div>
           </div>
         </div>
@@ -1126,35 +718,3 @@ export default function DoctorDashboard() {
     </div>
   );
 }
-
-// Composant StatCard
-const StatCard = ({ icon, label, value, color, alert }) => (
-  <div style={{
-    background: "white", borderRadius: 14, padding: "16px 18px",
-    border: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between",
-    position: "relative",
-  }}>
-    <div>
-      <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: "0.7rem", color: "#64748B", fontWeight: 500, marginTop: 2 }}>
-        {label}
-      </div>
-    </div>
-    <div style={{
-      width: 42, height: 42, borderRadius: 11,
-      background: `${color}10`, display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      {icon}
-    </div>
-    {alert && (
-      <div style={{
-        position: "absolute", top: -4, right: -4,
-        width: 10, height: 10, borderRadius: "50%",
-        background: "#EF4444", border: "2px solid white",
-        animation: "pulse 1.5s infinite",
-      }}/>
-    )}
-  </div>
-);

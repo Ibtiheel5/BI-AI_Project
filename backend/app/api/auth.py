@@ -1,4 +1,4 @@
-# app/api/auth.py — version avec rôle Patient
+# app/api/auth.py — version avec rôle Patient + domaine retina
 
 import os
 import json
@@ -27,7 +27,9 @@ pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 router        = APIRouter(prefix="/auth", tags=["auth"])
 
-VALID_ROLES = {"Medecin", "Patient", "Administrateur"}
+# ── Domaines valides (mis à jour avec retina) ──────────────────────
+VALID_ROLES   = {"Medecin", "Patient", "Administrateur"}
+VALID_DOMAINS = {"chest", "lung", "brain", "retina"}
 
 # ── Connexion PostgreSQL ────────────────────────────────────────────
 def get_db():
@@ -65,11 +67,12 @@ def init_db():
     if count == 0:
         defaults = [
             # (username, password, full_name, domains, role, specialty, status, is_admin)
-            ("dr.martin",  "chest123",   "Dr. Martin",     '["chest"]',                "Medecin",        "Radiologie thoracique", "approved", False),
-            ("dr.lambert", "neuro123",   "Dr. Lambert",    '["brain"]',                "Medecin",        "Neurologie et IRM",     "approved", False),
-            ("dr.benali",  "lung123",    "Dr. Benali",     '["lung"]',                 "Medecin",        "Oncologie pulmonaire",  "approved", False),
-            ("admin",      "admin123",   "Administrateur", '["chest","lung","brain"]', "Administrateur", "Acces complet",         "approved", True),
-            ("patient",    "patient123", "Ahmed Ben Ali",  '[]',                       "Patient",        "",                      "approved", False),
+            ("dr.martin",  "chest123",   "Dr. Martin",     '["chest"]',                       "Medecin",        "Radiologie thoracique",      "approved", False),
+            ("dr.lambert", "neuro123",   "Dr. Lambert",    '["brain"]',                       "Medecin",        "Neurologie et IRM",           "approved", False),
+            ("dr.benali",  "lung123",    "Dr. Benali",     '["lung"]',                        "Medecin",        "Oncologie pulmonaire",        "approved", False),
+            ("dr.seddik",  "retina123",  "Dr. Seddik",     '["retina"]',                      "Medecin",        "Ophtalmologie et Retinopathie","approved", False),
+            ("admin",      "admin123",   "Administrateur", '["chest","lung","brain","retina"]',"Administrateur", "Acces complet",               "approved", True),
+            ("patient",    "patient123", "Ahmed Ben Ali",  '[]',                              "Patient",        "",                            "approved", False),
         ]
         for username, pw, full_name, domains, role, specialty, st, is_admin in defaults:
             cur.execute(
@@ -78,18 +81,43 @@ def init_db():
                 (username, pwd_context.hash(pw), full_name, domains, role, specialty, st, is_admin)
             )
         conn.commit()
-        print("✅ [Auth] Table users créée avec les comptes par défaut (+ patient).")
+        print("✅ [Auth] Table users créée avec les comptes par défaut (chest/lung/brain/retina + patient).")
     else:
-        # Vérifier si le compte patient existe, sinon l'ajouter
-        cur.execute("SELECT id FROM users WHERE username='patient'")
-        if not cur.fetchone():
-            cur.execute(
-                "INSERT INTO users (username,password,full_name,domains,role,specialty,status,is_admin) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                ("patient", pwd_context.hash("patient123"), "Ahmed Ben Ali", "[]", "Patient", "", "approved", False)
-            )
-            conn.commit()
-            print("✅ [Auth] Compte patient par défaut ajouté.")
+        # Vérifier et ajouter les comptes manquants si la table existait déjà
+
+        missing_users = [
+            ("patient",   "patient123", "Ahmed Ben Ali", "[]",          "Patient",        "",                             "approved", False),
+            ("dr.seddik", "retina123",  "Dr. Seddik",   '["retina"]',  "Medecin",        "Ophtalmologie et Retinopathie", "approved", False),
+        ]
+
+        for username, pw, full_name, domains, role, specialty, st, is_admin in missing_users:
+            cur.execute("SELECT id FROM users WHERE username=%s", (username,))
+            if not cur.fetchone():
+                cur.execute(
+                    "INSERT INTO users (username,password,full_name,domains,role,specialty,status,is_admin) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (username, pwd_context.hash(pw), full_name, domains, role, specialty, st, is_admin)
+                )
+                print(f"✅ [Auth] Compte '{username}' ajouté.")
+        conn.commit()
+
+        # Mettre à jour le domaine admin pour inclure retina si nécessaire
+        cur.execute("SELECT domains FROM users WHERE username='admin'")
+        row = cur.fetchone()
+        if row:
+            try:
+                admin_domains = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                if "retina" not in admin_domains:
+                    admin_domains.append("retina")
+                    cur.execute(
+                        "UPDATE users SET domains=%s WHERE username='admin'",
+                        (json.dumps(admin_domains),)
+                    )
+                    conn.commit()
+                    print("✅ [Auth] Domaine 'retina' ajouté au compte admin.")
+            except Exception as e:
+                print(f"⚠️ [Auth] Impossible de mettre à jour les domaines admin : {e}")
+
         print(f"✅ [Auth] Table users OK ({count} utilisateurs)")
 
     cur.close()
@@ -176,7 +204,7 @@ class RegisterRequest(BaseModel):
     full_name: str
     domains:   List[str]
     specialty: str = ""
-    role:      str = "Medecin"   # ← nouveau champ : "Medecin" | "Patient"
+    role:      str = "Medecin"
 
 class ApproveRequest(BaseModel):
     user_id: int
@@ -230,8 +258,10 @@ async def register(req: RegisterRequest):
     if role == "Medecin":
         if not req.domains:
             raise HTTPException(400, detail="Sélectionnez au moins un domaine médical.")
-        if not all(d in {"chest", "lung", "brain"} for d in req.domains):
-            raise HTTPException(400, detail="Domaine invalide.")
+        # Valider que tous les domaines soumis sont valides (inclut maintenant retina)
+        invalid_domains = [d for d in req.domains if d not in VALID_DOMAINS]
+        if invalid_domains:
+            raise HTTPException(400, detail=f"Domaine(s) invalide(s) : {', '.join(invalid_domains)}. Domaines acceptés : {', '.join(sorted(VALID_DOMAINS))}.")
         domains = json.dumps(req.domains)
         status  = "pending"   # médecin → validation admin requise
     else:

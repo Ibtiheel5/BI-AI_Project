@@ -1,1363 +1,1070 @@
-// pages/PatientDashboard.jsx
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+// src/pages/PatientDashboard.jsx
+// Dashboard Patient — Version Premium avec Chatbot IA & Géolocalisation
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix icônes Leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+});
 
 const API = "http://localhost:8000/api/v1";
 
 // ═══════════════════════════════════════════════════════════════
-// COORDONNÉES VILLES TUNISIENNES (Haversine)
+// CONFIGURATION MÉDICALE
 // ═══════════════════════════════════════════════════════════════
+
+const STATUS_CONFIG = {
+  pending:  { label: "En attente",  short: "Attente",  color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", icon: "⏳" },
+  accepted: { label: "Pris en charge", short: "En cours", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", icon: "🩺" },
+  analyzed: { label: "Résultats prêts", short: "Résultat", color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", icon: "🧬" },
+  closed:   { label: "Terminé",     short: "Terminé",  color: "#6B7280", bg: "#F9FAFB", border: "#E5E7EB", icon: "✅" },
+  rejected: { label: "Refusé",      short: "Refusé",   color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", icon: "❌" },
+};
+
+const URGENCY_CONFIG = {
+  critical: { label: "Critique", color: "#DC2626", bg: "#FEE2E2", icon: "🔴", pulse: true },
+  urgent:   { label: "Urgent",   color: "#EA580C", bg: "#FFF7ED", icon: "🟠", pulse: true },
+  normal:   { label: "Normal",   color: "#059669", bg: "#F0FDF4", icon: "🟢", pulse: false },
+};
+
+const MODEL_CONFIG = {
+  brain:  { icon: "🧠", label: "IRM Cérébrale",     fullLabel: "Imagerie par Résonance Magnétique — Encéphale", color: "#7C3AED", bg: "#F5F3FF", organ: "Cerveau", modality: "IRM", accuracy: "96.2%" },
+  lung:   { icon: "🔬", label: "Scanner CT",         fullLabel: "Tomodensitométrie — Poumons",                  color: "#DC2626", bg: "#FEF2F2", organ: "Poumons", modality: "TDM", accuracy: "94.8%" },
+  chest:  { icon: "🫁", label: "Radio Thoracique",   fullLabel: "Radiographie — Thorax",                        color: "#0369A1", bg: "#F0F9FF", organ: "Thorax",  modality: "Rx",  accuracy: "97.3%" },
+  retina: { icon: "👁️", label: "Fond d'œil",        fullLabel: "Rétinographie — Fond d'œil",                   color: "#0E7490", bg: "#ECFEFF", organ: "Rétine",   modality: "Photo", accuracy: "92.1%" },
+};
+
 const CITY_COORDS = {
   "Tunis": [36.8065, 10.1815], "Sfax": [34.7398, 10.7600],
   "Sousse": [35.8254, 10.6369], "Ariana": [36.8625, 10.1956],
   "Bizerte": [37.2744, 9.8739], "Monastir": [35.7643, 10.8113],
   "Nabeul": [36.4561, 10.7376], "Ben Arous": [36.7533, 10.2282],
-  "Manouba": [36.8101, 10.0956], "Kairouan": [35.6781, 10.0963],
-  "Gabès": [33.8815, 10.0982], "Mahdia": [35.5047, 11.0622],
-  "Gafsa": [34.4250, 8.7842], "Béja": [36.7256, 9.1817],
-  "Jendouba": [36.5011, 8.7802], "Kasserine": [35.1676, 8.8365],
-  "Médenine": [33.3540, 10.5055], "Tozeur": [33.9197, 8.1336],
-  "Siliana": [36.0849, 9.3708], "Zaghouan": [36.4029, 10.1429],
-  "Kef": [36.1747, 8.7049], "Hammam Lif": [36.6661, 10.3145],
-  "La Marsa": [36.8783, 10.3247], "La Goulette": [36.8136, 10.3169],
+  "Kairouan": [35.6781, 10.0963], "Gabès": [33.8815, 10.0982],
+  "Mahdia": [35.5047, 11.0622], "Gafsa": [34.4250, 8.7842],
+  "Béja": [36.7256, 9.1817], "Jendouba": [36.5011, 8.7802],
+  "Manouba": [36.8101, 10.0956], "Kasserine": [35.1676, 8.8365],
+  "Médenine": [33.3540, 10.5055], "Tataouine": [32.9297, 10.4518],
+  "Tozeur": [33.9197, 8.1336], "Siliana": [36.0849, 9.3708],
+  "Zaghouan": [36.4029, 10.1429], "Le Kef": [36.1747, 8.7049],
+  "Sidi Bouzid": [34.4311, 9.4838], "Kébili": [33.7072, 8.9713],
+  "Hammam Lif": [36.6661, 10.3145], "La Marsa": [36.8783, 10.3247],
   "Carthage": [36.8530, 10.3220], "El Menzah": [36.8425, 10.1547],
-  "Le Kram": [36.8108, 10.3272], "El Mourouj": [36.7333, 10.2283],
-  "Ezzahra": [36.7314, 10.1997], "Mornag": [36.6331, 10.2583],
-  "Radès": [36.7033, 10.2333], "Ben Gardane": [33.3400, 11.1300],
-  "Sidi Bouzid": [34.4311, 9.4838], "Tataouine": [32.9297, 10.4518],
-  "Kébili": [33.7072, 8.9713], "Mahres": [34.5667, 10.5333],
-  "Hammam Sousse": [35.8625, 10.6111], "Kalaa Kebira": [35.7167, 10.6333],
+  "Radès": [36.7033, 10.2333], "Ezzahra": [36.7314, 10.1997],
+  "Mornag": [36.6331, 10.2583], "Hammam Sousse": [35.8625, 10.6111],
+  "Msaken": [35.7167, 10.5833], "Moknine": [35.6333, 10.9000],
+  "Ksar Hellal": [35.6333, 10.8833], "Mahres": [34.5667, 10.5333],
   "Enfidha": [36.1333, 10.4167], "Bouficha": [35.8833, 10.4500],
-  "Moknine": [35.6333, 10.9000], "Ksar Hellal": [35.6333, 10.8833],
-  "Msaken": [35.7167, 10.5833], "Sahline": [35.8000, 10.6500],
+  "Ben Gardane": [33.3400, 11.1300], "Kalaa Kebira": [35.7167, 10.6333],
 };
+
+const TUNISIA_CENTER = [34.0, 9.0];
 
 const SPEC_ICONS = {
   "Neurologue": "🧠", "Neurochirurgien": "🧠", "Pneumologue": "🫁",
-  "Oncologue": "🔬", "Carcinologue": "🔬", "Chirurgie carcinologique": "🔬",
-  "Cardiologue": "❤️", "Infectiologue": "🦠", "Radiologue": "⚡",
+  "Oncologue": "🔬", "Carcinologue": "🔬", "Cardiologue": "❤️",
+  "Infectiologue": "🦠", "Radiologue": "⚡", "Ophtalmologue": "👁️",
+  "Chirurgie carcinologique": "🔬",
 };
 
-function haversine(lat1, lon1, lat2, lon2) {
+const PREDICTION_DISPLAY = {
+  "Normal": { severity: "none", color: "#059669", label: "Aucune anomalie" },
+  "No Finding": { severity: "none", color: "#059669", label: "Aucune anomalie" },
+  "COVID": { severity: "critical", color: "#DC2626", label: "COVID-19" },
+  "Pneumonia": { severity: "critical", color: "#DC2626", label: "Pneumonie" },
+  "Pneumothorax": { severity: "critical", color: "#DC2626", label: "Pneumothorax" },
+  "Edema": { severity: "critical", color: "#DC2626", label: "Œdème pulmonaire" },
+  "Mass": { severity: "critical", color: "#DC2626", label: "Masse pulmonaire" },
+  "Malignant": { severity: "critical", color: "#DC2626", label: "Tumeur maligne" },
+  "Glioma": { severity: "critical", color: "#DC2626", label: "Gliome" },
+  "Cardiomegaly": { severity: "urgent", color: "#EA580C", label: "Cardiomégalie" },
+  "Meningioma": { severity: "urgent", color: "#EA580C", label: "Méningiome" },
+  "Benign": { severity: "low", color: "#D97706", label: "Tumeur bénigne" },
+  "No_DR": { severity: "none", color: "#059669", label: "Pas de rétinopathie" },
+  "Proliferate_DR": { severity: "critical", color: "#DC2626", label: "RD proliférante" },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// UTILITAIRES
+// ═══════════════════════════════════════════════════════════════
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function formatDistance(km) {
   if (km == null || isNaN(km)) return null;
-  return km < 1 ? `${Math.round(km * 1000)} m` : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+function formatDate(d, withTime = false) {
+  if (!d) return "—";
+  const options = { day: "numeric", month: "short", year: "numeric" };
+  if (withTime) { options.hour = "2-digit"; options.minute = "2-digit"; }
+  return new Date(d).toLocaleDateString("fr-FR", options);
+}
+
+function formatTimeAgo(d) {
+  if (!d) return "";
+  const diff = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
+  if (diff < 1) return "À l'instant";
+  if (diff < 60) return `Il y a ${diff} min`;
+  if (diff < 1440) return `Il y a ${Math.floor(diff / 60)}h`;
+  return `Il y a ${Math.floor(diff / 1440)}j`;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CONFIGURATION MÉDICALE
+// COMPOSANTS INTERNES
 // ═══════════════════════════════════════════════════════════════
-const STATUS_MED = {
-  pending:  { label: "En attente de médecin",   short: "En attente",  color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", icon: "⏳", dot: "#F59E0B", desc: "Votre demande est dans la file d'attente. Un médecin spécialisé sera notifié." },
-  accepted: { label: "Prise en charge",         short: "Pris en charge", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", icon: "🩺", dot: "#3B82F6", desc: "Un médecin a accepté votre dossier. L'analyse IA va démarrer." },
-  analyzed: { label: "Résultats disponibles",   short: "Résultat prêt", color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", icon: "🧬", dot: "#10B981", desc: "L'analyse est terminée. Consultez les résultats et le commentaire du médecin." },
-  rejected: { label: "Demande non traitée",     short: "Rejetée",      color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", icon: "✕",  dot: "#EF4444", desc: "Cette demande n'a pas pu être traitée. Vous pouvez soumettre une nouvelle image." },
-  closed:   { label: "Consultation terminée",   short: "Terminée",     color: "#4B5563", bg: "#F9FAFB", border: "#E5E7EB", icon: "📋", dot: "#6B7280", desc: "La consultation a été clôturée par le médecin. Les résultats restent accessibles." },
-};
 
-const URGENCY_MED = {
-  critical: { label: "Critique", color: "#DC2626", bg: "#FEF2F2", border: "#FCA5A5", icon: "🔴" },
-  urgent:   { label: "Urgent",   color: "#EA580C", bg: "#FFF7ED", border: "#FDBA74", icon: "🟠" },
-  normal:   { label: "Normal",   color: "#059669", bg: "#F0FDF4", border: "#86EFAC", icon: "🟢" },
-};
+// --- Particles Background ---
+function ParticlesBg() {
+  const particles = useMemo(() => Array.from({ length: 25 }, (_, i) => ({
+    id: i, x: Math.random() * 100, y: Math.random() * 100,
+    size: Math.random() * 3 + 1, duration: 8 + Math.random() * 15,
+    delay: Math.random() * 10, opacity: 0.03 + Math.random() * 0.06,
+  })), []);
 
-const MODEL_MED = {
-  brain: { icon: "🧠", label: "IRM Cérébrale",       full: "Imagerie par Résonance Magnétique — Encéphale", color: "#7C3AED", bg: "#F5F3FF", organ: "Cerveau", modality: "IRM" },
-  lung:  { icon: "🔬", label: "Scanner Thoracique",   full: "Tomodensitométrie — Poumons",                   color: "#DC2626", bg: "#FEF2F2", organ: "Poumons", modality: "TDM" },
-  chest: { icon: "🫁", label: "Radio Thoracique",     full: "Radiographie — Thorax",                        color: "#0369A1", bg: "#F0F9FF", organ: "Thorax", modality: "Rx" },
-};
-
-const PREDICTION_DISPLAY = {
-  glioma: { fr: "Gliome", severity: "high", color: "#DC2626" },
-  meningioma: { fr: "Méningiome", severity: "medium", color: "#EA580C" },
-  pituitary: { fr: "Adénome hypophysaire", severity: "medium", color: "#EA580C" },
-  no_tumor: { fr: "Pas de tumeur", severity: "none", color: "#059669" },
-  malignant: { fr: "Tumeur maligne", severity: "high", color: "#DC2626" },
-  benign: { fr: "Tumeur bénigne", severity: "medium", color: "#EA580C" },
-  normal: { fr: "Normal", severity: "none", color: "#059669" },
-  "Normal": { fr: "Normal", severity: "none", color: "#059669" },
-  "No Finding": { fr: "Aucune anomalie", severity: "none", color: "#059669" },
-  COVID: { fr: "COVID-19", severity: "high", color: "#DC2626" },
-  Viral_Pneumonia: { fr: "Pneumonie virale", severity: "high", color: "#DC2626" },
-  Bacterial_Pneumonia: { fr: "Pneumonie bactérienne", severity: "high", color: "#DC2626" },
-  Pneumonia: { fr: "Pneumonie", severity: "high", color: "#DC2626" },
-  Tuberculosis: { fr: "Tuberculose", severity: "high", color: "#DC2626" },
-  Cardiomegaly: { fr: "Cardiomégalie", severity: "medium", color: "#EA580C" },
-  Pleural_Effusion: { fr: "Épanchement pleural", severity: "medium", color: "#EA580C" },
-  Pulmonary_Fibrosis: { fr: "Fibrose pulmonaire", severity: "medium", color: "#EA580C" },
-  Edema: { fr: "Œdème pulmonaire", severity: "high", color: "#DC2626" },
-  Emphysema: { fr: "Emphysème", severity: "medium", color: "#EA580C" },
-  Lung_Opacity: { fr: "Opacité pulmonaire", severity: "medium", color: "#EA580C" },
-  Pneumothorax: { fr: "Pneumothorax", severity: "high", color: "#DC2626" },
-  Mass: { fr: "Masse pulmonaire", severity: "high", color: "#DC2626" },
-  Nodule: { fr: "Nodule pulmonaire", severity: "medium", color: "#EA580C" },
-  Atelectasis: { fr: "Atrélectasie", severity: "medium", color: "#EA580C" },
-  Consolidation: { fr: "Condensation", severity: "medium", color: "#EA580C" },
-  Hernia: { fr: "Hernie hiatale", severity: "low", color: "#D97706" },
-};
-
-const NOTIF_ICONS = {
-  new_consultation: "📋", consultation_accepted: "🩺", consultation_rejected: "❌",
-  analysis_ready: "🧬", appointment_scheduled: "📅", consultation_closed: "📋",
-  new_message: "💬", doctor_changed: "🔄", consultation_transferred: "📤",
-};
-
-const MODEL_TO_SPECS = {
-  brain: ["Neurologue", "Neurochirurgien", "Radiologue"],
-  lung: ["Pneumologue", "Oncologue", "Carcinologue", "Chirurgie carcinologique", "Radiologue"],
-  chest: ["Cardiologue", "Infectiologue", "Radiologue"],
-};
-
-// ═══════════════════════════════════════════════════════════════
-// SMALL COMPONENTS
-// ═══════════════════════════════════════════════════════════════
-function MedBadge({ label, color, bg, border, icon, size = "sm" }) {
-  const s = size === "sm" ? { p: "2px 8px", f: ".65rem", r: 6 } : { p: "4px 12px", f: ".75rem", r: 8 };
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4, padding: s.p, borderRadius: s.r,
-      background: bg, color, border: `1px solid ${border}`, fontSize: s.f, fontWeight: 700, whiteSpace: "nowrap",
-    }}>{icon && <span style={{ fontSize: ".85em" }}>{icon}</span>}{label}</span>
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+      {particles.map(p => (
+        <div key={p.id} style={{
+          position: "absolute", left: `${p.x}%`, top: `${p.y}%`,
+          width: p.size, height: p.size, borderRadius: "50%",
+          background: "#2563EB", opacity: p.opacity,
+          animation: `floatParticle ${p.duration}s ease-in-out ${p.delay}s infinite alternate`,
+        }} />
+      ))}
+    </div>
   );
 }
 
-function EmptyState({ icon, title, desc, actionLabel, onAction }) {
+// --- Map Components ---
+function MapCenterOnUser({ position }) {
+  const map = useMap();
+  useEffect(() => { if (position) map.setView(position, 13); }, [position, map]);
+  return null;
+}
+
+function DoctorMap({ userLocation, allDoctors, nearbyIds, selectedDoctor, setSelectedDoctor, searchRadius }) {
+  const userIcon = L.divIcon({
+    html: `<div style="width:22px;height:22px;background:#2563EB;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(37,99,235,0.3),0 0 16px rgba(37,99,235,0.5);animation:mapPulse 2s infinite;"></div>`,
+    className: "", iconSize: [22, 22], iconAnchor: [11, 11],
+  });
+
+  const nearbyIcon = (isSel) => L.divIcon({
+    html: `<div style="width:${isSel?38:28}px;height:${isSel?38:28}px;background:${isSel?'#DC2626':'#059669'};border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:${isSel?16:13}px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.3);">⚕</div>`,
+    className: "", iconSize: [isSel?38:28, isSel?38:28], iconAnchor: [isSel?19:14, isSel?19:14],
+  });
+
+  const farIcon = (isSel) => L.divIcon({
+    html: `<div style="width:${isSel?26:20}px;height:${isSel?26:20}px;background:${isSel?'#6B7280':'#94A3B8'};border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:${isSel?11:9}px;font-weight:700;opacity:0.7;">⚕</div>`,
+    className: "", iconSize: [isSel?26:20, isSel?26:20], iconAnchor: [isSel?13:10, isSel?13:10],
+  });
+
   return (
-    <div style={{ textAlign: "center", padding: "48px 24px", background: "linear-gradient(180deg,#FAFBFC,#F1F5F9)", borderRadius: 16, border: "1px dashed #E2E8F0" }}>
-      <div style={{ fontSize: "3rem", marginBottom: 14, opacity: .7 }}>{icon}</div>
-      <div style={{ fontSize: ".95rem", fontWeight: 700, color: "#0A2647", marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: ".82rem", color: "#94A3B8", lineHeight: 1.6, marginBottom: 18, maxWidth: 300, margin: "0 auto 18px" }}>{desc}</div>
-      {actionLabel && onAction && (
-        <button onClick={onAction} style={{ padding: "10px 24px", background: "linear-gradient(135deg,#0A2647,#1B3B6F)", border: "none", borderRadius: 10, color: "white", fontSize: ".82rem", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(10,38,71,.2)" }}>{actionLabel}</button>
+    <MapContainer center={TUNISIA_CENTER} zoom={7} style={{ height: "100%", width: "100%" }}>
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+      />
+      {userLocation && <MapCenterOnUser position={userLocation} />}
+      
+      {/* Cercle du rayon de recherche */}
+      {userLocation && (
+        <Circle
+          center={userLocation}
+          radius={searchRadius * 1000}
+          pathOptions={{
+            color: "#2563EB",
+            fillColor: "#2563EB",
+            fillOpacity: 0.05,
+            weight: 1.5,
+            dashArray: "5, 5",
+          }}
+        />
+      )}
+
+      {/* Position utilisateur */}
+      {userLocation && (
+        <Marker position={userLocation} icon={userIcon}>
+          <Popup>
+            <div style={{ fontWeight: 700, color: "#2563EB", padding: 4, textAlign: "center" }}>
+              📍 <strong>Ma position</strong>
+              {searchRadius && <div style={{ fontSize: "0.75rem", fontWeight: 400, marginTop: 2 }}>Rayon de recherche : {searchRadius} km</div>}
+            </div>
+          </Popup>
+        </Marker>
+      )}
+
+      {/* Tous les médecins */}
+      {allDoctors.filter(d => d.coordinates).map(doc => {
+        const isNearby = nearbyIds.has(doc.id);
+        const isSel = selectedDoctor?.id === doc.id;
+        const icon = isNearby ? nearbyIcon(isSel) : farIcon(isSel);
+        
+        return (
+          <Marker
+            key={doc.id}
+            position={doc.coordinates}
+            icon={icon}
+            zIndexOffset={isNearby ? 1000 : 500}
+            eventHandlers={{ click: () => setSelectedDoctor(doc) }}
+          >
+            <Popup>
+              <div style={{ minWidth: 200, padding: 4 }}>
+                <div style={{ fontWeight: 700, color: "#0A2647", marginBottom: 4, fontSize: "0.85rem" }}>
+                  {doc.name}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748B", marginBottom: 4 }}>
+                  {SPEC_ICONS[doc.specialite] || "⚕"} {doc.specialite}
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "#94A3B8", marginBottom: 8 }}>
+                  📍 {doc.ville}
+                  {doc.distance != null && (
+                    <span style={{
+                      marginLeft: 8,
+                      padding: "2px 8px",
+                      borderRadius: 8,
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      background: isNearby ? "#ECFDF5" : "#F1F5F9",
+                      color: isNearby ? "#059669" : "#64748B",
+                    }}>
+                      {formatDistance(doc.distance)}
+                      {!isNearby && " (hors rayon)"}
+                    </span>
+                  )}
+                </div>
+                {doc.address && (
+                  <div style={{ fontSize: "0.7rem", color: "#94A3B8", marginBottom: 6 }}>
+                    🏥 {doc.address.substring(0, 60)}
+                  </div>
+                )}
+                {doc.phones?.length > 0 && (
+                  <a href={`tel:${doc.phones[0]}`} style={{
+                    display: "inline-block", padding: "5px 12px",
+                    background: "#059669", color: "white", borderRadius: 8,
+                    fontSize: "0.7rem", fontWeight: 600, textDecoration: "none",
+                  }}>📞 Appeler</a>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </MapContainer>
+  );
+}
+
+// --- Doctor Card ---
+function DoctorCard({ doctor, isSelected, onClick, isNearby }) {
+  const specIcon = SPEC_ICONS[doctor.specialite] || "⚕";
+  return (
+    <div onClick={onClick} style={{
+      padding: "14px 16px", borderRadius: 14, marginBottom: 8, cursor: "pointer",
+      background: isSelected ? "linear-gradient(135deg, #EFF6FF, #DBEAFE)" : "white",
+      border: `1.5px solid ${isSelected ? "#2563EB" : "#F1F5F9"}`,
+      transition: "all 0.2s", position: "relative", overflow: "hidden",
+      opacity: isNearby ? 1 : 0.7,
+    }}>
+      {isSelected && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #2563EB, #0EA5E9)" }} />}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+          background: isSelected ? "linear-gradient(135deg, #2563EB, #1D4ED8)" : isNearby ? "linear-gradient(135deg, #059669, #047857)" : "linear-gradient(135deg, #94A3B8, #64748B)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "white", fontSize: "1.2rem", fontWeight: 700,
+          boxShadow: isSelected ? "0 6px 20px rgba(37,99,235,0.3)" : "none",
+        }}>{specIcon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+            <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0A2647", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doctor.name}</span>
+            {!isNearby && (
+              <span style={{ padding: "2px 6px", borderRadius: 4, fontSize: "0.58rem", fontWeight: 700, background: "#F1F5F9", color: "#94A3B8" }}>HORS RAYON</span>
+            )}
+          </div>
+          <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: 4 }}>{doctor.specialite}</div>
+          <div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
+            📍 {doctor.ville}
+            {doctor.distance != null && ` · ${formatDistance(doctor.distance)}`}
+          </div>
+        </div>
+        <div style={{ color: isSelected ? "#2563EB" : "#CBD5E1", fontSize: "1.1rem", transition: "transform 0.2s", transform: isSelected ? "rotate(90deg)" : "" }}>→</div>
+      </div>
+      {isSelected && (
+        <div style={{ marginTop: 12, padding: "12px", background: "white", borderRadius: 10, animation: "fadeUp 0.25s ease" }}>
+          {doctor.address && <div style={{ fontSize: "0.72rem", color: "#475569", marginBottom: 8 }}>🏥 {doctor.address}</div>}
+          {doctor.phones?.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {doctor.phones.map((p, i) => (
+                <a key={i} href={`tel:${p}`} onClick={e => e.stopPropagation()} style={{
+                  padding: "6px 14px", background: "linear-gradient(135deg, #059669, #047857)",
+                  color: "white", borderRadius: 8, fontSize: "0.72rem", fontWeight: 600,
+                  textDecoration: "none", display: "flex", alignItems: "center", gap: 5,
+                  boxShadow: "0 3px 10px rgba(5,150,105,0.2)",
+                }}>📞 {p}</a>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
+// --- Consultation Row ---
+function ConsultationRow({ consultation, onClick }) {
+  const st = STATUS_CONFIG[consultation.status] || STATUS_CONFIG.pending;
+  const mc = MODEL_CONFIG[consultation.model_key] || MODEL_CONFIG.chest;
+  const pd = PREDICTION_DISPLAY[consultation.prediction];
+  const ur = URGENCY_CONFIG[consultation.urgency];
+
+  return (
+    <div onClick={onClick} style={{
+      background: "white", borderRadius: 14, padding: "16px 20px",
+      border: "1px solid #E2E8F0", cursor: "pointer", display: "flex",
+      alignItems: "center", gap: 14, transition: "all 0.2s",
+    }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = mc.color; e.currentTarget.style.transform = "translateX(4px)"; e.currentTarget.style.boxShadow = `0 4px 16px ${mc.color}15`; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "none"; }}
+    >
+      <div style={{
+        width: 50, height: 50, borderRadius: 14, flexShrink: 0,
+        background: `linear-gradient(135deg, ${mc.color}, ${mc.color}cc)`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "1.4rem", color: "white", boxShadow: `0 6px 16px ${mc.color}30`,
+      }}>{mc.icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#94A3B8", fontFamily: "'DM Mono', monospace", background: "#F1F5F9", padding: "2px 8px", borderRadius: 6 }}>#{consultation.id}</span>
+          <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: "0.62rem", fontWeight: 700, background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{st.icon} {st.short}</span>
+          {ur && consultation.status !== "pending" && (
+            <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: "0.62rem", fontWeight: 700, background: ur.bg, color: ur.color, animation: ur.pulse ? "alertPulse 2s infinite" : "none" }}>{ur.icon} {ur.label}</span>
+          )}
+          {pd && consultation.status !== "pending" && (
+            <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: "0.62rem", fontWeight: 700, background: pd.color + "15", color: pd.color }}>{pd.label}</span>
+          )}
+        </div>
+        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0A2647", marginBottom: 3 }}>{mc.label} — {mc.organ}</div>
+        <div style={{ fontSize: "0.72rem", color: "#94A3B8" }}>
+          {formatDate(consultation.created_at)} · {mc.modality}
+          {consultation.doctor_name && ` · Dr. ${consultation.doctor_name}`}
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        {consultation.status === "analyzed" && (
+          <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#059669" }}>🧬 Résultat</div>
+        )}
+        <div style={{ color: "#CBD5E1", fontSize: "1.1rem", marginTop: 4 }}>→</div>
+      </div>
+    </div>
+  );
+}
+
+// --- Quick Action Card ---
+function QuickActionCard({ icon, title, desc, color, bg, onClick, badge }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "20px", background: "white", borderRadius: 16,
+      border: "1px solid #E2E8F0", cursor: "pointer", textAlign: "left",
+      transition: "all 0.2s", display: "flex", alignItems: "center", gap: 16,
+      position: "relative", overflow: "hidden",
+    }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 8px 24px ${color}15`; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "none"; }}
+    >
+      <div style={{ width: 52, height: 52, borderRadius: 14, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0A2647", marginBottom: 3 }}>{title}</div>
+        <div style={{ fontSize: "0.75rem", color: "#94A3B8", lineHeight: 1.4 }}>{desc}</div>
+      </div>
+      {badge && (
+        <span style={{
+          position: "absolute", top: 12, right: 12,
+          padding: "3px 10px", borderRadius: 20, fontSize: "0.65rem",
+          fontWeight: 700, background: color, color: "white",
+        }}>{badge}</span>
+      )}
+    </button>
+  );
+}
+
+// --- Stat Card ---
+function StatCard({ icon, label, value, color, bg, onClick, alert }) {
+  return (
+    <div onClick={onClick} style={{
+      background: "white", borderRadius: 16, padding: "18px 20px",
+      border: "1px solid #E2E8F0", cursor: onClick ? "pointer" : "default",
+      position: "relative", overflow: "hidden", transition: "all 0.2s",
+    }}
+      onMouseEnter={e => { if (onClick) { e.currentTarget.style.borderColor = color; e.currentTarget.style.transform = "translateY(-2px)"; } }}
+      onMouseLeave={e => { if (onClick) { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.transform = ""; } }}
+    >
+      <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: bg, opacity: 0.5 }} />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: "1.5rem" }}>{icon}</span>
+          {alert && <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 1.5s infinite" }} />}
+        </div>
+        <div style={{ fontSize: "1.8rem", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600, marginTop: 6 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+// --- Loading Spinner ---
+function LoadingSpinner({ text = "Chargement..." }) {
+  return (
+    <div style={{ textAlign: "center", padding: 60 }}>
+      <div style={{
+        width: 44, height: 44, border: "3px solid #E2E8F0",
+        borderTopColor: "#2563EB", borderRadius: "50%",
+        animation: "spin 0.8s linear infinite", margin: "0 auto 16px",
+      }} />
+      <div style={{ color: "#94A3B8", fontSize: "0.9rem" }}>{text}</div>
+    </div>
+  );
+}
+
+// --- Empty State ---
+function EmptyState({ icon, title, desc, actionLabel, onAction }) {
+  return (
+    <div style={{
+      textAlign: "center", padding: "60px 24px",
+      background: "linear-gradient(180deg, #FAFBFC, #F1F5F9)",
+      borderRadius: 20, border: "1px dashed #E2E8F0",
+    }}>
+      <div style={{ fontSize: "3.5rem", marginBottom: 16, opacity: 0.7 }}>{icon}</div>
+      <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0A2647", marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: "0.85rem", color: "#94A3B8", lineHeight: 1.6, maxWidth: 400, margin: "0 auto 20px" }}>{desc}</div>
+      {actionLabel && onAction && (
+        <button onClick={onAction} style={{
+          padding: "12px 28px", background: "linear-gradient(135deg, #0A2647, #1B3B6F)",
+          border: "none", borderRadius: 12, color: "white", fontSize: "0.85rem",
+          fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 20px rgba(10,38,71,0.25)",
+        }}>{actionLabel}</button>
+      )}
+    </div>
+  );
+}
+
+// --- Chatbot Widget ---
+function ChatbotWidget({ isOpen, onToggle, userLocation }) {
+  const [messages, setMessages] = useState([
+    {
+      type: "bot",
+      text: "Bonjour ! 👋 Je suis votre **assistant santé IA**.\n\nDécrivez-moi vos symptômes et je vous orienterai vers l'examen le plus adapté **avec les médecins disponibles près de chez vous**.\n\nJe peux vous aider pour :\n• 🫁 Symptômes respiratoires/cardiaques → Radio thoracique\n• 🔬 Lésions pulmonaires → Scanner CT\n• 🧠 Symptômes neurologiques → IRM cérébrale\n• 👁️ Problèmes de vision → Fond d'œil",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [recommendation, setRecommendation] = useState(null);
+  const [doctors, setDoctors] = useState([]);
+  const messagesEndRef = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isTyping]);
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || isTyping) return;
+    setInput("");
+    setMessages(prev => [...prev, { type: "user", text }]);
+    setIsTyping(true);
+    setDoctors([]);
+
+    try {
+      const body = { text };
+      if (userLocation) {
+        body.user_lat = userLocation[0];
+        body.user_lon = userLocation[1];
+      }
+
+      const res = await fetch(`${API}/chatbot/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      setMessages(prev => [...prev, { type: "bot", text: data.message }]);
+      if (data.recommendation) setRecommendation(data.recommendation);
+      if (data.doctors?.length > 0) setDoctors(data.doctors);
+    } catch {
+      setMessages(prev => [...prev, { type: "bot", text: "Désolé, une erreur est survenue. Veuillez réessayer." }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const quickExamples = [
+    { text: "Je tousse depuis 2 semaines avec fièvre", icon: "🫁", model: "chest" },
+    { text: "J'ai des maux de tête intenses et des vertiges", icon: "🧠", model: "brain" },
+    { text: "Je vois flou et je suis diabétique", icon: "👁️", model: "retina" },
+    { text: "J'ai perdu du poids et je fume beaucoup", icon: "🔬", model: "lung" },
+  ];
+
+  return (
+    <>
+      {/* Floating Button */}
+      <button onClick={onToggle} style={{
+        position: "fixed", bottom: 28, right: 28, zIndex: 1001,
+        width: 64, height: 64, borderRadius: 20,
+        background: isOpen ? "#DC2626" : "linear-gradient(135deg, #0EA5E9, #2563EB)",
+        border: "none", boxShadow: "0 10px 30px rgba(37,99,235,0.4)",
+        cursor: "pointer", display: "flex", alignItems: "center",
+        justifyContent: "center", fontSize: "1.6rem",
+        transition: "all 0.3s", color: "white",
+      }}
+        onMouseEnter={e => e.currentTarget.style.transform = "scale(1.05)"}
+        onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+      >
+        {isOpen ? "✕" : "🤖"}
+        {!isOpen && <div style={{
+          position: "absolute", top: -4, right: -4,
+          width: 16, height: 16, borderRadius: "50%",
+          background: "#10B981", border: "2px solid white",
+          animation: "pulse 2s infinite",
+        }} />}
+      </button>
+
+      {/* Chat Window */}
+      <div style={{
+        position: "fixed", bottom: isOpen ? 108 : -700, right: 28, zIndex: 1000,
+        width: 440, height: 620, background: "white", borderRadius: 24,
+        boxShadow: "0 24px 60px rgba(0,0,0,0.2)", border: "1px solid #E2E8F0",
+        display: "flex", flexDirection: "column", transition: "bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+        overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", borderBottom: "1px solid #E2E8F0",
+          background: "linear-gradient(135deg, #0EA5E9, #2563EB)", color: "white",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>🤖</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>Assistant Santé IA</div>
+            <div style={{ fontSize: "0.65rem", opacity: 0.8 }}>Analyse de symptômes · Recommandation médecins</div>
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ADE80", animation: "pulse 1.5s infinite" }} />
+            <span style={{ fontSize: "0.62rem", opacity: 0.8 }}>En ligne</span>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "#F8FAFC" }}>
+          {messages.map((msg, i) => (
+            <div key={i} style={{
+              display: "flex", justifyContent: msg.type === "user" ? "flex-end" : "flex-start",
+              marginBottom: 14, animation: "fadeUp 0.3s ease",
+            }}>
+              {msg.type === "bot" && (
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(135deg, #0EA5E9, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "0.8rem", marginRight: 8, marginTop: 6, flexShrink: 0 }}>🤖</div>
+              )}
+              <div style={{
+                maxWidth: msg.type === "user" ? "78%" : "88%",
+                padding: "12px 16px", borderRadius: msg.type === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                background: msg.type === "user" ? "linear-gradient(135deg, #0A2647, #1B3B6F)" : "white",
+                color: msg.type === "user" ? "white" : "#0A2647",
+                fontSize: "0.82rem", lineHeight: 1.65,
+                border: msg.type === "bot" ? "1px solid #E2E8F0" : "none",
+                boxShadow: msg.type === "user" ? "0 4px 12px rgba(10,38,71,0.2)" : "0 1px 4px rgba(0,0,0,0.04)",
+              }}>
+                {msg.text.split("\n").map((line, j) => (
+                  <div key={j}>{line.split(/(\*\*.*?\*\*)/).map((part, k) => {
+                    if (part.startsWith("**") && part.endsWith("**")) return <strong key={k} style={{ color: msg.type === "user" ? "#93C5FD" : "#2563EB" }}>{part.slice(2, -2)}</strong>;
+                    return part;
+                  })}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Médecins Cards */}
+          {doctors.length > 0 && (
+            <div style={{ marginLeft: 40, marginBottom: 14, animation: "fadeUp 0.3s ease" }}>
+              <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#059669", marginBottom: 8 }}>👨‍⚕️ Médecins disponibles — Appelez directement</div>
+              {doctors.map(doc => (
+                <div key={doc.id} style={{ background: "white", borderRadius: 14, padding: "12px 14px", marginBottom: 8, border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #059669, #047857)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "1rem", fontWeight: 700, flexShrink: 0 }}>{SPEC_ICONS[doc.specialite] || "⚕"}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0A2647", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
+                      <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{doc.specialite}</div>
+                    </div>
+                    {doc.distance_km && <span style={{ padding: "3px 8px", borderRadius: 10, fontSize: "0.65rem", fontWeight: 700, background: "#ECFDF5", color: "#059669" }}>{doc.distance_km} km</span>}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#94A3B8", marginBottom: 6 }}>📍 {doc.ville}{doc.address ? ` — ${doc.address.substring(0, 50)}` : ""}</div>
+                  {doc.phones?.length > 0 && (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {doc.phones.map((p, j) => (
+                        <a key={j} href={`tel:${p}`} style={{ padding: "5px 12px", background: "linear-gradient(135deg, #059669, #047857)", color: "white", borderRadius: 8, fontSize: "0.68rem", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>📞 {p}</a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isTyping && (
+            <div style={{ display: "flex", gap: 5, marginLeft: 40, marginBottom: 14 }}>
+              {[0, 0.15, 0.3].map((delay, i) => (
+                <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#CBD5E1", animation: `typingBounce 1.2s ease-in-out ${delay}s infinite` }} />
+              ))}
+            </div>
+          )}
+
+          {recommendation && (
+            <div style={{ textAlign: "center", marginTop: 8, marginBottom: 8, animation: "fadeUp 0.3s ease" }}>
+              <button onClick={() => navigate(`/patient/consultation/new?model=${recommendation.model_key}`)} style={{
+                padding: "12px 24px", background: "linear-gradient(135deg, #059669, #047857)",
+                border: "none", borderRadius: 14, color: "white", fontSize: "0.85rem",
+                fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8,
+                boxShadow: "0 6px 20px rgba(5,150,105,0.3)",
+              }}>
+                {MODEL_CONFIG[recommendation.model_key]?.icon || "📋"} Commencer l'examen →
+              </button>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Quick examples */}
+        {messages.length <= 1 && (
+          <div style={{ padding: "0 16px 10px", background: "#F8FAFC" }}>
+            <div style={{ fontSize: "0.65rem", color: "#94A3B8", marginBottom: 8, fontWeight: 600 }}>💡 Exemples :</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {quickExamples.map((ex, i) => (
+                <button key={i} onClick={() => { setInput(ex.text); setTimeout(() => handleSend(), 100); }} style={{
+                  padding: "6px 12px", background: "white", border: "1px solid #E2E8F0",
+                  borderRadius: 20, fontSize: "0.68rem", color: "#475569", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563EB"; e.currentTarget.style.color = "#2563EB"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.color = "#475569"; }}
+                >{ex.icon} {ex.text.substring(0, 30)}...</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Input */}
+        <div style={{ padding: "12px 16px", borderTop: "1px solid #E2E8F0", display: "flex", gap: 10, alignItems: "flex-end", background: "white" }}>
+          <textarea value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Décrivez vos symptômes..." rows={2}
+            style={{ flex: 1, padding: "10px 14px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 12, fontSize: "0.82rem", color: "#0A2647", resize: "none", fontFamily: "'DM Sans', sans-serif", outline: "none", maxHeight: 80 }}
+            onFocus={e => e.target.style.borderColor = "#2563EB"} onBlur={e => e.target.style.borderColor = "#E2E8F0"}
+          />
+          <button onClick={handleSend} disabled={!input.trim() || isTyping} style={{
+            width: 44, height: 44, borderRadius: 14,
+            background: input.trim() ? "linear-gradient(135deg, #2563EB, #0EA5E9)" : "#E2E8F0",
+            border: "none", color: "white", fontSize: "1.1rem",
+            cursor: input.trim() ? "pointer" : "not-allowed",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, transition: "all 0.2s",
+            boxShadow: input.trim() ? "0 4px 14px rgba(37,99,235,0.3)" : "none",
+          }}>➤</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════
-// MAIN
+// DASHBOARD PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
+
 export default function PatientDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const token = localStorage.getItem("medai-token");
 
-  // ── State ──
+  // State
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [consultations, setConsultations] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [showNotifs, setShowNotifs] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [locationError, setLocationError] = useState("");
+  const [doctors, setDoctors] = useState([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(true);
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [searchRadius, setSearchRadius] = useState(50);
+  const [filterSpecialty, setFilterSpecialty] = useState("");
+  const [chatbotOpen, setChatbotOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
 
-  // ── Doctors state ──
-  const [doctors, setDoctors] = useState([]);
-  const [allVilles, setAllVilles] = useState([]);
-  const [docLoading, setDocLoading] = useState(true);
-  const [docError, setDocError] = useState("");
-  const [selectedVille, setSelectedVille] = useState("");
-  const [selectedSpec, setSelectedSpec] = useState("");
-  const [docSearch, setDocSearch] = useState("");
-  const [userCoords, setUserCoords] = useState(null);
-  const [locDetected, setLocDetected] = useState(false);
-  const [locError, setLocError] = useState("");
-  const [showDocDetail, setShowDocDetail] = useState(null);
-  const [docTab, setDocTab] = useState("nearby");
-
-  // ── Detect location ──
+  // Fetch consultations
   useEffect(() => {
-    if (!navigator.geolocation) { 
-      setLocError("Géolocalisation non supportée"); 
-      return; 
-    }
+    const headers = { Authorization: `Bearer ${token}` };
+    Promise.all([
+      fetch(`${API}/consultations/my`, { headers }),
+      fetch(`${API}/consultations/notifications/me?unread_only=false`, { headers }),
+    ])
+      .then(([cRes, nRes]) => Promise.all([cRes.json(), nRes.ok ? nRes.json() : { notifications: [], unread: 0 }]))
+      .then(([cData, nData]) => {
+        setConsultations(cData.consultations || []);
+        setNotifications(nData.notifications || []);
+        setUnreadCount(nData.unread || 0);
+        setLoading(false);
+      })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [token]);
+
+  // Géolocalisation
+  useEffect(() => {
+    if (!navigator.geolocation) { setLocationError("Non supporté"); setLocationLoading(false); return; }
     navigator.geolocation.getCurrentPosition(
-      (pos) => { 
-        setUserCoords([pos.coords.latitude, pos.coords.longitude]); 
-        setLocDetected(true); 
-      },
-      () => { 
-        setLocError("Localisation refusée — sélectionnez votre ville manuellement"); 
-      },
-      { timeout: 8000 }
+      pos => { setUserLocation([pos.coords.latitude, pos.coords.longitude]); setLocationLoading(false); },
+      () => { setLocationError("Activez la localisation"); setLocationLoading(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   }, []);
 
-  // ── Fetch consultations ──
-  const fetchData = useCallback(async () => {
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [cRes, nRes] = await Promise.all([
-        fetch(`${API}/consultations/my`, { headers }),
-        fetch(`${API}/consultations/notifications/me?unread_only=false`, { headers }),
-      ]);
-      if (!cRes.ok) throw new Error("Impossible de charger vos consultations.");
-      const cData = await cRes.json();
-      const nData = nRes.ok ? await nRes.json() : { notifications: [], unread: 0 };
-      setConsultations(cData.consultations || []);
-      setNotifications(nData.notifications || []);
-      setUnreadCount(nData.unread || 0);
-    } catch (e) { 
-      setError(e.message); 
-    } finally { 
-      setLoading(false); 
-    }
-  }, [token]);
-
-  useEffect(() => { 
-    fetchData(); 
-  }, [fetchData]);
-
-  // ── Fetch doctors ──
-  const fetchDoctors = useCallback(async (ville, spec) => {
-    setDocLoading(true); 
-    setDocError("");
-    try {
-      const params = new URLSearchParams();
-      if (ville) params.set("ville", ville);
-      if (spec) params.set("specialite", spec);
-      const [dRes, vRes] = await Promise.all([
-        fetch(`${API}/doctors?${params.toString()}`),
-        fetch(`${API}/doctors/villes`),
-      ]);
-      if (!dRes.ok) throw new Error("Service médecins indisponible");
-      const dData = await dRes.json();
-      const vData = vRes.ok ? await vRes.json() : { villes: [] };
-      setDoctors(dData.doctors || []);
-      setAllVilles(vData.villes || []);
-    } catch (e) { 
-      setDocError(e.message); 
-    } finally { 
-      setDocLoading(false); 
-    }
-  }, []);
-
-  useEffect(() => { 
-    fetchDoctors(selectedVille, selectedSpec); 
-  }, [selectedVille, selectedSpec, fetchDoctors]);
-
-  // Close notif
+  // Fetch doctors
   useEffect(() => {
-    const handleClickOutside = (e) => { 
-      if (notifRef.current && !notifRef.current.contains(e.target)) {
-        setShowNotifs(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    fetch(`${API}/doctors`)
+      .then(r => r.json()).then(d => { setDoctors(d.doctors || []); setDoctorsLoading(false); })
+      .catch(() => setDoctorsLoading(false));
   }, []);
+
+  // Close notifications
+  useEffect(() => {
+    const handler = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifications(false); };
+    if (showNotifications) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showNotifications]);
+
+  // TOUS les médecins avec distance
+  const allDoctorsWithDistance = useMemo(() => {
+    if (!userLocation) {
+      return doctors.map(doc => ({
+        ...doc,
+        distance: null,
+        coordinates: CITY_COORDS[doc.ville] || null,
+      }));
+    }
+    return doctors.map(doc => {
+      const coords = CITY_COORDS[doc.ville];
+      if (!coords) return { ...doc, distance: null, coordinates: null };
+      const distance = haversineDistance(userLocation[0], userLocation[1], coords[0], coords[1]);
+      return { ...doc, distance, coordinates: coords };
+    });
+  }, [doctors, userLocation]);
+
+  // Médecins dans le rayon
+  const nearbyDoctors = useMemo(() => {
+    let filtered = allDoctorsWithDistance.filter(d => d.distance !== null && d.distance <= searchRadius);
+    if (filterSpecialty) filtered = filtered.filter(d => d.specialite?.toLowerCase().includes(filterSpecialty.toLowerCase()));
+    return filtered.sort((a, b) => a.distance - b.distance);
+  }, [allDoctorsWithDistance, searchRadius, filterSpecialty]);
+
+  // IDs des médecins dans le rayon
+  const nearbyIds = useMemo(() => new Set(nearbyDoctors.map(d => d.id)), [nearbyDoctors]);
+
+  // Médecins pour la carte (tous, filtrés par spécialité)
+  const mapDoctors = useMemo(() => {
+    if (filterSpecialty) return allDoctorsWithDistance.filter(d => d.specialite?.toLowerCase().includes(filterSpecialty.toLowerCase()));
+    return allDoctorsWithDistance;
+  }, [allDoctorsWithDistance, filterSpecialty]);
+
+  const specialties = useMemo(() => [...new Set(doctors.map(d => d.specialite).filter(Boolean))].sort(), [doctors]);
+
+  // Stats
+  const stats = useMemo(() => ({
+    total: consultations.length,
+    pending: consultations.filter(c => c.status === "pending").length,
+    active: consultations.filter(c => c.status === "accepted").length,
+    ready: consultations.filter(c => c.status === "analyzed").length,
+    closed: consultations.filter(c => c.status === "closed").length,
+    critical: consultations.filter(c => c.urgency === "critical" || c.urgency === "urgent").length,
+  }), [consultations]);
+
+  const tabs = [
+    { key: "dashboard", icon: "📊", label: "Vue d'ensemble" },
+    { key: "consultations", icon: "📋", label: "Consultations" },
+    { key: "appointments", icon: "📅", label: "Rendez-vous" },
+    { key: "nearby", icon: "🗺️", label: "Médecins" },
+    { key: "profile", icon: "👤", label: "Profil" },
+  ];
 
   const markAllRead = async () => {
     try {
-      await fetch(`${API}/consultations/notifications/read-all`, { 
-        method: "POST", 
-        headers: { Authorization: `Bearer ${token}` } 
-      });
+      await fetch(`${API}/consultations/notifications/read-all`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       setUnreadCount(0);
       setNotifications(n => n.map(x => ({ ...x, is_read: true })));
-    } catch (e) {
-      console.error("Error marking notifications as read:", e);
-    }
+    } catch {}
   };
 
-  // ── Computed: patient's model_keys ──
-  const patientModels = useMemo(() => [...new Set(consultations.map(c => c.model_key).filter(Boolean))], [consultations]);
-  const patientSpecs = useMemo(() => {
-    const s = new Set();
-    patientModels.forEach(m => (MODEL_TO_SPECS[m] || []).forEach(sp => s.add(sp)));
-    return [...s];
-  }, [patientModels]);
-
-  // ── Computed: platform doctors (from past consultations) ──
-  const platformDoctors = useMemo(() => {
-    const map = new Map();
-    (consultations || []).forEach(c => {
-      if (c.doctor_id && c.doctor_name) {
-        if (!map.has(c.doctor_id)) {
-          map.set(c.doctor_id, {
-            id: c.doctor_id, 
-            name: `Dr. ${c.doctor_name}`, 
-            specialite: c.doctor_specialty || "",
-            ville: "", 
-            address: "", 
-            phones: [], 
-            models: [], 
-            source: "plateforme",
-            url: null, 
-            consultations: 0, 
-            lastStatus: c.status,
-          });
-        }
-        const d = map.get(c.doctor_id);
-        d.consultations++;
-        if (c.updated_at > (d.lastDate || 0)) d.lastDate = c.updated_at;
-      }
-    });
-    return [...map.values()];
-  }, [consultations]);
-
-  // ── Computed: scraped doctors with distance ──
-  const scrapedWithDist = useMemo(() => {
-    if (!userCoords) return doctors.map(d => ({ ...d, distance: null }));
-    return doctors.map(d => {
-      const cityCoords = CITY_COORDS[d.ville];
-      if (!cityCoords) return { ...d, distance: null };
-      return { ...d, distance: haversine(userCoords[0], userCoords[1], cityCoords[0], cityCoords[1]) };
-    }).sort((a, b) => {
-      if (a.distance == null && b.distance == null) return 0;
-      if (a.distance == null) return 1;
-      if (b.distance == null) return -1;
-      return a.distance - b.distance;
-    });
-  }, [doctors, userCoords]);
-
-  // ── Filtered scraped ──
-  const filteredScraped = useMemo(() => {
-    let list = scrapedWithDist;
-    if (docSearch.trim()) {
-      const q = docSearch.toLowerCase();
-      list = list.filter(d =>
-        (d.name || "").toLowerCase().includes(q) ||
-        (d.specialite || "").toLowerCase().includes(q) ||
-        (d.ville || "").toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [scrapedWithDist, docSearch]);
-
-  // ── Critical results ──
-  const criticalResults = consultations.filter(c => c.status === "analyzed" && (c.urgency === "critical" || c.urgency === "urgent"));
-  const pendingCount = consultations.filter(c => c.status === "pending").length;
-  const analyzedCount = consultations.filter(c => c.status === "analyzed").length;
-  const closedCount = consultations.filter(c => c.status === "closed").length;
-
-  // ── Formatters ──
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
-  const formatDateShort = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "—";
-  const formatNotifTime = (d) => {
-    const diff = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
-    if (diff < 60) return "À l'instant";
-    if (diff < 3600) return `Il y a ${Math.floor(diff / 60)} min`;
-    if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)}h`;
-    return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-  };
-  const timeSince = (d) => {
-    if (!d) return "";
-    const diff = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
-    if (diff < 1) return "À l'instant";
-    if (diff < 60) return `Il y a ${diff} min`;
-    if (diff < 1440) return `Il y a ${Math.floor(diff / 60)}h`;
-    return `Il y a ${Math.floor(diff / 1440)}j`;
-  };
-
-  // Helper pour les styles hover
-  const handleMouseEnter = (e, bgColor, textColor) => {
-    e.currentTarget.style.background = bgColor;
-    if (textColor) e.currentTarget.style.color = textColor;
-  };
-  
-  const handleMouseLeave = (e, bgColor, textColor) => {
-    e.currentTarget.style.background = bgColor;
-    if (textColor) e.currentTarget.style.color = textColor;
-  };
-
-  // ═══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════
   // RENDER
-  // ═══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════
   return (
-    <div style={{ minHeight: "100vh", background: "#F8FAFC", fontFamily: "'DM Sans',sans-serif" }}>
+    <div style={{
+      minHeight: "100vh", background: "linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 50%, #E2E8F0 100%)",
+      fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif",
+    }}>
+      <ParticlesBg />
+
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
-        @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
-        @keyframes slideRight{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
-        @keyframes alertPulse{0%,100%{opacity:1}50%{opacity:.7}}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-        *{scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent}
-        *::-webkit-scrollbar{width:6px}*::-webkit-scrollbar-track{background:transparent}*::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&display=swap');
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: 0.6; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes typingBounce { 0%,100% { opacity: 0.3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-6px); } }
+        @keyframes alertPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes floatParticle { 0% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-20px) translateX(10px); } 100% { transform: translateY(15px) translateX(-15px); } }
+        @keyframes mapPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.5); } 50% { box-shadow: 0 0 0 14px rgba(37,99,235,0); } }
+        * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+        *::-webkit-scrollbar { width: 5px; } *::-webkit-scrollbar-track { background: transparent; } *::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
       `}</style>
 
-      {/* ═══════════════ HEADER ═══════════════ */}
-      <div style={{ background: "linear-gradient(135deg,#0A2647 0%,#144272 50%,#205295 100%)", padding: "0 32px", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, opacity: .04, backgroundImage: "radial-gradient(circle at 20% 50%,white 1px,transparent 1px),radial-gradient(circle at 80% 20%,white 1px,transparent 1px)", backgroundSize: "60px 60px,40px 40px" }} />
-        <div style={{ maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.1)", backdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>⚕️</div>
+      {/* HEADER */}
+      <div style={{
+        background: "linear-gradient(135deg, #030C1A 0%, #0A2647 30%, #144272 60%, #205295 100%)",
+        padding: "24px 32px 32px", color: "white", position: "relative", overflow: "hidden",
+      }}>
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle at 30% 40%, rgba(255,255,255,0.04) 1px, transparent 1px), radial-gradient(circle at 70% 60%, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "50px 50px, 40px 40px" }} />
+        <div style={{ maxWidth: 1240, margin: "0 auto", position: "relative", zIndex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05))", border: "2px solid rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", fontWeight: 700, flexShrink: 0 }}>
+                {user?.full_name?.charAt(0)?.toUpperCase() || "P"}
+              </div>
               <div>
-                <div style={{ fontSize: ".85rem", fontWeight: 800, color: "white", letterSpacing: ".04em" }}>MedAI</div>
-                <div style={{ fontSize: ".58rem", color: "rgba(255,255,255,.45)", fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase" }}>Plateforme de diagnostic IA</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, letterSpacing: "-0.02em" }}>{user?.full_name || "Patient"}</div>
+                <div style={{ fontSize: "0.72rem", opacity: 0.7, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: "'DM Mono', monospace", background: "rgba(255,255,255,0.1)", padding: "2px 8px", borderRadius: 6, fontSize: "0.65rem" }}>PAT-{String(user?.id || 0).padStart(6, "0")}</span>
+                  {userLocation && <span style={{ background: "rgba(52,211,153,0.2)", color: "#4ADE80", padding: "2px 8px", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600 }}>📍 Localisé</span>}
+                </div>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div ref={notifRef} style={{ position: "relative" }}>
-                <button 
-                  onClick={() => setShowNotifs(!showNotifs)} 
-                  style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem", cursor: "pointer", color: "white", transition: "all .2s" }}
-                  onMouseEnter={(e) => handleMouseEnter(e, "rgba(255,255,255,.15)")}
-                  onMouseLeave={(e) => handleMouseLeave(e, "rgba(255,255,255,.08)")}
-                >
-                  🔔
-                  {unreadCount > 0 && (
-                    <span style={{ position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 10, background: "#EF4444", color: "white", fontSize: ".6rem", fontWeight: 800, padding: "0 5px", display: "flex", alignItems: "center", justifyContent: "center", animation: "pulse 2s infinite", border: "2px solid #0A2647" }}>
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
+                <button onClick={() => setShowNotifications(!showNotifications)} style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", cursor: "pointer", color: "white" }}>
+                  🔔{unreadCount > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 10, background: "#DC2626", color: "white", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", border: "2px solid #0A2647", animation: "pulse 2s infinite" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}
                 </button>
-                {showNotifs && (
-                  <div style={{ position: "absolute", top: 48, right: 0, width: 380, background: "white", borderRadius: 16, border: "1px solid #E2E8F0", boxShadow: "0 20px 60px rgba(0,0,0,.15)", zIndex: 200, overflow: "hidden", animation: "fadeUp .2s ease" }}>
+                {showNotifications && (
+                  <div style={{ position: "absolute", top: 52, right: 0, width: 380, maxHeight: 400, background: "white", borderRadius: 18, border: "1px solid #E2E8F0", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", zIndex: 200, overflow: "hidden" }}>
                     <div style={{ padding: "14px 18px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FAFBFC" }}>
-                      <div>
-                        <span style={{ fontWeight: 800, fontSize: ".88rem", color: "#0A2647" }}>Notifications</span>
-                        {unreadCount > 0 && <span style={{ marginLeft: 8, fontSize: ".7rem", fontWeight: 700, color: "#DC2626" }}>{unreadCount} non lue{unreadCount > 1 ? "s" : ""}</span>}
-                      </div>
-                      {unreadCount > 0 && (
-                        <button onClick={markAllRead} style={{ background: "none", border: "1px solid #E2E8F0", color: "#475569", fontSize: ".7rem", fontWeight: 600, cursor: "pointer", borderRadius: 6, padding: "3px 10px" }}>
-                          Tout lire
-                        </button>
-                      )}
+                      <span style={{ fontWeight: 800, fontSize: "0.88rem", color: "#0A2647" }}>Notifications</span>
+                      {unreadCount > 0 && <button onClick={markAllRead} style={{ background: "none", border: "1px solid #E2E8F0", color: "#475569", fontSize: "0.7rem", fontWeight: 600, cursor: "pointer", borderRadius: 6, padding: "3px 10px" }}>Tout lire</button>}
                     </div>
-                    <div style={{ maxHeight: 360, overflowY: "auto" }}>
-                      {notifications.length === 0 ? (
-                        <div style={{ padding: "40px 20px", textAlign: "center", color: "#CBD5E1" }}>
-                          <div style={{ fontSize: "2rem", marginBottom: 8 }}>🔔</div>
-                          <div style={{ fontSize: ".82rem" }}>Aucune notification</div>
-                        </div>
-                      ) : (
-                        notifications.slice(0, 12).map((n, i) => (
-                          <div 
-                            key={n.id} 
-                            onClick={() => { 
-                              try { 
-                                const d = typeof n.data === "string" ? JSON.parse(n.data) : n.data; 
-                                if (d.consultation_id) navigate(`/consultation/${d.consultation_id}`); 
-                              } catch (e) {} 
-                              setShowNotifs(false); 
-                            }} 
-                            style={{ padding: "13px 18px", borderBottom: "1px solid #F8FAFC", cursor: "pointer", background: n.is_read ? "white" : "#F0F9FF", transition: "background .1s", animation: `slideRight .2s ease ${i * 30}ms both` }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                            onMouseLeave={e => e.currentTarget.style.background = n.is_read ? "white" : "#F0F9FF"}
-                          >
+                    <div style={{ overflowY: "auto", maxHeight: 340 }}>
+                      {notifications.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: "#CBD5E1" }}>Aucune notification</div> :
+                        notifications.slice(0, 10).map(n => (
+                          <div key={n.id} style={{ padding: "12px 18px", borderBottom: "1px solid #F8FAFC", background: n.is_read ? "white" : "#F0F9FF", cursor: "pointer" }}
+                            onClick={() => { try { const d = typeof n.data === "string" ? JSON.parse(n.data) : n.data; if (d.consultation_id) navigate(`/consultation/${d.consultation_id}`); } catch {} setShowNotifications(false); }}>
                             <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                              <div style={{ width: 32, height: 32, borderRadius: 8, background: n.is_read ? "#F1F5F9" : "#DBEAFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".85rem", flexShrink: 0 }}>
-                                {NOTIF_ICONS[n.type] || "📌"}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: ".8rem", fontWeight: 700, color: "#0A2647", marginBottom: 2 }}>{n.title}</div>
-                                <div style={{ fontSize: ".73rem", color: "#64748B", lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.message}</div>
-                                <div style={{ fontSize: ".63rem", color: "#CBD5E1", marginTop: 4, fontWeight: 500 }}>{formatNotifTime(n.created_at)}</div>
-                              </div>
-                              {!n.is_read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB", flexShrink: 0, marginTop: 6, boxShadow: "0 0 0 2px rgba(37,99,235,.2)" }} />}
+                              <div style={{ width: 32, height: 32, borderRadius: 8, background: n.is_read ? "#F1F5F9" : "#DBEAFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem" }}>📌</div>
+                              <div><div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0A2647", marginBottom: 2 }}>{n.title}</div>
+                                <div style={{ fontSize: "0.72rem", color: "#64748B", lineHeight: 1.4 }}>{n.message}</div>
+                                <div style={{ fontSize: "0.62rem", color: "#CBD5E1", marginTop: 4 }}>{formatTimeAgo(n.created_at)}</div></div>
                             </div>
                           </div>
-                        ))
-                      )}
+                        ))}
                     </div>
                   </div>
                 )}
               </div>
-              <button 
-                onClick={() => navigate("/patient/consultation/new")} 
-                style={{ padding: "9px 20px", background: "rgba(255,255,255,.12)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 10, color: "white", fontSize: ".82rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all .2s" }}
-                onMouseEnter={(e) => handleMouseEnter(e, "rgba(255,255,255,.2)")}
-                onMouseLeave={(e) => handleMouseLeave(e, "rgba(255,255,255,.12)")}
-              >
-                <span style={{ fontSize: "1rem" }}>+</span> Nouvelle demande
-              </button>
+              <button onClick={() => navigate("/patient/consultation/new")} style={{ padding: "11px 24px", background: "rgba(255,255,255,0.15)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 14, color: "white", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>+ Nouvelle demande</button>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 0 22px", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{ width: 54, height: 54, borderRadius: 16, background: "linear-gradient(135deg,rgba(255,255,255,.15),rgba(255,255,255,.05))", border: "2px solid rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", color: "white", backdropFilter: "blur(10px)" }}>
-                {user?.full_name?.charAt(0)?.toUpperCase() || "P"}
-              </div>
-              <div>
-                <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "white", letterSpacing: "-.01em", marginBottom: 2 }}>{user?.full_name || "Patient"}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: ".6rem", fontWeight: 700, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.6)", letterSpacing: ".08em", fontFamily: "monospace" }}>
-                    PAT-{String(user?.id || 0).padStart(6, "0")}
-                  </span>
-                  <span style={{ fontSize: ".72rem", color: "rgba(255,255,255,.5)" }}>·</span>
-                  <span style={{ fontSize: ".72rem", color: "rgba(255,255,255,.6)", fontWeight: 500 }}>Dossier patient</span>
-                  {locDetected && <span style={{ fontSize: ".68rem", color: "rgba(52,211,153,.8)", fontWeight: 600 }}>📍 Localisé</span>}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-              {[
-                { l: "Consultations", v: consultations.length }, 
-                { l: "En cours", v: pendingCount + consultations.filter(c => c.status === "accepted").length }
-              ].map(s => (
-                <div key={s.l} style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "white" }}>{s.v}</div>
-                  <div style={{ fontSize: ".6rem", color: "rgba(255,255,255,.4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>{s.l}</div>
-                </div>
-              ))}
-            </div>
+          <div style={{ maxWidth: 600 }}>
+            <h1 style={{ fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)", fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 8, lineHeight: 1.2 }}>
+              {new Date().getHours() < 12 ? "👋 Bonjour" : new Date().getHours() < 18 ? "☀️ Bon après-midi" : "🌙 Bonsoir"}, {user?.full_name?.split(" ")[0]}
+            </h1>
+            <p style={{ fontSize: "0.95rem", opacity: 0.8, lineHeight: 1.6 }}>Votre espace santé sécurisé. Consultez vos résultats, trouvez un médecin près de chez vous, ou soumettez un nouvel examen.</p>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════ MAIN ═══════════════ */}
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 32px 48px" }}>
-
-        {/* ── Alertes urgentes ── */}
-        {criticalResults.length > 0 && (
-          <div style={{ marginBottom: 20, padding: "16px 20px", background: "linear-gradient(135deg,#FEF2F2,#FFF1F2)", border: "1.5px solid #FECACA", borderRadius: 14, display: "flex", alignItems: "center", gap: 14, animation: "fadeUp .3s ease" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 14, background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", color: "white", flexShrink: 0, animation: "alertPulse 2s infinite" }}>⚠️</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: ".88rem", fontWeight: 800, color: "#991B1B", marginBottom: 2 }}>
-                Résultat{criticalResults.length > 1 ? "s" : ""} nécessitant votre attention
-              </div>
-              <div style={{ fontSize: ".76rem", color: "#B91C1C", lineHeight: 1.5 }}>
-                {criticalResults.length === 1 
-                  ? `La consultation #${criticalResults[0].id} présente un résultat ${URGENCY_MED[criticalResults[0].urgency]?.label?.toLowerCase()}. Consultez un médecin spécialisé.` 
-                  : `${criticalResults.length} consultations présentent des résultats anormaux.`}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                {criticalResults.slice(0, 3).map(c => (
-                  <button 
-                    key={c.id} 
-                    onClick={() => navigate(`/consultation/${c.id}`)} 
-                    style={{ padding: "3px 10px", background: "white", border: "1px solid #FCA5A5", borderRadius: 6, fontSize: ".7rem", fontWeight: 700, color: "#DC2626", cursor: "pointer" }}
-                  >
-                    #{c.id} — {PREDICTION_DISPLAY[c.prediction]?.fr || c.prediction}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button 
-              onClick={() => navigate(`/consultation/${criticalResults[0].id}`)} 
-              style={{ padding: "9px 16px", background: "#DC2626", border: "none", borderRadius: 10, color: "white", fontSize: ".76rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-            >
-              Voir →
-            </button>
-          </div>
-        )}
-
-        {/* ── Stats ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24, animation: "fadeUp .3s ease" }}>
-          {[
-            { l: "Total examens", v: consultations.length, ic: "📋", bg: "#F8FAFC", ac: "#0A2647", sub: `${Object.keys(MODEL_MED).length} modalités` },
-            { l: "En attente", v: pendingCount, ic: "⏳", bg: "#FFFBEB", ac: "#D97706", sub: pendingCount ? "Dossier en attente" : "Aucune attente" },
-            { l: "Résultats prêts", v: analyzedCount, ic: "🧬", bg: "#ECFDF5", ac: "#059669", sub: analyzedCount ? "Consultez vos résultats" : "Pas encore de résultat" },
-            { l: "Terminées", v: closedCount, ic: "✅", bg: "#F0F9FF", ac: "#0284C7", sub: "Consultations clôturées" },
-          ].map((s, i) => (
-            <div key={s.l} style={{ background: "white", borderRadius: 14, padding: "16px 18px", border: "1px solid #E2E8F0", position: "relative", overflow: "hidden", animation: `fadeUp .3s ease ${i * 60}ms both` }}>
-              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${s.ac},${s.ac}44)` }} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem" }}>{s.ic}</div>
-                <div style={{ fontSize: "1.5rem", fontWeight: 800, color: s.ac }}>{s.v}</div>
-              </div>
-              <div style={{ fontSize: ".76rem", fontWeight: 700, color: "#0A2647", marginBottom: 1 }}>{s.l}</div>
-              <div style={{ fontSize: ".66rem", color: "#94A3B8" }}>{s.sub}</div>
-            </div>
+      {/* TABS */}
+      <div style={{ background: "white", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+        <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", gap: 2, padding: "0 32px", overflowX: "auto" }}>
+          {tabs.map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+              padding: "16px 24px", border: "none", background: "none",
+              borderBottom: activeTab === tab.key ? "3px solid #2563EB" : "3px solid transparent",
+              color: activeTab === tab.key ? "#2563EB" : "#64748B",
+              fontWeight: activeTab === tab.key ? 700 : 400, fontSize: "0.88rem",
+              cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 10,
+            }}>{tab.icon} {tab.label}</button>
           ))}
         </div>
+      </div>
 
-        {/* Loading */}
-        {loading && (
-          <div style={{ textAlign: "center", padding: "80px 20px" }}>
-            <div style={{ width: 40, height: 40, border: "3px solid #E2E8F0", borderTopColor: "#0A2647", borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto 16px" }} />
-            <div style={{ fontSize: ".9rem", color: "#94A3B8" }}>Chargement de votre dossier…</div>
-          </div>
-        )}
+      {/* CONTENT */}
+      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "28px 32px", position: "relative", zIndex: 1 }}>
 
-        {/* Error */}
-        {error && !loading && (
-          <div style={{ padding: "14px 18px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 14, color: "#DC2626", fontSize: ".85rem", marginBottom: 18, display: "flex", alignItems: "center", gap: 10 }}>
-            <span>⚠️</span>
-            <span style={{ flex: 1 }}>{error}</span>
-            <button onClick={() => setError("")} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: "1rem" }}>✕</button>
-          </div>
-        )}
-
-        {!loading && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
-
-            {/* ═══════ LEFT ═══════ */}
-            <div>
-
-              {/* ═══════════════════════════════════════════════
-                  MÉDECINS RECOMMANDÉS — SECTION COMPLÈTE
-                 ═══════════════════════════════════════════════ */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(10,38,71,.04)" }}>
-
-                  {/* Section header */}
-                  <div style={{ padding: "18px 22px 14px", borderBottom: "1px solid #F1F5F9", background: "linear-gradient(135deg,#FAFBFC,#F8FAFC)" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#0A2647,#1B3B6F)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".95rem", color: "white" }}>🏥</div>
-                        <div>
-                          <div style={{ fontSize: ".95rem", fontWeight: 800, color: "#0A2647" }}>Médecins recommandés</div>
-                          <div style={{ fontSize: ".7rem", color: "#94A3B8" }}>Spécialistes près de chez vous · {filteredScraped.length + platformDoctors.length} médecins trouvés</div>
-                        </div>
-                      </div>
-                      {locDetected && <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: ".65rem", fontWeight: 700, background: "#ECFDF5", color: "#059669", border: "1px solid #A7F3D0" }}>📍 Géolocalisé</span>}
-                    </div>
-
-                    {/* Location status */}
-                    {locError && (
-                      <div style={{ padding: "8px 12px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, fontSize: ".72rem", color: "#92400E", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                        <span>⚠️</span>{locError}
-                      </div>
-                    )}
-
-                    {/* Filters row */}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <select 
-                        value={selectedVille} 
-                        onChange={e => setSelectedVille(e.target.value)} 
-                        style={{
-                          flex: 1, minWidth: 140, padding: "8px 12px", background: "#F8FAFC", border: "1.5px solid #E2E8F0",
-                          borderRadius: 8, fontSize: ".78rem", color: "#0A2647", outline: "none", fontFamily: "'DM Sans',sans-serif",
-                          cursor: "pointer", appearance: "auto",
-                        }}
-                      >
-                        <option value="">📍 Toutes les villes</option>
-                        {allVilles.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
-                      <select 
-                        value={selectedSpec} 
-                        onChange={e => setSelectedSpec(e.target.value)} 
-                        style={{
-                          flex: 1, minWidth: 140, padding: "8px 12px", background: "#F8FAFC", border: "1.5px solid #E2E8F0",
-                          borderRadius: 8, fontSize: ".78rem", color: "#0A2647", outline: "none", fontFamily: "'DM Sans',sans-serif",
-                          cursor: "pointer", appearance: "auto",
-                        }}
-                      >
-                        <option value="">🩺 Toutes spécialités</option>
-                        {patientSpecs.length > 0 && (
-                          <optgroup label="── Spécialités recommandées ──">
-                            {patientSpecs.map(s => <option key={s} value={s}>{SPEC_ICONS[s] || ""} {s}</option>)}
-                          </optgroup>
-                        )}
-                        {Object.keys(SPEC_ICONS).map(s => !patientSpecs.includes(s) && (
-                          <option key={s} value={s}>{SPEC_ICONS[s]} {s}</option>
-                        ))}
-                      </select>
-                      <div style={{ flex: 1.5, minWidth: 180, position: "relative" }}>
-                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: ".8rem", color: "#CBD5E1" }}>🔍</span>
-                        <input 
-                          type="text" 
-                          value={docSearch} 
-                          onChange={e => setDocSearch(e.target.value)} 
-                          placeholder="Nom, spécialité…" 
-                          style={{
-                            width: "100%", padding: "8px 10px 8px 32px", background: "#F8FAFC", border: "1.5px solid #E2E8F0",
-                            borderRadius: 8, fontSize: ".78rem", color: "#0A2647", outline: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box",
-                          }}
-                          onFocus={e => e.target.style.borderColor = "#0A2647"} 
-                          onBlur={e => e.target.style.borderColor = "#E2E8F0"} 
-                        />
-                      </div>
-                    </div>
-
-                    {/* Tabs */}
-                    <div style={{ display: "flex", gap: 4, marginTop: 10, background: "#F1F5F9", borderRadius: 8, padding: 3 }}>
-                      {[
-                        { k: "nearby", l: `Annuaire médical (${filteredScraped.length})`, ic: "📋" }, 
-                        { k: "platform", l: `Mes médecins (${platformDoctors.length})`, ic: "🩺" }
-                      ].map(t => (
-                        <button 
-                          key={t.k} 
-                          onClick={() => setDocTab(t.k)} 
-                          style={{
-                            flex: 1, padding: "7px 10px", borderRadius: 6, fontSize: ".72rem", fontWeight: 700,
-                            background: docTab === t.k ? "white" : "transparent", color: docTab === t.k ? "#0A2647" : "#94A3B8",
-                            border: "none", cursor: "pointer", transition: "all .15s",
-                            boxShadow: docTab === t.k ? "0 1px 4px rgba(0,0,0,.06)" : "none",
-                          }}
-                        >
-                          {t.ic} {t.l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ── Tab: Nearby / Scraped doctors ── */}
-                  {docTab === "nearby" && (
-                    <div style={{ maxHeight: 520, overflowY: "auto" }}>
-                      {docLoading && (
-                        <div style={{ padding: "40px 20px", textAlign: "center" }}>
-                          <div style={{ width: 32, height: 32, border: "3px solid #E2E8F0", borderTopColor: "#0A2647", borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto 12px" }} />
-                          <div style={{ fontSize: ".82rem", color: "#94A3B8" }}>Recherche de médecins…</div>
-                        </div>
-                      )}
-                      {docError && !docLoading && (
-                        <div style={{ padding: "30px 20px", textAlign: "center" }}>
-                          <div style={{ fontSize: "2rem", marginBottom: 8 }}>⚠️</div>
-                          <div style={{ fontSize: ".85rem", color: "#DC2626", fontWeight: 600, marginBottom: 4 }}>{docError}</div>
-                          <div style={{ fontSize: ".75rem", color: "#94A3B8" }}>Le service est temporairement indisponible.</div>
-                        </div>
-                      )}
-                      {!docLoading && !docError && filteredScraped.length === 0 && (
-                        <div style={{ padding: "40px 20px", textAlign: "center" }}>
-                          <div style={{ fontSize: "2.5rem", marginBottom: 10, opacity: .6 }}>🔍</div>
-                          <div style={{ fontSize: ".88rem", fontWeight: 700, color: "#0A2647", marginBottom: 4 }}>Aucun médecin trouvé</div>
-                          <div style={{ fontSize: ".78rem", color: "#94A3B8", maxWidth: 280, margin: "0 auto" }}>Essayez de modifier vos filtres de ville ou spécialité.</div>
-                        </div>
-                      )}
-                      {!docLoading && filteredScraped.map((doc, idx) => {
-                        const dist = formatDistance(doc.distance);
-                        const isNearest = idx === 0 && dist != null && !selectedVille && !selectedSpec && !docSearch;
-                        const specIcon = SPEC_ICONS[doc.specialite] || "🩺";
-                        return (
-                          <div 
-                            key={doc.id || idx} 
-                            style={{
-                              padding: "14px 22px", borderBottom: "1px solid #F8FAFC",
-                              cursor: "pointer", transition: "all .15s", position: "relative",
-                              background: isNearest ? "#F0FDF4" : "white",
-                            }}
-                            onClick={() => setShowDocDetail(showDocDetail === (doc.id || idx) ? null : (doc.id || idx))}
-                            onMouseEnter={e => e.currentTarget.style.background = isNearest ? "#ECFDF5" : "#F8FAFC"}
-                            onMouseLeave={e => e.currentTarget.style.background = isNearest ? "#F0FDF4" : "white"}
-                          >
-                            {/* Nearest badge */}
-                            {isNearest && (
-                              <div style={{ position: "absolute", top: 10, right: 14 }}>
-                                <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: ".6rem", fontWeight: 800, background: "#059669", color: "white", letterSpacing: ".04em" }}>★ PLUS PROCHE</span>
-                              </div>
-                            )}
-                            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                              <div style={{
-                                width: 46, height: 46, borderRadius: 12, flexShrink: 0,
-                                background: isNearest ? "linear-gradient(135deg,#059669,#047857)" : "#F1F5F9",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                fontSize: "1.15rem", color: isNearest ? "white" : "#64748B",
-                              }}>{specIcon}</div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: ".85rem", fontWeight: 800, color: "#0A2647", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {doc.name}
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                                  <span style={{ fontSize: ".72rem", fontWeight: 600, color: "#475569" }}>{doc.specialite}</span>
-                                  {doc.ville && (
-                                    <>
-                                      <span style={{ fontSize: ".65rem", color: "#CBD5E1" }}>·</span>
-                                      <span style={{ fontSize: ".7rem", color: "#64748B" }}>📍 {doc.ville}</span>
-                                    </>
-                                  )}
-                                  {dist && (
-                                    <>
-                                      <span style={{ fontSize: ".65rem", color: "#CBD5E1" }}>·</span>
-                                      <span style={{ fontSize: ".7rem", fontWeight: 700, color: isNearest ? "#059669" : "#475569" }}>{dist}</span>
-                                    </>
-                                  )}
-                                </div>
-                                {doc.address && (
-                                  <div style={{ fontSize: ".66rem", color: "#CBD5E1", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {doc.address}
-                                  </div>
-                                )}
-                              </div>
-                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-                                {doc.phones && doc.phones.length > 0 && (
-                                  <a 
-                                    href={`tel:${doc.phones[0]}`} 
-                                    onClick={e => e.stopPropagation()} 
-                                    style={{
-                                      padding: "5px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0",
-                                      borderRadius: 8, fontSize: ".68rem", fontWeight: 700, color: "#059669",
-                                      textDecoration: "none", display: "flex", alignItems: "center", gap: 4,
-                                      transition: "all .15s", whiteSpace: "nowrap",
-                                    }}
-                                    onMouseEnter={e => {
-                                      e.currentTarget.style.background = "#059669";
-                                      e.currentTarget.style.color = "white";
-                                    }}
-                                    onMouseLeave={e => {
-                                      e.currentTarget.style.background = "#ECFDF5";
-                                      e.currentTarget.style.color = "#059669";
-                                    }}
-                                  >
-                                    📞 Appeler
-                                  </a>
-                                )}
-                                <span style={{ fontSize: ".6rem", color: "#CBD5E1" }}>
-                                  {doc.source === "plateforme" ? "MedAI" : "tunisie-medicale"}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Expanded detail */}
-                            {showDocDetail === (doc.id || idx) && (
-                              <div style={{ marginTop: 12, padding: "12px 14px", background: "#FAFBFC", borderRadius: 10, border: "1px solid #F1F5F9", animation: "fadeUp .2s ease" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                                  {[
-                                    ["Spécialité", doc.specialite],
-                                    ["Ville", doc.ville || "—"],
-                                    ["Adresse", doc.address || "—"],
-                                    ["Source", doc.source === "plateforme" ? "MedAI (votre médecin)" : "tunisie-medicale.com"],
-                                  ].map(([l, v]) => (
-                                    <div key={l}>
-                                      <div style={{ fontSize: ".62rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em" }}>{l}</div>
-                                      <div style={{ fontSize: ".78rem", color: "#0A2647", fontWeight: 600 }}>{v}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                                {doc.phones && doc.phones.length > 0 && (
-                                  <div style={{ marginBottom: 10 }}>
-                                    <div style={{ fontSize: ".62rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Téléphone(s)</div>
-                                    {doc.phones.map((p, i) => (
-                                      <a 
-                                        key={i} 
-                                        href={`tel:${p}`} 
-                                        onClick={e => e.stopPropagation()} 
-                                        style={{ display: "inline-block", padding: "4px 10px", marginRight: 6, marginBottom: 4, background: "white", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: ".78rem", color: "#0A2647", textDecoration: "none", fontWeight: 600 }}
-                                      >
-                                        {p}
-                                      </a>
-                                    ))}
-                                  </div>
-                                )}
-                                {doc.models && doc.models.length > 0 && (
-                                  <div style={{ marginBottom: 10 }}>
-                                    <div style={{ fontSize: ".62rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Compatible avec vos examens</div>
-                                    <div style={{ display: "flex", gap: 4 }}>
-                                      {doc.models.map(m => (
-                                        <span key={m} style={{ padding: "3px 8px", background: (MODEL_MED[m] || {}).bg || "#F1F5F9", border: `1px solid ${(MODEL_MED[m] || {}).color || "#E2E8F0"}33`, borderRadius: 6, fontSize: ".68rem", fontWeight: 700, color: (MODEL_MED[m] || {}).color || "#64748B" }}>
-                                          {(MODEL_MED[m] || {}).icon} {(MODEL_MED[m] || {}).label}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {doc.url && (
-                                  <a 
-                                    href={doc.url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    onClick={e => e.stopPropagation()} 
-                                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "white", border: "1.5px solid #E2E8F0", borderRadius: 8, fontSize: ".75rem", fontWeight: 700, color: "#475569", textDecoration: "none", transition: "all .15s" }}
-                                    onMouseEnter={e => { 
-                                      e.currentTarget.style.borderColor = "#0A2647"; 
-                                      e.currentTarget.style.color = "#0A2647"; 
-                                    }}
-                                    onMouseLeave={e => { 
-                                      e.currentTarget.style.borderColor = "#E2E8F0"; 
-                                      e.currentTarget.style.color = "#475569"; 
-                                    }}
-                                  >
-                                    🔗 Voir la fiche complète →
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* ── Tab: Platform doctors ── */}
-                  {docTab === "platform" && (
-                    <div style={{ maxHeight: 520, overflowY: "auto" }}>
-                      {platformDoctors.length === 0 ? (
-                        <div style={{ padding: "40px 20px", textAlign: "center" }}>
-                          <div style={{ fontSize: "2.5rem", marginBottom: 10, opacity: .6 }}>🩺</div>
-                          <div style={{ fontSize: ".88rem", fontWeight: 700, color: "#0A2647", marginBottom: 4 }}>Aucun médecin de la plateforme</div>
-                          <div style={{ fontSize: ".78rem", color: "#94A3B8", maxWidth: 280, margin: "0 auto" }}>Les médecins qui traitent vos consultations apparaîtront ici.</div>
-                        </div>
-                      ) : (
-                        platformDoctors.map((doc, idx) => {
-                          const specIcon = SPEC_ICONS[doc.specialite] || "🩺";
-                          return (
-                            <div 
-                              key={doc.id} 
-                              onClick={() => navigate("/patient")} 
-                              style={{
-                                padding: "14px 22px", borderBottom: "1px solid #F8FAFC",
-                                cursor: "pointer", transition: "all .15s",
-                              }} 
-                              onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"} 
-                              onMouseLeave={e => e.currentTarget.style.background = "white"}
-                            >
-                              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                                <div style={{
-                                  width: 46, height: 46, borderRadius: 12, flexShrink: 0,
-                                  background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  fontSize: "1.15rem", color: "white",
-                                }}>{specIcon}</div>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: ".85rem", fontWeight: 800, color: "#0A2647", marginBottom: 2 }}>{doc.name}</div>
-                                  <div style={{ fontSize: ".72rem", color: "#64748B" }}>
-                                    {doc.specialite} · {doc.consultations} consultation{doc.consultations > 1 ? "s" : ""}
-                                  </div>
-                                </div>
-                                <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: ".62rem", fontWeight: 800, background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }}>MEDAI</span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-
-                  {/* Footer */}
-                  <div style={{ padding: "10px 22px", borderTop: "1px solid #F1F5F9", background: "#FAFBFC" }}>
-                    <div style={{ fontSize: ".65rem", color: "#CBD5E1", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span>ℹ️</span>
-                      <span>Données issues de l'annuaire médical tunisien et de la plateforme MedAI. En cas d'urgence, appelez le <strong style={{ color: "#DC2626" }}>15 (SAMU)</strong> ou le <strong style={{ color: "#DC2626" }}>112</strong>.</span>
-                    </div>
-                  </div>
-                </div>
+        {/* TAB: DASHBOARD */}
+        {activeTab === "dashboard" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            {stats.critical > 0 && (
+              <div style={{ padding: "16px 20px", background: "linear-gradient(135deg, #FEF2F2, #FFF1F2)", border: "1.5px solid #FCA5A5", borderRadius: 16, marginBottom: 20, display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 46, height: 46, borderRadius: 14, background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", color: "white", animation: "alertPulse 2s infinite" }}>⚠️</div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#991B1B", marginBottom: 4 }}>Résultats nécessitant votre attention</div><div style={{ fontSize: "0.78rem", color: "#B91C1C" }}>{stats.critical} consultation{stats.critical > 1 ? "s" : ""} urgente{stats.critical > 1 ? "s" : ""}</div></div>
+                <button onClick={() => setActiveTab("consultations")} style={{ padding: "9px 18px", background: "#DC2626", border: "none", borderRadius: 10, color: "white", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Voir →</button>
               </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
+              <StatCard icon="📋" label="Total examens" value={stats.total} color="#0A2647" bg="#F1F5F9" />
+              <StatCard icon="⏳" label="En attente" value={stats.pending} color="#D97706" bg="#FFFBEB" onClick={() => setActiveTab("consultations")} alert={stats.pending > 0} />
+              <StatCard icon="🧬" label="Résultats prêts" value={stats.ready} color="#059669" bg="#ECFDF5" onClick={() => setActiveTab("consultations")} />
+              <StatCard icon="✅" label="Terminés" value={stats.closed} color="#6B7280" bg="#F9FAFB" />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
+              <QuickActionCard icon="📤" title="Nouvel examen" desc="Soumettre une image médicale" color="#7C3AED" bg="#EDE9FE" onClick={() => navigate("/patient/consultation/new")} />
+              <QuickActionCard icon="🗺️" title="Médecins proches" desc="Trouver un spécialiste" color="#2563EB" bg="#EFF6FF" onClick={() => setActiveTab("nearby")} badge={userLocation ? `${nearbyDoctors.length}` : "📍"} />
+              <QuickActionCard icon="💬" title="Consultations" desc="Historique & résultats" color="#059669" bg="#ECFDF5" onClick={() => setActiveTab("consultations")} />
+              <QuickActionCard icon="📅" title="Rendez-vous" desc="Planning & suivi" color="#EA580C" bg="#FFF7ED" onClick={() => setActiveTab("appointments")} />
+            </div>
+            <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+              <div style={{ padding: "18px 22px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ width: 34, height: 34, borderRadius: 10, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563EB", fontSize: "0.9rem" }}>📋</div><div><div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0A2647" }}>Dernières consultations</div><div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>{consultations.length} consultation{consultations.length > 1 ? "s" : ""}</div></div></div>
+                {consultations.length > 5 && <button onClick={() => setActiveTab("consultations")} style={{ background: "none", border: "1px solid #E2E8F0", borderRadius: 8, color: "#2563EB", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", padding: "6px 14px" }}>Voir tout →</button>}
+              </div>
+              {loading ? <LoadingSpinner /> : consultations.length === 0 ? <EmptyState icon="🏥" title="Aucune consultation" desc="Soumettez votre première image médicale." actionLabel="+ Nouvelle demande" onAction={() => navigate("/patient/consultation/new")} /> :
+                <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {consultations.slice(0, 5).map(c => <ConsultationRow key={c.id} consultation={c} onClick={() => navigate(`/consultation/${c.id}`)} />)}
+                </div>}
+            </div>
+          </div>
+        )}
 
-              {/* ═══════ CONSULTATIONS ═══════ */}
-              <div>
-                {/* Toolbar */}
-                <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #E2E8F0", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
-                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: ".85rem", color: "#CBD5E1" }}>🔍</span>
-                    <input 
-                      type="text" 
-                      value={search} 
-                      onChange={e => setSearch(e.target.value)} 
-                      placeholder="Réf., examen, médecin, résultat…" 
-                      style={{ width: "100%", padding: "9px 12px 9px 36px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: ".82rem", color: "#0A2647", outline: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box" }} 
-                      onFocus={e => e.target.style.borderColor = "#0A2647"} 
-                      onBlur={e => e.target.style.borderColor = "#E2E8F0"} 
-                    />
-                  </div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {[
-                      { k: "all", l: "Toutes" }, 
-                      { k: "pending", l: "⏳ Attente" }, 
-                      { k: "accepted", l: "🩺 En cours" }, 
-                      { k: "analyzed", l: "🧬 Résultats" }, 
-                      { k: "closed", l: "✅ Terminées" }
-                    ].map(f => (
-                      <button 
-                        key={f.k} 
-                        onClick={() => setFilter(f.k)} 
-                        style={{ 
-                          padding: "6px 12px", 
-                          borderRadius: 8, 
-                          fontSize: ".72rem", 
-                          fontWeight: 700, 
-                          background: filter === f.k ? "#0A2647" : "white", 
-                          color: filter === f.k ? "white" : "#64748B", 
-                          border: filter === f.k ? "none" : "1px solid #E2E8F0", 
-                          cursor: "pointer", 
-                          transition: "all .15s", 
-                          whiteSpace: "nowrap" 
-                        }}
-                      >
-                        {f.l}
-                      </button>
-                    ))}
-                  </div>
+        {/* TAB: CONSULTATIONS */}
+        {activeTab === "consultations" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            <div style={{ marginBottom: 20 }}><h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647", marginBottom: 4 }}>📋 Mes Consultations</h2><p style={{ color: "#64748B" }}>Historique complet de vos examens et analyses IA</p></div>
+            {loading ? <LoadingSpinner /> : consultations.length === 0 ? <EmptyState icon="🏥" title="Aucune consultation" desc="Soumettez votre première image médicale." actionLabel="+ Nouvelle demande" onAction={() => navigate("/patient/consultation/new")} /> :
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{consultations.map(c => <ConsultationRow key={c.id} consultation={c} onClick={() => navigate(`/consultation/${c.id}`)} />)}</div>}
+          </div>
+        )}
+
+        {/* TAB: APPOINTMENTS */}
+        {activeTab === "appointments" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            <div style={{ marginBottom: 20 }}><h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647", marginBottom: 4 }}>📅 Mes Rendez-vous</h2><p style={{ color: "#64748B" }}>Gérez vos rendez-vous médicaux</p></div>
+            <EmptyState icon="📅" title="Aucun rendez-vous" desc="Les rendez-vous avec vos médecins apparaîtront ici." />
+          </div>
+        )}
+
+        {/* TAB: MÉDECINS PROCHES */}
+        {activeTab === "nearby" && (
+          <div style={{ animation: "fadeUp 0.4s ease" }}>
+            <div style={{ marginBottom: 20 }}><h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647", marginBottom: 4 }}>🗺️ Médecins à Proximité</h2><p style={{ color: "#64748B" }}>{userLocation ? `${nearbyDoctors.length} médecin${nearbyDoctors.length > 1 ? "s" : ""} dans un rayon de ${searchRadius} km · ${mapDoctors.filter(d => d.coordinates).length} au total sur la carte` : "Activez la géolocalisation pour voir les distances"}</p></div>
+            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", padding: "16px 20px", background: "white", borderRadius: 16, border: "1px solid #E2E8F0", alignItems: "center" }}>
+              <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>Rayon :</span>
+              <select value={searchRadius} onChange={e => setSearchRadius(Number(e.target.value))} style={{ padding: "8px 12px", borderRadius: 10, border: "1.5px solid #E2E8F0", fontSize: "0.8rem", background: "#F8FAFC", cursor: "pointer" }}>
+                <option value={10}>10 km</option><option value={25}>25 km</option><option value={50}>50 km</option><option value={100}>100 km</option><option value={0}>Tout afficher</option>
+              </select>
+              <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>Spécialité :</span>
+              <select value={filterSpecialty} onChange={e => setFilterSpecialty(e.target.value)} style={{ padding: "8px 12px", borderRadius: 10, border: "1.5px solid #E2E8F0", fontSize: "0.8rem", background: "#F8FAFC", cursor: "pointer" }}>
+                <option value="">Toutes</option>{specialties.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <div style={{ marginLeft: "auto" }}><span style={{ padding: "7px 16px", borderRadius: 20, fontSize: "0.78rem", fontWeight: 700, background: "#EFF6FF", color: "#2563EB" }}>🟢 {nearbyDoctors.length} proches · ⚪ {allDoctorsWithDistance.length - nearbyDoctors.length} autres</span></div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
+              <div style={{ height: "calc(100vh - 400px)", minHeight: 500, borderRadius: 18, overflow: "hidden", border: "2px solid #E2E8F0", position: "relative" }}>
+                {locationLoading ? <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#F8FAFC" }}><LoadingSpinner text="Détection de votre position..." /></div> :
+                  <DoctorMap userLocation={userLocation} allDoctors={mapDoctors} nearbyIds={nearbyIds} selectedDoctor={selectedDoctor} setSelectedDoctor={setSelectedDoctor} searchRadius={searchRadius} />}
+                {locationError && <div style={{ position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 999, padding: "10px 18px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, color: "#92400E", fontSize: "0.8rem", fontWeight: 600 }}>⚠️ {locationError}</div>}
+              </div>
+              <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 400px)" }}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0", fontWeight: 800, color: "#0A2647", fontSize: "0.9rem" }}>
+                  📋 {filterSpecialty ? `Médecins — ${filterSpecialty}` : "Tous les médecins"}
+                  <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "#94A3B8", marginLeft: 8 }}>
+                    ({nearbyDoctors.length} dans le rayon)
+                  </span>
                 </div>
-
-                <div style={{ fontSize: ".7rem", color: "#94A3B8", marginBottom: 10, fontWeight: 600, paddingLeft: 4 }}>
-                  {consultations.filter(c => filter === "all" || c.status === filter).filter(c => {
-                    if (!search.trim()) return true;
-                    const q = search.toLowerCase();
-                    return String(c.id).includes(q) || 
-                           (MODEL_MED[c.model_key]?.label || "").toLowerCase().includes(q) || 
-                           (c.doctor_name || "").toLowerCase().includes(q) || 
-                           (PREDICTION_DISPLAY[c.prediction]?.fr || "").toLowerCase().includes(q);
-                  }).length} résultat{consultations.length !== 1 ? "s" : ""}{filter !== "all" && ` — ${STATUS_MED[filter]?.short}`}
-                </div>
-
-                {(() => {
-                  const filtered = consultations.filter(c => filter === "all" || c.status === filter).filter(c => { 
-                    if (!search.trim()) return true; 
-                    const q = search.toLowerCase(); 
-                    return String(c.id).includes(q) || 
-                           (MODEL_MED[c.model_key]?.label || "").toLowerCase().includes(q) || 
-                           (c.doctor_name || "").toLowerCase().includes(q) || 
-                           (PREDICTION_DISPLAY[c.prediction]?.fr || "").toLowerCase().includes(q); 
-                  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-                  if (filtered.length === 0) {
-                    return <EmptyState 
-                      icon={filter === "all" && !search ? "🏥" : "🔍"} 
-                      title={filter === "all" && !search ? "Aucune consultation" : "Aucun résultat"} 
-                      desc={filter === "all" && !search ? "Soumettez votre première image médicale." : "Modifiez vos critères."} 
-                      actionLabel={filter === "all" && !search ? "Soumettre un examen" : null} 
-                      onAction={filter === "all" && !search ? () => navigate("/patient/consultation/new") : null} 
-                    />;
-                  }
-
-                  return filtered.map((c, idx) => {
-                    const st = STATUS_MED[c.status] || STATUS_MED.pending;
-                    const ur = URGENCY_MED[c.urgency] || URGENCY_MED.normal;
-                    const md = MODEL_MED[c.model_key] || MODEL_MED.chest;
-                    const pd = PREDICTION_DISPLAY[c.prediction];
-                    const isExp = expandedId === c.id;
-
-                    return (
-                      <div key={c.id} style={{ marginBottom: 8, animation: `fadeUp .3s ease ${idx * 35}ms both` }}>
-                        <div 
-                          onClick={() => setExpandedId(isExp ? null : c.id)} 
-                          style={{ 
-                            background: "white", 
-                            borderRadius: 14, 
-                            border: `1.5px solid ${isExp ? md.color + "44" : "#E2E8F0"}`, 
-                            cursor: "pointer", 
-                            transition: "all .2s", 
-                            overflow: "hidden", 
-                            boxShadow: isExp ? `0 4px 20px ${md.color}10` : "0 1px 3px rgba(0,0,0,.04)" 
-                          }}
-                          onMouseEnter={e => { if (!isExp) { e.currentTarget.style.borderColor = "#CBD5E1"; } }} 
-                          onMouseLeave={e => { if (!isExp) { e.currentTarget.style.borderColor = "#E2E8F0"; } }}
-                        >
-                          <div style={{ height: 3, background: `linear-gradient(90deg,${st.dot},${st.dot}33)` }} />
-                          <div style={{ padding: "14px 18px" }}>
-                            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                              <div style={{ 
-                                width: 48, height: 48, borderRadius: 13, flexShrink: 0, 
-                                background: `linear-gradient(135deg,${md.color},${md.color}cc)`, 
-                                display: "flex", alignItems: "center", justifyContent: "center", 
-                                fontSize: "1.4rem", color: "white", boxShadow: `0 4px 12px ${md.color}30` 
-                              }}>
-                                {md.icon}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-                                  <span style={{ fontSize: ".66rem", fontWeight: 800, color: "#94A3B8", fontFamily: "monospace", letterSpacing: ".04em" }}>
-                                    REF-{String(c.id).padStart(4, "0")}
-                                  </span>
-                                  <MedBadge label={st.short} color={st.color} bg={st.bg} border={st.border} icon={st.icon} />
-                                  {c.urgency && c.urgency !== "normal" && c.status !== "pending" && (
-                                    <MedBadge label={ur.label} color={ur.color} bg={ur.bg} border={ur.border} icon={ur.icon} />
-                                  )}
-                                </div>
-                                <div style={{ fontSize: ".88rem", fontWeight: 800, color: "#0A2647", marginBottom: 3 }}>
-                                  {md.label}
-                                  {pd && c.status !== "pending" && (
-                                    <span style={{ fontWeight: 500, color: pd.color, marginLeft: 8 }}>— {pd.fr}</span>
-                                  )}
-                                </div>
-                                <div style={{ fontSize: ".72rem", color: "#94A3B8", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                  <span style={{ fontWeight: 600, color: "#64748B" }}>{md.modality}</span>
-                                  <span>·</span>
-                                  <span>{md.organ}</span>
-                                  {c.doctor_name && (
-                                    <>
-                                      <span>·</span>
-                                      <span>Dr. {c.doctor_name}</span>
-                                    </>
-                                  )}
-                                  <span>·</span>
-                                  <span>{formatDateShort(c.created_at)}</span>
-                                </div>
-                                {isExp && (
-                                  <div style={{ 
-                                    marginTop: 8, padding: "8px 12px", background: `${st.color}08`, 
-                                    borderRadius: 8, borderLeft: `3px solid ${st.color}`, 
-                                    fontSize: ".76rem", color: "#475569", lineHeight: 1.5, animation: "fadeIn .2s ease" 
-                                  }}>
-                                    {st.desc}
-                                  </div>
-                                )}
-                              </div>
-                              <div style={{ 
-                                width: 26, height: 26, borderRadius: 7, background: "#F8FAFC", 
-                                display: "flex", alignItems: "center", justifyContent: "center", 
-                                color: "#CBD5E1", fontSize: ".7rem", flexShrink: 0, transition: "all .2s", 
-                                transform: isExp ? "rotate(180deg)" : "" 
-                              }}>
-                                ▼
-                              </div>
-                            </div>
-                          </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+                  {doctorsLoading ? <LoadingSpinner /> : nearbyDoctors.length === 0 && allDoctorsWithDistance.length === 0 ?
+                    <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}><div style={{ fontSize: "2.5rem", marginBottom: 8, opacity: 0.5 }}>🔍</div><div>Aucun médecin trouvé</div></div> :
+                    <>
+                      {/* Médecins dans le rayon */}
+                      {nearbyDoctors.map(doc => <DoctorCard key={doc.id} doctor={doc} isSelected={selectedDoctor?.id === doc.id} onClick={() => setSelectedDoctor(doc)} isNearby={true} />)}
+                      {/* Séparateur */}
+                      {nearbyDoctors.length > 0 && nearbyDoctors.length < allDoctorsWithDistance.length && (
+                        <div style={{ margin: "12px 0", borderTop: "1px dashed #E2E8F0", textAlign: "center" }}>
+                          <span style={{ position: "relative", top: -10, padding: "2px 12px", background: "#F8FAFC", borderRadius: 10, fontSize: "0.65rem", color: "#94A3B8", fontWeight: 600 }}>
+                            ⚪ Hors rayon ({searchRadius} km) — {allDoctorsWithDistance.length - nearbyDoctors.length} médecins
+                          </span>
                         </div>
-
-                        {isExp && (
-                          <div style={{ 
-                            background: "#FAFBFC", borderRadius: "0 0 14px 14px", border: "1.5px solid #E2E8F0", 
-                            borderTop: "none", padding: "0 18px 18px", animation: "fadeUp .25s ease" 
-                          }}>
-                            <div style={{ height: 1, background: "#F1F5F9", margin: "0 -18px 14px" }} />
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                              <div>
-                                <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8 }}>
-                                  Détails de l'examen
-                                </div>
-                                {[
-                                  ["Modalité", `${md.icon} ${md.full}`], 
-                                  ["Organe", md.organ], 
-                                  ["Date", formatDate(c.created_at)], 
-                                  ...(c.doctor_name ? [["Médecin", `Dr. ${c.doctor_name}`]] : [])
-                                ].map(([l, v]) => (
-                                  <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F1F5F9" }}>
-                                    <span style={{ fontSize: ".73rem", color: "#94A3B8" }}>{l}</span>
-                                    <span style={{ fontSize: ".75rem", color: "#0A2647", fontWeight: 600, textAlign: "right" }}>{v}</span>
-                                  </div>
-                                ))}
-                                {c.patient_notes && (
-                                  <div style={{ marginTop: 10 }}>
-                                    <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 4 }}>
-                                      Vos symptômes
-                                    </div>
-                                    <div style={{ padding: "8px 10px", background: "white", border: "1px solid #F1F5F9", borderRadius: 8, fontSize: ".78rem", color: "#475569", lineHeight: 1.6, fontStyle: "italic" }}>
-                                      « {c.patient_notes}»
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              {(c.status === "analyzed" || c.status === "closed") && pd ? (
-                                <div>
-                                  <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8 }}>
-                                    Résultat IA
-                                  </div>
-                                  <div style={{ 
-                                    padding: "12px", borderRadius: 10, 
-                                    background: pd.severity === "none" ? "#F0FDF4" : pd.severity === "low" ? "#FFFBEB" : pd.severity === "medium" ? "#FFF7ED" : "#FEF2F2", 
-                                    border: `1px solid ${pd.color}33`, marginBottom: 10 
-                                  }}>
-                                    <div style={{ fontSize: ".66rem", fontWeight: 700, color: "#94A3B8", marginBottom: 3 }}>Diagnostic principal</div>
-                                    <div style={{ fontSize: "1rem", fontWeight: 800, color: pd.color, marginBottom: 5 }}>{pd.fr}</div>
-                                    {c.confidence != null && (
-                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                        <div style={{ flex: 1, height: 5, background: "#E2E8F0", borderRadius: 3, overflow: "hidden" }}>
-                                          <div style={{ 
-                                            width: `${c.confidence * 100}%`, height: "100%", 
-                                            background: c.confidence > .8 ? "#059669" : c.confidence > .5 ? "#F59E0B" : "#DC2626", 
-                                            borderRadius: 3, transition: "width .6s ease" 
-                                          }} />
-                                        </div>
-                                        <span style={{ fontSize: ".76rem", fontWeight: 800, color: "#0A2647" }}>{(c.confidence * 100).toFixed(1)}%</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {c.doctor_notes && (
-                                    <div style={{ padding: "10px", background: "white", border: "1px solid #BBF7D0", borderRadius: 8, marginBottom: 10 }}>
-                                      <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 3 }}>
-                                        🩺 Commentaire médecin
-                                      </div>
-                                      <div style={{ fontSize: ".78rem", color: "#166534", lineHeight: 1.6 }}>{c.doctor_notes}</div>
-                                    </div>
-                                  )}
-                                  <div style={{ 
-                                    padding: "7px 10px", borderRadius: 8, 
-                                    background: pd.severity === "none" ? "#F0FDF4" : "#FEF2F2", 
-                                    fontSize: ".7rem", fontWeight: 700, 
-                                    color: pd.severity === "none" ? "#059669" : "#DC2626", 
-                                    display: "flex", alignItems: "center", gap: 6 
-                                  }}>
-                                    {pd.severity === "none" ? "🟢" : pd.severity === "low" ? "🟡" : pd.severity === "medium" ? "🟠" : "🔴"}
-                                    {pd.severity === "none" 
-                                      ? "Aucune anomalie détectée" 
-                                      : pd.severity === "low" 
-                                        ? "Anomalie mineure — surveillance" 
-                                        : pd.severity === "medium" 
-                                          ? "Anomalie modérée — consultation conseillée" 
-                                          : "Anomalie significative — consultation urgente"}
-                                  </div>
-                                </div>
-                              ) : c.status === "pending" || c.status === "accepted" ? (
-                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", textAlign: "center" }}>
-                                  <div style={{ width: 50, height: 50, borderRadius: "50%", background: `${st.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", marginBottom: 10 }}>
-                                    {c.status === "pending" ? "⏳" : "🩺"}
-                                  </div>
-                                  <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#0A2647", marginBottom: 3 }}>
-                                    {c.status === "pending" ? "En attente" : "Pris en charge"}
-                                  </div>
-                                  <div style={{ fontSize: ".73rem", color: "#94A3B8", lineHeight: 1.5 }}>
-                                    {c.status === "pending" ? "Un médecin sera notifié." : "L'analyse IA va démarrer."}
-                                  </div>
-                                </div>
-                              ) : c.status === "rejected" ? (
-                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px", textAlign: "center" }}>
-                                  <div style={{ fontSize: "1.8rem", marginBottom: 8 }}>❌</div>
-                                  <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Demande non traitée</div>
-                                  <button 
-                                    onClick={e => { e.stopPropagation(); navigate("/patient/consultation/new"); }} 
-                                    style={{ padding: "7px 14px", background: "#0A2647", border: "none", borderRadius: 8, color: "white", fontSize: ".76rem", fontWeight: 700, cursor: "pointer" }}
-                                  >
-                                    Nouvelle demande
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
-                            {(c.status === "analyzed" || c.status === "accepted" || c.status === "closed") && (
-                              <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
-                                <button 
-                                  onClick={e => { e.stopPropagation(); navigate(`/consultation/${c.id}`); }} 
-                                  style={{ 
-                                    padding: "9px 20px", 
-                                    background: c.status === "analyzed" ? "linear-gradient(135deg,#059669,#047857)" : c.status === "accepted" ? "linear-gradient(135deg,#2563EB,#1D4ED8)" : "#F8FAFC", 
-                                    border: c.status === "closed" ? "1.5px solid #E2E8F0" : "none", 
-                                    borderRadius: 10, 
-                                    color: c.status === "closed" ? "#475569" : "white", 
-                                    fontSize: ".8rem", 
-                                    fontWeight: 700, 
-                                    cursor: "pointer", 
-                                    display: "flex", 
-                                    alignItems: "center", 
-                                    gap: 8, 
-                                    boxShadow: c.status !== "closed" ? "0 4px 12px rgba(0,0,0,.1)" : "none", 
-                                    transition: "all .15s" 
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"} 
-                                  onMouseLeave={e => e.currentTarget.style.transform = ""}
-                                >
-                                  {c.status === "analyzed" ? "🧬 Voir le résultat complet" : c.status === "accepted" ? "💬 Ouvrir la consultation" : "📋 Voir le dossier"} →
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
+                      )}
+                      {/* Médecins hors rayon */}
+                      {allDoctorsWithDistance.filter(d => !nearbyIds.has(d.id)).slice(0, 20).map(doc => <DoctorCard key={doc.id} doctor={doc} isSelected={selectedDoctor?.id === doc.id} onClick={() => setSelectedDoctor(doc)} isNearby={false} />)}
+                    </>
+                  }
+                </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* ═══════ RIGHT SIDEBAR ═══════ */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* Quick submit */}
-              <div style={{ background: "linear-gradient(135deg,#0A2647,#205295)", borderRadius: 16, padding: "20px", color: "white", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,.05)" }} />
-                <div style={{ position: "relative", zIndex: 1 }}>
-                  <div style={{ fontSize: ".62rem", fontWeight: 700, color: "rgba(255,255,255,.45)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>Nouvel examen</div>
-                  <div style={{ fontSize: ".95rem", fontWeight: 800, marginBottom: 5, lineHeight: 1.4 }}>Soumettre une image médicale</div>
-                  <div style={{ fontSize: ".72rem", color: "rgba(255,255,255,.55)", lineHeight: 1.5, marginBottom: 14 }}>IRM, Scanner ou Radio — diagnostic assisté par IA.</div>
-                  <div style={{ display: "flex", gap: 5, marginBottom: 14 }}>
-                    {Object.values(MODEL_MED).map(m => (
-                      <span key={m.label} style={{ padding: "2px 7px", borderRadius: 5, fontSize: ".68rem", background: "rgba(255,255,255,.1)", fontWeight: 600 }}>{m.icon}</span>
-                    ))}
-                  </div>
-                  <button 
-                    onClick={() => navigate("/patient/consultation/new")} 
-                    style={{ width: "100%", padding: "10px", background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 10, color: "white", fontSize: ".8rem", fontWeight: 700, cursor: "pointer", transition: "all .15s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.22)"} 
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,.12)"}
-                  >
-                    Commencer →
-                  </button>
-                </div>
+        {/* TAB: PROFIL */}
+        {activeTab === "profile" && (
+          <div style={{ animation: "fadeUp 0.4s ease", maxWidth: 700 }}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647", marginBottom: 20 }}>👤 Mon Profil Médical</h2>
+            <div style={{ background: "white", borderRadius: 18, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+              <div style={{ padding: "28px", borderBottom: "1px solid #E2E8F0", background: "linear-gradient(135deg, #FAFBFC, white)", display: "flex", alignItems: "center", gap: 20 }}>
+                <div style={{ width: 80, height: 80, borderRadius: 24, background: "linear-gradient(135deg, #0A2647, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "2rem", fontWeight: 700, boxShadow: "0 8px 24px rgba(37,99,235,0.3)" }}>{user?.full_name?.charAt(0)?.toUpperCase() || "P"}</div>
+                <div><div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0A2647", marginBottom: 4 }}>{user?.full_name || "Patient"}</div><div style={{ fontSize: "0.85rem", color: "#64748B" }}>@{user?.username || "patient"}</div><div style={{ marginTop: 8, display: "flex", gap: 6 }}><span style={{ padding: "3px 10px", borderRadius: 8, fontSize: "0.68rem", fontWeight: 700, background: "#EFF6FF", color: "#2563EB" }}>{user?.role || "Patient"}</span><span style={{ padding: "3px 10px", borderRadius: 8, fontSize: "0.68rem", fontWeight: 700, background: "#ECFDF5", color: "#059669" }}>Compte actif</span></div></div>
               </div>
-
-              {/* Modalités */}
-              <div style={{ background: "white", borderRadius: 14, padding: "16px 18px", border: "1px solid #E2E8F0" }}>
-                <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 10 }}>
-                  Modalités disponibles
-                </div>
-                {Object.entries(MODEL_MED).map(([k, m]) => {
-                  const cnt = consultations.filter(c => c.model_key === k).length;
-                  return (
-                    <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F8FAFC" }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 9, background: m.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", flexShrink: 0 }}>{m.icon}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#0A2647" }}>{m.label}</div>
-                        <div style={{ fontSize: ".66rem", color: "#94A3B8" }}>{m.organ} · {m.modality}</div>
-                      </div>
-                      {cnt > 0 && (
-                        <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: ".63rem", fontWeight: 700, background: "#F1F5F9", color: "#64748B" }}>{cnt}</span>
-                      )}
-                    </div>
-                  );
-                })}
+              <div style={{ padding: "20px 28px" }}>
+                {[["Nom complet", user?.full_name],["Identifiant", user?.username],["Email", user?.email || "Non renseigné"],["Téléphone", user?.phone || "Non renseigné"],["Spécialité", user?.specialty || "—"],["Date d'inscription", formatDate(user?.created_at)]].map(([l, v], i) => (
+                  <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: i < 5 ? "1px solid #F8FAFC" : "none" }}><span style={{ fontSize: "0.85rem", color: "#94A3B8", fontWeight: 500 }}>{l}</span><span style={{ fontSize: "0.88rem", fontWeight: 600, color: "#0A2647" }}>{v || "—"}</span></div>
+                ))}
               </div>
-
-              {/* Guide */}
-              <div style={{ background: "white", borderRadius: 14, padding: "16px 18px", border: "1px solid #E2E8F0" }}>
-                <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 10 }}>
-                  Comprendre vos résultats
-                </div>
-                {[
-                  { ic: "🟢", l: "Normal", d: "Aucune anomalie détectée.", c: "#059669" },
-                  { ic: "🟡", l: "Mineure", d: "Surveillance recommandée.", c: "#D97706" },
-                  { ic: "🟠", l: "Modérée", d: "Consultation conseillée.", c: "#EA580C" },
-                  { ic: "🔴", l: "Significative", d: "Consultation urgente.", c: "#DC2626" },
-                ].map(i => (
-                  <div key={i.l} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid #F8FAFC" }}>
-                    <span style={{ fontSize: ".8rem", flexShrink: 0 }}>{i.ic}</span>
-                    <div>
-                      <div style={{ fontSize: ".72rem", fontWeight: 700, color: i.c }}>{i.l}</div>
-                      <div style={{ fontSize: ".66rem", color: "#94A3B8", lineHeight: 1.4 }}>{i.d}</div>
-                    </div>
+            </div>
+            <div style={{ marginTop: 20, background: "white", borderRadius: 18, border: "1px solid #E2E8F0", padding: "20px 24px" }}>
+              <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0A2647", marginBottom: 16 }}>🔬 Examens disponibles</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
+                {Object.entries(MODEL_CONFIG).map(([k, m]) => (
+                  <div key={k} style={{ padding: "14px", borderRadius: 14, background: m.bg, border: `1px solid ${m.color}20`, display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ fontSize: "1.4rem" }}>{m.icon}</div><div><div style={{ fontSize: "0.82rem", fontWeight: 700, color: m.color }}>{m.label}</div><div style={{ fontSize: "0.7rem", color: "#64748B" }}>{m.organ} · {m.accuracy}</div></div>
                   </div>
                 ))}
               </div>
-
-              {/* Timeline */}
-              {consultations.length > 0 && (
-                <div style={{ background: "white", borderRadius: 14, padding: "16px 18px", border: "1px solid #E2E8F0" }}>
-                  <div style={{ fontSize: ".62rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 10 }}>
-                    Activité récente
-                  </div>
-                  {consultations.slice(0, 4).map((c, i) => {
-                    const st = STATUS_MED[c.status] || STATUS_MED.pending;
-                    const md = MODEL_MED[c.model_key];
-                    return (
-                      <div 
-                        key={c.id} 
-                        onClick={() => navigate(`/consultation/${c.id}`)} 
-                        style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", cursor: "pointer", borderBottom: i < 3 ? "1px solid #F8FAFC" : "none" }}
-                      >
-                        <div style={{ width: 5, height: 5, borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: ".73rem", fontWeight: 600, color: "#0A2647", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {md?.icon} #{c.id} — {md?.label}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: ".63rem", color: "#CBD5E1", fontWeight: 500, whiteSpace: "nowrap" }}>
-                          {timeSince(c.updated_at || c.created_at)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Disclaimer */}
-              <div style={{ padding: "12px 14px", borderRadius: 10, background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-                <div style={{ fontSize: ".68rem", fontWeight: 800, color: "#92400E", marginBottom: 3 }}>⚕️ Avertissement médical</div>
-                <div style={{ fontSize: ".66rem", color: "#A16207", lineHeight: 1.6 }}>
-                  Les résultats IA sont des <strong>aides au diagnostic</strong> et ne remplacent pas l'avis d'un professionnel de santé. Urgence : <strong>15 (SAMU)</strong> ou <strong>112</strong>.
-                </div>
-              </div>
-
-              {/* Privacy */}
-              <div style={{ padding: "10px 14px", borderRadius: 10, background: "#F0F9FF", border: "1px solid #BAE6FD" }}>
-                <div style={{ fontSize: ".66rem", color: "#0369A1", lineHeight: 1.5, display: "flex", gap: 5 }}>
-                  <span>🔒</span>
-                  <span>Données chiffrées. Accès réservé aux médecins assignés à votre dossier.</span>
-                </div>
-              </div>
+            </div>
+            <div style={{ marginTop: 20, padding: "16px 20px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 14 }}>
+              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#92400E", marginBottom: 4 }}>⚠️ Avertissement médical</div>
+              <div style={{ fontSize: "0.75rem", color: "#A16207", lineHeight: 1.6 }}>Les résultats IA sont des aides au diagnostic. En cas d'urgence, appelez le <strong>15 (SAMU)</strong> ou le <strong>112</strong>.</div>
             </div>
           </div>
         )}
 
-        {/* Footer */}
-        {!loading && (
-          <div style={{ marginTop: 28, padding: "16px 0", borderTop: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: ".8rem" }}>⚕️</span>
-              <span style={{ fontSize: ".68rem", color: "#94A3B8" }}>MedAI — Diagnostic assisté par intelligence artificielle</span>
-            </div>
-            <div style={{ display: "flex", gap: 14 }}>
-              {["Conditions", "Confidentialité", "Contact"].map(l => (
-                <span key={l} style={{ fontSize: ".65rem", color: "#94A3B8", cursor: "pointer", fontWeight: 500 }}>{l}</span>
-              ))}
-            </div>
-          </div>
-        )}
+      </div>
+
+      {/* CHATBOT */}
+      <ChatbotWidget isOpen={chatbotOpen} onToggle={() => setChatbotOpen(!chatbotOpen)} userLocation={userLocation} />
+
+      {/* FOOTER */}
+      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 32px 30px", borderTop: "1px solid #E2E8F0", textAlign: "center", color: "#94A3B8", fontSize: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 4 }}>⚕️ MedAI — Plateforme de télémédecine assistée par IA</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 6 }}>{["Confidentialité", "Conditions", "Contact", "Aide"].map(l => <span key={l} style={{ cursor: "pointer" }}>{l}</span>)}</div>
       </div>
     </div>
   );

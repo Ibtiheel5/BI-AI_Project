@@ -38,13 +38,13 @@ export default function RegisterPage() {
 
   const validateStep1 = () => {
     if (!formData.fullName.trim()) return "Veuillez entrer votre nom complet";
-    if (!formData.username.match(/^[a-zA-Z0-9._-]{3,50}$/)) 
+    if (!formData.username.match(/^[a-zA-Z0-9._-]{3,50}$/))
       return "Identifiant invalide (3-50 caractères)";
-    if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) 
+    if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
       return "Email invalide";
-    if (formData.password.length < 6) 
+    if (formData.password.length < 6)
       return "Le mot de passe doit contenir au moins 6 caractères";
-    if (formData.password !== formData.confirmPassword) 
+    if (formData.password !== formData.confirmPassword)
       return "Les mots de passe ne correspondent pas";
     return null;
   };
@@ -78,10 +78,40 @@ export default function RegisterPage() {
     }
   };
 
+  // ── 4 domaines médicaux disponibles ──────────────────────────────
   const DOMAIN_OPTIONS = [
-    { key: "chest", label: "Radiologie Thoracique", icon: "🫁", desc: "Analyse de radiographies pulmonaires" },
-    { key: "brain", label: "Neurologie & IRM", icon: "🧠", desc: "Analyse d'IRM cérébrales" },
-    { key: "lung", label: "Cancer Pulmonaire", icon: "🔬", desc: "Détection de nodules pulmonaires" },
+    {
+      key: "chest",
+      label: "Radiologie Thoracique",
+      icon: "🫁",
+      desc: "Analyse de radiographies pulmonaires (10 pathologies)",
+      color: "#2D5F9E",
+      bg: "rgba(45,95,158,0.08)",
+    },
+    {
+      key: "brain",
+      label: "Neurologie & IRM",
+      icon: "🧠",
+      desc: "Analyse d'IRM cérébrales — 4 types de tumeurs",
+      color: "#6B4FA0",
+      bg: "rgba(107,79,160,0.08)",
+    },
+    {
+      key: "lung",
+      label: "Cancer Pulmonaire",
+      icon: "🔬",
+      desc: "Détection de lésions pulmonaires sur scanner CT",
+      color: "#D62828",
+      bg: "rgba(214,40,40,0.08)",
+    },
+    {
+      key: "retina",
+      label: "Rétinopathie Diabétique",
+      icon: "👁️",
+      desc: "Classification de 5 stades de rétinopathie (APTOS 2019)",
+      color: "#0E7490",
+      bg: "rgba(14,116,144,0.08)",
+    },
   ];
 
   return (
@@ -100,15 +130,32 @@ export default function RegisterPage() {
             Créer votre compte<br />
             <span style={{color: "#2D5F9E"}}>MedAI</span>
           </h1>
-          
+
           <p style={styles.description}>
             Rejoignez la plateforme de diagnostic assisté par IA
           </p>
+
+          {/* Aperçu des spécialités disponibles */}
+          <div style={styles.domainPreview}>
+            {[
+              { icon: "🫁", label: "Thorax", color: "#2D5F9E" },
+              { icon: "🧠", label: "Neurologie", color: "#6B4FA0" },
+              { icon: "🔬", label: "Oncologie", color: "#D62828" },
+              { icon: "👁️", label: "Rétinopathie", color: "#0E7490" },
+            ].map(d => (
+              <div key={d.label} style={{...styles.domainPill, borderColor: d.color + "40", color: d.color, background: d.color + "15"}}>
+                <span style={{fontSize: '16px'}}>{d.icon}</span>
+                <span style={{fontSize: '12px', fontWeight: 600}}>{d.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       <div style={styles.rightPanel}>
         <div style={styles.formContainer}>
+
+          {/* ── ÉTAPE 0 : Choix du rôle ─────────────────────────── */}
           {step === 0 && (
             <>
               <div style={styles.formHeader}>
@@ -122,7 +169,7 @@ export default function RegisterPage() {
                   <span style={styles.roleIcon}>👨‍⚕️</span>
                   <div>
                     <div style={styles.roleTitle}>Professionnel de santé</div>
-                    <div style={styles.roleDesc}>Médecin, radiologue, neurologue...</div>
+                    <div style={styles.roleDesc}>Médecin, radiologue, neurologue, ophtalmologue...</div>
                   </div>
                   <span style={styles.roleArrow}>→</span>
                 </button>
@@ -131,7 +178,7 @@ export default function RegisterPage() {
                   <span style={styles.roleIcon}>👤</span>
                   <div>
                     <div style={styles.roleTitle}>Patient</div>
-                    <div style={styles.roleDesc}>Accédez à vos résultats</div>
+                    <div style={styles.roleDesc}>Accédez à vos résultats et suivis</div>
                   </div>
                   <span style={styles.roleArrow}>→</span>
                 </button>
@@ -143,6 +190,7 @@ export default function RegisterPage() {
             </>
           )}
 
+          {/* ── ÉTAPE 1 : Informations personnelles ─────────────── */}
           {step === 1 && (
             <>
               <div style={styles.formHeader}>
@@ -219,7 +267,7 @@ export default function RegisterPage() {
                         value={formData.specialty}
                         onChange={(e) => updateForm("specialty", e.target.value)}
                         style={styles.input}
-                        placeholder="Radiologie, Neurologie..."
+                        placeholder="Radiologie, Neurologie, Ophtalmologie..."
                       />
                     </div>
 
@@ -245,8 +293,9 @@ export default function RegisterPage() {
                 <button
                   onClick={() => {
                     const err = validateStep1();
-                    if (err) setError(err);
-                    else if (role === "Patient") handleSubmit();
+                    if (err) { setError(err); return; }
+                    setError("");
+                    if (role === "Patient") handleSubmit();
                     else setStep(2);
                   }}
                   disabled={loading}
@@ -258,36 +307,68 @@ export default function RegisterPage() {
             </>
           )}
 
+          {/* ── ÉTAPE 2 : Sélection des domaines (médecins) ─────── */}
           {step === 2 && role === "Medecin" && (
             <>
               <div style={styles.formHeader}>
                 <button onClick={() => setStep(1)} style={styles.backButton}>← Retour</button>
                 <div style={styles.formIcon}>🏥</div>
                 <h2 style={styles.formTitle}>Domaines médicaux</h2>
-                <p style={styles.formSubtitle}>Sélectionnez vos spécialités</p>
+                <p style={styles.formSubtitle}>Sélectionnez vos spécialités (plusieurs possibles)</p>
               </div>
 
               <div style={styles.domainsContainer}>
-                {DOMAIN_OPTIONS.map((domain) => (
-                  <button
-                    key={domain.key}
-                    onClick={() => toggleDomain(domain.key)}
-                    style={{
-                      ...styles.domainCard,
-                      ...(formData.domains.includes(domain.key) ? styles.domainCardActive : {}),
-                    }}
-                  >
-                    <span style={styles.domainIcon}>{domain.icon}</span>
-                    <div style={styles.domainInfo}>
-                      <div style={styles.domainLabel}>{domain.label}</div>
-                      <div style={styles.domainDesc}>{domain.desc}</div>
-                    </div>
-                    <div style={styles.domainCheck}>
-                      {formData.domains.includes(domain.key) && "✓"}
-                    </div>
-                  </button>
-                ))}
+                {DOMAIN_OPTIONS.map((domain) => {
+                  const selected = formData.domains.includes(domain.key);
+                  return (
+                    <button
+                      key={domain.key}
+                      onClick={() => toggleDomain(domain.key)}
+                      style={{
+                        ...styles.domainCard,
+                        ...(selected ? {
+                          borderColor: domain.color,
+                          backgroundColor: domain.bg,
+                          boxShadow: `0 0 0 3px ${domain.color}20`,
+                        } : {}),
+                      }}
+                    >
+                      <span style={styles.domainIcon}>{domain.icon}</span>
+                      <div style={styles.domainInfo}>
+                        <div style={{...styles.domainLabel, ...(selected ? {color: domain.color} : {})}}>
+                          {domain.label}
+                        </div>
+                        <div style={styles.domainDesc}>{domain.desc}</div>
+                      </div>
+                      <div style={{
+                        ...styles.domainCheck,
+                        background: selected ? domain.color : '#E2E8F0',
+                        color: selected ? 'white' : 'transparent',
+                      }}>
+                        {selected && "✓"}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+
+              {formData.domains.length > 0 && (
+                <div style={styles.selectedBadges}>
+                  {formData.domains.map(k => {
+                    const d = DOMAIN_OPTIONS.find(o => o.key === k);
+                    return d ? (
+                      <span key={k} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                        padding: '4px 10px', borderRadius: '8px', fontSize: '12px',
+                        fontWeight: 600, background: d.color + '15', color: d.color,
+                        border: `1px solid ${d.color}40`,
+                      }}>
+                        {d.icon} {d.label}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
 
               {error && (
                 <div style={styles.errorBox}>
@@ -298,13 +379,18 @@ export default function RegisterPage() {
               <button
                 onClick={handleSubmit}
                 disabled={loading || formData.domains.length === 0}
-                style={{...styles.submitButton, marginTop: "20px"}}
+                style={{
+                  ...styles.submitButton,
+                  marginTop: "20px",
+                  ...(formData.domains.length === 0 ? {opacity: 0.5, cursor: 'not-allowed'} : {}),
+                }}
               >
-                {loading ? "Création en cours..." : "Créer mon compte"}
+                {loading ? "Création en cours..." : `Créer mon compte (${formData.domains.length} domaine${formData.domains.length > 1 ? 's' : ''})`}
               </button>
             </>
           )}
 
+          {/* ── ÉTAPE 3 : Succès ─────────────────────────────────── */}
           {step === 3 && (
             <div style={styles.successContainer}>
               <div style={styles.successIcon}>✅</div>
@@ -313,8 +399,8 @@ export default function RegisterPage() {
               </h2>
               <p style={styles.successMessage}>
                 {role === "Medecin"
-                  ? "Votre demande a été transmise à l'administrateur. Vous recevrez une confirmation par email."
-                  : "Votre compte patient a été créé avec succès. Vous pouvez vous connecter."
+                  ? "Votre demande a été transmise à l'administrateur. Vous recevrez une confirmation par email une fois votre compte validé."
+                  : "Votre compte patient a été créé avec succès. Vous pouvez vous connecter dès maintenant."
                 }
               </p>
               <button onClick={() => navigate("/login")} style={styles.submitButton}>
@@ -383,6 +469,20 @@ const styles = {
     fontSize: "16px",
     opacity: 0.8,
     lineHeight: 1.6,
+    marginBottom: "32px",
+  },
+  domainPreview: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "10px",
+  },
+  domainPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "8px 14px",
+    borderRadius: "12px",
+    border: "1px solid",
   },
   rightPanel: {
     width: "520px",
@@ -392,10 +492,11 @@ const styles = {
     justifyContent: "center",
     padding: "40px",
     boxShadow: "-5px 0 20px rgba(0,0,0,0.05)",
+    overflowY: "auto",
   },
   formContainer: {
     width: "100%",
-    maxWidth: "400px",
+    maxWidth: "420px",
   },
   formHeader: {
     textAlign: "center",
@@ -411,6 +512,7 @@ const styles = {
     color: "#2D5F9E",
     cursor: "pointer",
     fontSize: "14px",
+    fontWeight: 600,
   },
   formIcon: {
     width: "64px",
@@ -494,6 +596,7 @@ const styles = {
     fontSize: "14px",
     boxSizing: "border-box",
     outline: "none",
+    fontFamily: "inherit",
   },
   errorBox: {
     backgroundColor: "#FEF2F2",
@@ -517,30 +620,29 @@ const styles = {
     fontWeight: "bold",
     cursor: "pointer",
     transition: "all 0.3s",
+    fontFamily: "inherit",
   },
   domainsContainer: {
     display: "flex",
     flexDirection: "column",
-    gap: "12px",
+    gap: "10px",
+    marginBottom: "12px",
   },
   domainCard: {
     display: "flex",
     alignItems: "center",
     gap: "14px",
-    padding: "16px",
-    border: "1px solid #E2E8F0",
-    borderRadius: "12px",
+    padding: "14px 16px",
+    border: "2px solid #E2E8F0",
+    borderRadius: "14px",
     background: "white",
     cursor: "pointer",
-    transition: "all 0.3s",
+    transition: "all 0.25s",
     textAlign: "left",
-  },
-  domainCardActive: {
-    borderColor: "#2D5F9E",
-    backgroundColor: "#E5F0F8",
   },
   domainIcon: {
     fontSize: "28px",
+    flexShrink: 0,
   },
   domainInfo: {
     flex: 1,
@@ -549,22 +651,31 @@ const styles = {
     fontSize: "14px",
     fontWeight: "bold",
     color: "#0A2647",
-    marginBottom: "4px",
+    marginBottom: "3px",
+    transition: "color 0.25s",
   },
   domainDesc: {
     fontSize: "12px",
     color: "#64748B",
+    lineHeight: 1.4,
   },
   domainCheck: {
     width: "24px",
     height: "24px",
     borderRadius: "12px",
-    backgroundColor: "#2D5F9E",
-    color: "white",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontSize: "14px",
+    fontWeight: "bold",
+    flexShrink: 0,
+    transition: "all 0.25s",
+  },
+  selectedBadges: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginBottom: "8px",
   },
   successContainer: {
     textAlign: "center",

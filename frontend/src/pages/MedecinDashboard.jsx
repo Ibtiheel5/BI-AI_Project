@@ -6,8 +6,28 @@ import { useAuth } from "../context/AuthContext";
 
 const API = "http://localhost:8000/api/v1";
 
-const MODEL_ICONS = { brain: "🧠", lung: "🔬", chest: "🫁" };
-const MODEL_LABELS = { brain: "IRM cérébrale", lung: "Scanner CT", chest: "Radio thoracique" };
+// ── Configuration des modèles (icônes + labels) ───────────────────
+const MODEL_ICONS = {
+  brain:  "🧠",
+  lung:   "🔬",
+  chest:  "🫁",
+  retina: "👁️",
+};
+
+const MODEL_LABELS = {
+  brain:  "IRM cérébrale",
+  lung:   "Scanner CT",
+  chest:  "Radio thoracique",
+  retina: "Fond d'œil (Rétine)",
+};
+
+// Couleur du badge par modèle (pour cohérence visuelle)
+const MODEL_COLORS = {
+  chest:  { color: "#2D5F9E", bg: "#EFF6FF" },
+  brain:  { color: "#6B4FA0", bg: "#F5F3FF" },
+  lung:   { color: "#D62828", bg: "#FEF2F2" },
+  retina: { color: "#0E7490", bg: "#ECFEFF" },
+};
 
 const STATUS_CONFIG = {
   pending:  { label: "Attente",  color: "#F59E0B", bg: "#FFFBEB" },
@@ -76,7 +96,9 @@ export default function MedecinDashboard() {
 
   const formatDate = (d) => {
     if (!d) return "—";
-    return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(d).toLocaleDateString("fr-FR", {
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+    });
   };
 
   const formatNotifTime = (d) => {
@@ -88,19 +110,27 @@ export default function MedecinDashboard() {
   };
 
   const NOTIF_ICONS = {
-    new_consultation: "📋", consultation_accepted: "✅", consultation_rejected: "❌",
-    analysis_ready: "🤖", appointment_scheduled: "📅", consultation_closed: "🔒",
-    new_message: "💬", doctor_changed: "🔄",
+    new_consultation:       "📋",
+    consultation_accepted:  "✅",
+    consultation_rejected:  "❌",
+    analysis_ready:         "🤖",
+    appointment_scheduled:  "📅",
+    consultation_closed:    "🔒",
+    new_message:            "💬",
+    doctor_changed:         "🔄",
   };
 
   const stats = [
-    { label: "En attente",   value: queue.length,                                                    icon: "⏳", bg: "#FFFBEB", color: "#D97706" },
-    { label: "En cours",     value: assigned.filter(c => c.status === "accepted").length,             icon: "🔄", bg: "#EFF6FF", color: "#3B82F6" },
-    { label: "Résultats prêts", value: assigned.filter(c => c.status === "analyzed").length,          icon: "🤖", bg: "#ECFDF5", color: "#059669" },
-    { label: "Terminées",    value: assigned.filter(c => c.status === "closed").length,               icon: "✅", bg: "#F0FDF4", color: "#16A34A" },
+    { label: "En attente",      value: queue.length,                                          icon: "⏳", bg: "#FFFBEB", color: "#D97706" },
+    { label: "En cours",        value: assigned.filter(c => c.status === "accepted").length,  icon: "🔄", bg: "#EFF6FF", color: "#3B82F6" },
+    { label: "Résultats prêts", value: assigned.filter(c => c.status === "analyzed").length,  icon: "🤖", bg: "#ECFDF5", color: "#059669" },
+    { label: "Terminées",       value: assigned.filter(c => c.status === "closed").length,    icon: "✅", bg: "#F0FDF4", color: "#16A34A" },
   ];
 
   const criticalQueue = queue.filter(c => c.urgency === "critical" || c.urgency === "urgent");
+
+  // Domaines de l'utilisateur avec leur config
+  const userDomains = (user?.domains || []);
 
   return (
     <div style={{ minHeight: "100vh", background: "#F1F5F9", fontFamily: "'DM Sans', sans-serif", padding: "24px 32px" }}>
@@ -113,18 +143,26 @@ export default function MedecinDashboard() {
 
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
 
-        {/* Header */}
+        {/* ── Header ────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: "1.7rem", fontWeight: 800, color: "#0A2647", letterSpacing: "-.02em", marginBottom: 4 }}>
               Dr. {user?.full_name || "Médecin"}
             </h1>
-            <p style={{ color: "#64748B", fontSize: ".9rem" }}>
-              {user?.specialty || "Médecin"} · Domaines : {(user?.domains || []).map(d => (
-                <span key={d} style={{ display: "inline-block", padding: "2px 8px", background: "#EDE9FE", color: "#7C3AED", borderRadius: 6, fontSize: ".75rem", fontWeight: 600, marginRight: 4, marginLeft: 4 }}>
-                  {MODEL_ICONS[d]} {d}
-                </span>
-              ))}
+            <p style={{ color: "#64748B", fontSize: ".9rem", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {user?.specialty || "Médecin"} · Domaines :
+              {userDomains.map(d => {
+                const mc = MODEL_COLORS[d] || { color: "#64748B", bg: "#F1F5F9" };
+                return (
+                  <span key={d} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "2px 8px", borderRadius: 6, fontSize: ".75rem", fontWeight: 600,
+                    background: mc.bg, color: mc.color,
+                  }}>
+                    {MODEL_ICONS[d] || "🏥"} {d}
+                  </span>
+                );
+              })}
             </p>
           </div>
 
@@ -205,7 +243,7 @@ export default function MedecinDashboard() {
           </div>
         </div>
 
-        {/* Alert urgents */}
+        {/* ── Alerte urgents ────────────────────────────────────── */}
         {criticalQueue.length > 0 && (
           <div style={{
             padding: "16px 20px", background: "#FEE2E2", borderRadius: 14,
@@ -231,7 +269,7 @@ export default function MedecinDashboard() {
           </div>
         )}
 
-        {/* Stats */}
+        {/* ── Stats ─────────────────────────────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28, animation: "fadeUp .3s ease" }}>
           {stats.map(s => (
             <div key={s.label} style={{
@@ -251,7 +289,7 @@ export default function MedecinDashboard() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
-          {/* File rapide */}
+          {/* ── File rapide ───────────────────────────────────────── */}
           <div style={{ background: "white", borderRadius: 20, padding: "22px", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(10,38,71,.04)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#0A2647" }}>File d'attente</h2>
@@ -266,10 +304,12 @@ export default function MedecinDashboard() {
               </div>
             ) : queue.slice(0, 5).map(c => {
               const ur = URGENCY_CONFIG[c.urgency];
+              const mc = MODEL_COLORS[c.model_key] || { color: "#64748B", bg: "#F9FAFB" };
               return (
                 <div key={c.id} onClick={() => navigate(`/consultation/${c.id}`)} style={{
                   padding: "12px 14px", borderRadius: 12, marginBottom: 8,
-                  background: ur ? ur.bg : "#F8FAFC", border: `1px solid ${ur ? ur.color + "33" : "#F1F5F9"}`,
+                  background: ur ? ur.bg : "#F8FAFC",
+                  border: `1px solid ${ur ? ur.color + "33" : "#F1F5F9"}`,
                   cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
                   transition: "all .15s",
                   animation: ur?.color === "#DC2626" ? "fadeUp .3s ease, urgentPulse 2s infinite" : "fadeUp .3s ease",
@@ -277,12 +317,17 @@ export default function MedecinDashboard() {
                   onMouseEnter={e => e.currentTarget.style.transform = "translateX(4px)"}
                   onMouseLeave={e => e.currentTarget.style.transform = ""}
                 >
-                  <span style={{ fontSize: "1.2rem" }}>{MODEL_ICONS[c.model_key]}</span>
+                  <span style={{ fontSize: "1.2rem" }}>{MODEL_ICONS[c.model_key] || "🏥"}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#0A2647", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       #{c.id} — {c.patient_name}
                     </div>
-                    <div style={{ fontSize: ".7rem", color: "#94A3B8" }}>{waitMinutes(c.created_at)}</div>
+                    <div style={{ fontSize: ".7rem", color: "#94A3B8", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{waitMinutes(c.created_at)}</span>
+                      <span style={{ padding: "1px 6px", borderRadius: 4, background: mc.bg, color: mc.color, fontSize: ".65rem", fontWeight: 600 }}>
+                        {MODEL_LABELS[c.model_key] || c.model_key}
+                      </span>
+                    </div>
                   </div>
                   {ur && (
                     <span style={{ padding: "2px 8px", borderRadius: 8, fontSize: ".65rem", fontWeight: 700, background: ur.bg, color: ur.color }}>
@@ -294,7 +339,7 @@ export default function MedecinDashboard() {
             })}
           </div>
 
-          {/* Cas récents */}
+          {/* ── Cas récents ───────────────────────────────────────── */}
           <div style={{ background: "white", borderRadius: 20, padding: "22px", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(10,38,71,.04)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#0A2647" }}>Mes cas récents</h2>
@@ -306,6 +351,7 @@ export default function MedecinDashboard() {
               </div>
             ) : assigned.slice(0, 5).map(c => {
               const st = STATUS_CONFIG[c.status] || STATUS_CONFIG.pending;
+              const mc = MODEL_COLORS[c.model_key] || { color: "#64748B", bg: "#F9FAFB" };
               return (
                 <div key={c.id} onClick={() => navigate(`/consultation/${c.id}`)} style={{
                   padding: "12px 14px", borderRadius: 12, marginBottom: 8,
@@ -316,12 +362,17 @@ export default function MedecinDashboard() {
                   onMouseEnter={e => e.currentTarget.style.transform = "translateX(4px)"}
                   onMouseLeave={e => e.currentTarget.style.transform = ""}
                 >
-                  <span style={{ fontSize: "1.2rem" }}>{MODEL_ICONS[c.model_key]}</span>
+                  <span style={{ fontSize: "1.2rem" }}>{MODEL_ICONS[c.model_key] || "🏥"}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#0A2647", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       #{c.id} — {c.patient_name}
                     </div>
-                    <div style={{ fontSize: ".7rem", color: "#94A3B8" }}>{formatDate(c.updated_at)}</div>
+                    <div style={{ fontSize: ".7rem", color: "#94A3B8", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{formatDate(c.updated_at)}</span>
+                      <span style={{ padding: "1px 6px", borderRadius: 4, background: mc.bg, color: mc.color, fontSize: ".65rem", fontWeight: 600 }}>
+                        {MODEL_LABELS[c.model_key] || c.model_key}
+                      </span>
+                    </div>
                   </div>
                   <span style={{ padding: "2px 10px", borderRadius: 8, fontSize: ".68rem", fontWeight: 700, background: st.bg, color: st.color }}>
                     {st.label}
@@ -332,7 +383,7 @@ export default function MedecinDashboard() {
           </div>
         </div>
 
-        {/* Quick actions */}
+        {/* ── Quick actions ─────────────────────────────────────── */}
         <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
           {[
             { icon: "🔬", label: "Classification directe", desc: "Analyser une image sans consultation", action: () => navigate("/classification"), color: "#7C3AED", bg: "#EDE9FE" },
@@ -344,8 +395,16 @@ export default function MedecinDashboard() {
               border: "1px solid #E2E8F0", cursor: "pointer", textAlign: "left",
               transition: "all .2s", display: "flex", alignItems: "center", gap: 14,
             }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = a.color; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 16px ${a.color}15`; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "none"; }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = a.color;
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = `0 4px 16px ${a.color}15`;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = "#E2E8F0";
+                e.currentTarget.style.transform = "";
+                e.currentTarget.style.boxShadow = "none";
+              }}
             >
               <div style={{ width: 44, height: 44, borderRadius: 12, background: a.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>
                 {a.icon}
@@ -357,6 +416,47 @@ export default function MedecinDashboard() {
             </button>
           ))}
         </div>
+
+        {/* ── Accès rapide par domaine (si médecin multi-domaines) ─ */}
+        {userDomains.length > 1 && (
+          <div style={{ marginTop: 20, background: "white", borderRadius: 20, padding: "22px", border: "1px solid #E2E8F0" }}>
+            <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#0A2647", marginBottom: 16 }}>
+              Mes spécialités
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(userDomains.length, 4)}, 1fr)`, gap: 12 }}>
+              {userDomains.map(d => {
+                const mc = MODEL_COLORS[d] || { color: "#64748B", bg: "#F9FAFB" };
+                const domainInfo = {
+                  chest:  { label: "Radiologie Thoracique", accuracy: "97.3%", classes: "10 pathologies" },
+                  brain:  { label: "Neurologie & IRM",      accuracy: "96.2%", classes: "4 tumeurs" },
+                  lung:   { label: "Cancer Pulmonaire",      accuracy: "94.8%", classes: "3 classes" },
+                  retina: { label: "Rétinopathie Diab.",     accuracy: "92.1%", classes: "5 stades DR" },
+                }[d] || { label: d, accuracy: "—", classes: "—" };
+
+                return (
+                  <div key={d} style={{
+                    padding: "16px", borderRadius: 14,
+                    background: mc.bg, border: `1px solid ${mc.color}30`,
+                    cursor: "pointer", transition: "all .2s",
+                  }}
+                    onClick={() => navigate("/classification")}
+                    onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = ""}
+                  >
+                    <div style={{ fontSize: "1.8rem", marginBottom: 8 }}>{MODEL_ICONS[d]}</div>
+                    <div style={{ fontSize: ".82rem", fontWeight: 700, color: mc.color, marginBottom: 4 }}>
+                      {domainInfo.label}
+                    </div>
+                    <div style={{ fontSize: ".7rem", color: "#64748B", marginBottom: 2 }}>{domainInfo.classes}</div>
+                    <div style={{ fontSize: ".7rem", fontWeight: 600, color: mc.color }}>
+                      Précision : {domainInfo.accuracy}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {showNotifs && <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setShowNotifs(false)} />}
