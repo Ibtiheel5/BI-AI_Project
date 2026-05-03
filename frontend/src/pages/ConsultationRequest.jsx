@@ -1,6 +1,6 @@
 // pages/ConsultationRequest.jsx
 // Patient soumet une demande de consultation avec image médicale
-// Style premium identique à PatientDashboard
+// Version avec API fonctionnelle
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,7 +8,9 @@ import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import "./patient/PatientDashboard.css";
 
-const API = "http://localhost:8000/api/v1";
+// API URL - Assurez-vous que le backend tourne sur le bon port
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API_URL = `${API_BASE}/api/v1`;
 
 // Configuration médicale détaillée par spécialité (4 modèles)
 const MODEL_OPTIONS = [
@@ -208,6 +210,7 @@ export default function ConsultationRequest() {
 
   const fileRef = useRef(null);
 
+  // Vérifier l'authentification
   useEffect(() => {
     if (!authLoading && (!user || user.role !== "Patient")) {
       navigate("/login", { replace: true });
@@ -271,20 +274,21 @@ export default function ConsultationRequest() {
   }, [analyzeImageQuality]);
 
   const validateMedicalForm = () => {
-    if (!symptoms.trim()) {
-      setError("Veuillez décrire vos symptômes principaux");
-      return false;
-    }
-    if (symptoms.length < 10) {
-      setError("La description des symptômes est trop courte (minimum 10 caractères)");
-      return false;
-    }
-    if (!consentAccepted) {
-      setError("Vous devez accepter les conditions de traitement des données médicales");
-      return false;
-    }
-    return true;
-  };
+  if (!symptoms.trim()) {
+    setError("Veuillez décrire vos symptômes principaux");
+    return false;
+  }
+  // Réduire la longueur minimale à 3 caractères au lieu de 10
+  if (symptoms.length < 3) {
+    setError("La description des symptômes est trop courte (minimum 3 caractères)");
+    return false;
+  }
+  if (!consentAccepted) {
+    setError("Vous devez accepter les conditions de traitement des données médicales");
+    return false;
+  }
+  return true;
+};
 
   const buildMedicalNotes = () => {
     const sections = [];
@@ -310,36 +314,65 @@ export default function ConsultationRequest() {
 
     try {
       const token = localStorage.getItem("medai-token");
-      if (!token) throw new Error("Session expirée.");
+      console.log("Token:", token ? "Présent" : "Absent");
+      
+      if (!token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
 
-      const form = new FormData();
-      form.append("file", file);
-      form.append("model_key", selectedModel.key);
-      form.append("patient_notes", buildMedicalNotes());
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("model_key", selectedModel.key);
+      formData.append("patient_notes", buildMedicalNotes());
 
+      console.log("Envoi de la requête à:", `${API_URL}/consultations`);
+      console.log("Modèle:", selectedModel.key);
+      console.log("Fichier:", file.name, file.size, file.type);
+
+      // Simulation de progression
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => prev >= 90 ? 90 : prev + 10);
       }, 200);
 
-      const res = await fetch(`${API}/consultations`, {
+      const response = await fetch(`${API_URL}/consultations`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+        headers: {
+          "Authorization": `Bearer ${token}`
+        },
+        body: formData,
       });
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Erreur ${res.status}`);
+      console.log("Response status:", response.status);
+
+      if (!response.ok) {
+        let errorMessage = `Erreur ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error("Erreur API:", errorData);
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          console.error("Erreur de parsing:", e);
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await res.json();
-      setResult({ ...data, consultation_id: data.consultation_id, model: selectedModel });
+      const data = await response.json();
+      console.log("Succès:", data);
+      
+      setResult({
+        ...data,
+        consultation_id: data.consultation_id,
+        created_at: new Date().toISOString(),
+        model: selectedModel,
+      });
       setStep(3);
+      
     } catch (e) {
-      setError(e.message);
+      console.error("Erreur détaillée:", e);
+      setError(e.message || "Une erreur est survenue. Veuillez réessayer.");
     } finally {
       setLoading(false);
       setTimeout(() => setUploadProgress(0), 1000);
@@ -382,7 +415,7 @@ export default function ConsultationRequest() {
   return (
     <div className="pd3" style={{ position: "relative", minHeight: "100vh", overflowX: "hidden" }}>
       
-      {/* ========== HERO SECTION PREMIUM ========== */}
+      {/* ========== HERO SECTION ========== */}
       <section className="pd3-hero" style={{ minHeight: "40vh", position: "relative" }}>
         <div className="pd3-hero-grid" />
         <div className="pd3-hero-orb pd3-hero-orb-1" />
@@ -411,7 +444,7 @@ export default function ConsultationRequest() {
               animate={{ opacity: 1, y: 0 }} 
               transition={{ duration: 0.5, delay: 0.1 }}
             >
-              📋 <span className="highlight">Demande médicale</span>
+              <span className="highlight">Demande médicale</span>
             </motion.h1>
             
             <motion.p 
@@ -507,7 +540,7 @@ export default function ConsultationRequest() {
         {/* ÉTAPE 1 - Sélection examen */}
         {step === 1 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div className="pd3-metric" style={{ padding: 32 }}>
+            <div className="pd3-metric" style={{ padding: 32, marginBottom: 0 }}>
               <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--navy)", marginBottom: 20 }}>
                 1. Sélectionnez votre examen
               </h2>
@@ -524,7 +557,8 @@ export default function ConsultationRequest() {
                     style={{
                       padding: "20px 24px",
                       border: `2px solid ${selectedModel?.key === model.key ? model.color : "var(--border)"}`,
-                      textAlign: "left"
+                      textAlign: "left",
+                      cursor: "pointer"
                     }}
                   >
                     <div className="pd3-action-top" style={{ marginBottom: 0 }}>
@@ -571,7 +605,7 @@ export default function ConsultationRequest() {
                   </div>
                   <span style={{ color: selectedModel.color }}>{selectedModel.label}</span>
                 </div>
-                <button onClick={() => { setStep(1); setFile(null); setPreview(null); }} className="pd3-section-link">
+                <button onClick={() => { setStep(1); setFile(null); setPreview(null); }} className="pd3-section-link" style={{ cursor: "pointer" }}>
                   Changer ←
                 </button>
               </div>
@@ -580,7 +614,7 @@ export default function ConsultationRequest() {
               <div style={{ marginBottom: 28 }}>
                 <div className="pd3-section-row-title" style={{ marginBottom: 12 }}>
                   <Icons.Upload size={16} color="var(--gold-dk)" />
-                  <span>Image médicale</span>
+                  <span>Image médicale <span style={{ color: "var(--danger)" }}>*</span></span>
                 </div>
                 {!preview ? (
                   <div
@@ -599,7 +633,10 @@ export default function ConsultationRequest() {
                       <Icons.Upload size={28} color={selectedModel.color} />
                     </div>
                     <div className="pd3-empty-title">Déposez votre image ici</div>
-                    <div className="pd3-empty-desc">JPEG, PNG · Max 10 Mo · Min 300x300 px</div>
+                    <div className="pd3-empty-desc">ou cliquez pour parcourir</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--txt3)", marginTop: 8 }}>
+                      JPEG, PNG · Max 10 Mo · Min 300x300 px
+                    </div>
                   </div>
                 ) : (
                   <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--navy)" }}>
@@ -611,7 +648,7 @@ export default function ConsultationRequest() {
                           <span className="pd3-badge" style={{ background: "rgba(245,158,11,0.1)", color: "var(--warning)" }}>⚠️ {imageQuality.suggestions[0]}</span>
                         )}
                       </div>
-                      <button onClick={() => { setFile(null); setPreview(null); setImageQuality(null); }} className="pd3-section-link" style={{ color: "var(--danger)" }}>
+                      <button onClick={() => { setFile(null); setPreview(null); setImageQuality(null); }} className="pd3-section-link" style={{ color: "var(--danger)", cursor: "pointer" }}>
                         Remplacer
                       </button>
                     </div>
@@ -623,7 +660,7 @@ export default function ConsultationRequest() {
               <div style={{ marginBottom: 28 }}>
                 <div className="pd3-section-row-title" style={{ marginBottom: 12 }}>
                   <Icons.Folder size={16} color="var(--gold-dk)" />
-                  <span>Données cliniques</span>
+                  <span>Données cliniques <span style={{ color: "var(--danger)" }}>*</span></span>
                 </div>
                 <div className="pd3-metrics-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                   <div style={{ gridColumn: "span 2" }}>
@@ -725,7 +762,7 @@ export default function ConsultationRequest() {
               {/* Consentement */}
               <div style={{ marginBottom: 24, padding: 16, background: "var(--bg)", borderRadius: "var(--radius-lg)" }}>
                 <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
-                  <input type="checkbox" checked={consentAccepted} onChange={e => setConsentAccepted(e.target.checked)} />
+                  <input type="checkbox" checked={consentAccepted} onChange={e => setConsentAccepted(e.target.checked)} style={{ marginTop: 2 }} />
                   <span style={{ fontSize: "0.8rem", color: "var(--txt2)" }}>
                     J'accepte le traitement de mes données médicales conformément au RGPD et certifie l'exactitude des informations fournies.
                   </span>
@@ -735,7 +772,7 @@ export default function ConsultationRequest() {
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={() => setStep(1)} className="pd3-btn pd3-btn-outline" style={{ flex: 1 }}>
+                <button onClick={() => setStep(1)} className="pd3-btn pd3-btn-outline" style={{ flex: 1, cursor: "pointer" }}>
                   ← Retour
                 </button>
                 <button
@@ -810,10 +847,10 @@ export default function ConsultationRequest() {
               </div>
 
               <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                <button onClick={resetForm} className="pd3-btn pd3-btn-outline" style={{ background: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.2)", color: "white" }}>
+                <button onClick={resetForm} className="pd3-btn pd3-btn-outline" style={{ background: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.2)", color: "white", cursor: "pointer" }}>
                   📋 Nouvelle demande
                 </button>
-                <button onClick={() => navigate("/patient")} className="pd3-btn pd3-btn-gold">
+                <button onClick={() => navigate("/patient")} className="pd3-btn pd3-btn-gold" style={{ cursor: "pointer" }}>
                   🏠 Tableau de bord
                 </button>
               </div>
@@ -823,7 +860,7 @@ export default function ConsultationRequest() {
       </div>
 
       {/* ========== FOOTER PREMIUM ========== */}
-      <footer className="hp-footer">
+      <footer className="hp-footer" style={{ marginTop: 0 }}>
         <div className="hp-footer-inner">
           <div className="hp-footer-grid">
             <div className="hp-footer-brand">

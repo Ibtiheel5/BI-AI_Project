@@ -3,33 +3,43 @@ app/services/inference.py
 
 Service d'inférence multi-modèles — chest / lung / brain / retina
 
-RETINA — NOUVEAU PIPELINE (EfficientNet-B3 APTOS) :
-=====================================================
-Remplace l'ancien pipeline MultiModal (EfficientNet-B4 + GAT + BERT + TDA).
-Le nouveau checkpoint final_aptos_model.pth contient :
+RETINA — PIPELINE DRNet (EfficientNetV2-S + Swin-T) :
+=======================================================
+Remplace l'ancien pipeline APTOS (EfficientNet-B3, AptosModel).
+Le nouveau checkpoint best_retina_model.pth contient :
 
-  model_state_dict : poids EfficientNet-B3 + tête FC custom
-  class_names      : ['No_DR', 'Mild', 'Moderate', 'Severe', 'Proliferate_DR']
-  num_classes      : 5
-  img_size         : 224
-  class_weights    : liste des poids utilisés à l'entraînement (pour info)
-  val_metrics      : {'accuracy': ..., 'loss': ..., 'kappa_quad': ...}
-  model_info       : {'backbone': 'efficientnet_b3', 'in_features': 1536,
-                      'hidden': 512, 'dropout': 0.4, 'label_smoothing': 0.1,
-                      'weighted_sampler': True, 'class_weights': True}
+  model_state_dict : poids DRNet (EfficientNetV2-S + Swin-T + tête fusion)
+  metadata         : {
+      'classes'      : ['Mild','Moderate','No_DR','Proliferate_DR','Severe'],
+      'num_classes'  : 5,
+      'img_size'     : 224,
+      'mean'         : [0.485, 0.456, 0.406],
+      'std'          : [0.229, 0.224, 0.225],
+      'normalization': 'imagenet',
+      'backbone'     : 'efficientnetv2_s+swin_t',
+  }
+  epoch            : epoch du meilleur val_f1
+  val_f1           : meilleur F1 macro validation
+  val_acc          : accuracy validation
+  test_acc         : accuracy test
+  test_f1          : F1 macro test
 
-Architecture AptosModel (identique au notebook) :
-  backbone : timm EfficientNet-B3 (num_classes=0, global_pool='avg') → [B, 1536]
-  head     : Linear(1536→512) → BN → SiLU → Dropout(0.4) → Linear(512→5)
+CHANGEMENTS vs ancien AptosModel :
+  - Architecture : DRNet (2 branches CNN + Transformer) au lieu de EfficientNet-B3
+  - Fichier      : best_retina_model.pth  (était final_aptos_model.pth)
+  - Classes      : ordre ALPHABÉTIQUE ['Mild','Moderate','No_DR','Proliferate_DR','Severe']
+                   ≠ ordre APTOS ['No_DR','Mild','Moderate','Severe','Proliferate_DR']
+  - Métadonnées  : sous clé 'metadata' (pas 'model_info')
+  - GradCAM      : cible 'cnn_backbone' (branche CNN de DRNet)
+  - Preprocessing: Ben Graham ajouté dans preprocessing.py (sigma=10)
 
-NORMALISATION : ImageNet mean/std (identique aux autres modèles)
-  ← CHANGEMENT vs l'ancien pipeline qui faisait /255 uniquement
+NORMALISATION : ImageNet mean/std (inchangé vs AptosModel)
 """
+
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import torchvision.models as tvm
-from collections import OrderedDict
 from pathlib import Path
 from typing import Dict
 
@@ -37,7 +47,7 @@ from app.core.config import settings
 from app.services.preprocessing import preprocess_image
 
 
-# ── Classes par défaut ─────────────────────────────────────────────────────────
+# ── Classes par défaut ────────────────────────────────────────────────────────
 
 CLASSES_CHEST  = [
     'COVID', 'Lung_Opacity', 'Viral Pneumonia', 'Cardiomegaly',
@@ -45,13 +55,17 @@ CLASSES_CHEST  = [
 ]
 CLASSES_LUNG   = ['Benign', 'Malignant', 'Normal']
 CLASSES_BRAIN  = ['glioma', 'meningioma', 'notumor', 'pituitary']
-CLASSES_RETINA = ['No_DR', 'Mild', 'Moderate', 'Severe', 'Proliferate_DR']
+
+# ⚠️  CHANGEMENT : ordre ALPHABÉTIQUE (dataset folder-based du notebook DRNet)
+#    Mild=0, Moderate=1, No_DR=2, Proliferate_DR=3, Severe=4
+#    (différent de l'ordre APTOS : No_DR=0, Mild=1, Moderate=2, Severe=3, Proliferate_DR=4)
+CLASSES_RETINA = ['Mild', 'Moderate', 'No_DR', 'Proliferate_DR', 'Severe']
 
 MODEL_FILES = {
     "chest":  "final_model_10classes.pth",
     "lung":   "final_lung_cancer_model.pth",
     "brain":  "final_brain_tumor_model.pth",
-    "retina": "final_aptos_model.pth",     # ← MODIFIÉ : était best_retina_model.pth
+    "retina": "best_retina_model.pth",          # ← MODIFIÉ : était final_aptos_model.pth
 }
 MODEL_DEFAULT_CLASSES = {
     "chest":  CLASSES_CHEST,
@@ -63,11 +77,11 @@ MODEL_IMG_SIZES = {
     "chest":  224,
     "lung":   260,
     "brain":  224,
-    "retina": 224,   # ← inchangé
+    "retina": 224,   # inchangé
 }
 
 
-# ── Architecture chest : ResNet50 ─────────────────────────────────────────────
+# ── Architecture chest : ResNet50 ────────────────────────────────────────────
 
 class ChestXrayClassifier(nn.Module):
     def __init__(self, num_classes, dropout=0.0):
@@ -83,16 +97,17 @@ class ChestXrayClassifier(nn.Module):
         return self.backbone(x)
 
 
-# ── Architecture lung : EfficientNet-B2 + classifier custom ───────────────────
+# ── Architecture lung : EfficientNet-B2 ──────────────────────────────────────
 
 class LungCancerModel(nn.Module):
     def __init__(self, num_classes=3):
         super().__init__()
         import timm
+        from collections import OrderedDict
         self.backbone = timm.create_model(
             'efficientnet_b2', pretrained=False, num_classes=0
         )
-        in_f = self.backbone.num_features  # 1408
+        in_f = self.backbone.num_features
         self.classifier = nn.Sequential(OrderedDict([
             ('0', nn.BatchNorm1d(in_f)),
             ('1', nn.ReLU()),
@@ -106,7 +121,7 @@ class LungCancerModel(nn.Module):
         return self.classifier(self.backbone(x))
 
 
-# ── Architecture brain : EfficientNet-B3 + classifier custom ──────────────────
+# ── Architecture brain : EfficientNet-B3 ─────────────────────────────────────
 
 class BrainTumorModel(nn.Module):
     def __init__(self, num_classes=4):
@@ -128,49 +143,65 @@ class BrainTumorModel(nn.Module):
         )
 
     def forward(self, x):
-        x = self.backbone(x)
-        return self.classifier(x)
+        return self.classifier(self.backbone(x))
 
 
-# ── Architecture retina : EfficientNet-B3 APTOS (NOUVEAU) ─────────────────────
+# ── Architecture retina : DRNet (NOUVEAU) ────────────────────────────────────
 #
-# Remplace entièrement l'ancien RetinaInference (MultiModal + GAT + BERT + TDA).
-# Architecture identique à AptosModel dans le notebook d'entraînement.
+# Remplace AptosModel (EfficientNet-B3).
+# Fusion de deux branches :
+#   EfficientNetV2-S (CNN)      → [B, 1280]  ─┐
+#                                               ├→ concat [B,2048] → head → [B,5]
+#   Swin Transformer-T (ViT)   → [B,  768]  ─┘
 #
-#   Input  : [B, 3, 224, 224]  — normalisé ImageNet
-#   Backbone: EfficientNet-B3 (global_pool='avg', num_classes=0) → [B, 1536]
-#   Head   : Linear(1536→512) → BN1d → SiLU → Dropout(0.4) → Linear(512→5)
-#   Output : [B, 5]  logits
+# Input  : [B, 3, 224, 224] — normalisé ImageNet, preprocessé Ben Graham
+# Output : [B, 5] logits
+#
+# ⚠️  Ordre des classes (alphabétique) :
+#   0=Mild, 1=Moderate, 2=No_DR, 3=Proliferate_DR, 4=Severe
 
-class AptosModel(nn.Module):
+class DRNet(nn.Module):
     """
-    EfficientNet-B3 fine-tuné sur APTOS 2019 avec class weights + WeightedRandomSampler.
-    Tête de classification custom identique au notebook d'entraînement.
+    Fusion EfficientNetV2-S + Swin Transformer-T.
+    Architecture identique au notebook DRNet (cellule 7).
     """
-    def __init__(self, num_classes: int = 5, dropout: float = 0.4):
+    CNN_DIM = 1280
+    TR_DIM  = 768
+    FUSED   = CNN_DIM + TR_DIM   # 2048
+
+    def __init__(self, num_classes: int = 5, dropout: float = 0.35):
         super().__init__()
-        import timm
-        self.backbone = timm.create_model(
-            'efficientnet_b3',
-            pretrained=False,
-            num_classes=0,        # supprime la tête timm
-            global_pool='avg'     # → sortie [B, 1536]
-        )
-        in_features = self.backbone.num_features   # 1536 pour B3
+
+        # CNN branch : EfficientNetV2-S (sans classifier)
+        eff = tvm.efficientnet_v2_s(weights=None)
+        self.cnn_backbone = nn.Sequential(*list(eff.children())[:-1])
+        # → [B, 1280, 1, 1]
+
+        # Transformer branch : Swin-T (sans tête)
+        swin = tvm.swin_t(weights=None)
+        swin.head = nn.Identity()
+        self.transformer = swin
+        # → [B, 768]
+
+        # Tête de fusion
         self.head = nn.Sequential(
-            nn.Linear(in_features, 512),
-            nn.BatchNorm1d(512),
-            nn.SiLU(),
+            nn.LayerNorm(self.FUSED),
+            nn.Linear(self.FUSED, 512),
+            nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(512, num_classes),
+            nn.Linear(512, 256),
+            nn.GELU(),
+            nn.Dropout(dropout / 2),
+            nn.Linear(256, num_classes),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        features = self.backbone(x)   # [B, 1536]
-        return self.head(features)    # [B, num_classes]
+        c = self.cnn_backbone(x).flatten(1)        # [B, 1280]
+        t = self.transformer(x)                    # [B, 768]
+        return self.head(torch.cat([c, t], dim=1)) # [B, num_classes]
 
 
-# ── Construction du modèle ────────────────────────────────────────────────────
+# ── Construction des modèles ──────────────────────────────────────────────────
 
 def _build_model(model_key: str, num_classes: int, checkpoint: dict) -> nn.Module:
     if model_key == 'chest':
@@ -187,67 +218,62 @@ def _build_model(model_key: str, num_classes: int, checkpoint: dict) -> nn.Modul
         return BrainTumorModel(num_classes=num_classes)
 
     if model_key == 'retina':
-        return _build_retina_model(num_classes, checkpoint)
+        return _build_drnet(num_classes, checkpoint)
 
     raise ValueError(f"Modèle inconnu : '{model_key}'")
 
 
-def _build_retina_model(num_classes: int, checkpoint: dict) -> nn.Module:
+def _build_drnet(num_classes: int, checkpoint: dict) -> nn.Module:
     """
-    Instancie AptosModel et charge les poids depuis final_aptos_model.pth.
+    Instancie DRNet et charge les poids depuis best_retina_model.pth.
 
-    Format du checkpoint (sauvegardé par le notebook APTOS) :
-      checkpoint['model_state_dict'] → poids backbone + head
-      checkpoint['model_info']['dropout'] → valeur du dropout (défaut 0.4)
-      checkpoint['num_classes']      → 5
-      checkpoint['img_size']         → 224
-      checkpoint['class_names']      → ['No_DR', 'Mild', ...]
-      checkpoint['val_metrics']      → {'accuracy', 'loss', 'kappa_quad'}
-      checkpoint['class_weights']    → liste des poids (info uniquement)
+    Lecture des métadonnées :
+      checkpoint['metadata']['dropout']  → dropout (défaut 0.35)
+      checkpoint['val_f1']               → meilleur F1 validation
+      checkpoint['val_acc']              → accuracy validation
+      checkpoint['test_acc']             → accuracy test
     """
-    # Lire le dropout depuis les métadonnées du checkpoint
-    model_info = checkpoint.get('model_info', {})
-    dropout    = float(model_info.get('dropout', 0.4))
+    meta    = checkpoint.get('metadata', {})
+    dropout = float(meta.get('dropout', 0.35))
 
-    model = AptosModel(num_classes=num_classes, dropout=dropout)
+    model = DRNet(num_classes=num_classes, dropout=dropout)
 
-    # Charger les poids
     state_dict = checkpoint.get('model_state_dict', checkpoint)
     if not isinstance(state_dict, dict):
         raise RuntimeError(
-            "[RetinaModel] model_state_dict absent ou invalide dans le checkpoint. "
-            "Vérifiez que final_aptos_model.pth a été généré par le notebook APTOS."
+            "[DRNet] 'model_state_dict' absent ou invalide dans le checkpoint. "
+            "Vérifiez que best_retina_model.pth est bien généré par le notebook DRNet."
         )
 
-    # Chargement strict — l'architecture est exactement celle du notebook
     try:
         model.load_state_dict(state_dict, strict=True)
-        print(f"[RetinaModel] ✅ Chargement strict OK — {len(state_dict)} clés")
+        print(f"[DRNet] ✅ Chargement strict OK — {len(state_dict)} clés")
     except RuntimeError as e:
-        print(f"[RetinaModel] strict=True échoué → tentative strict=False")
-        print(f"[RetinaModel] Erreur : {e}")
+        print(f"[DRNet] strict=True échoué → tentative strict=False")
+        print(f"[DRNet] Erreur : {e}")
         missing, unexpected = model.load_state_dict(state_dict, strict=False)
         if missing:
-            print(f"[RetinaModel] ⚠️  Clés manquantes ({len(missing)}) : {missing[:5]}")
+            print(f"[DRNet] ⚠️  Clés manquantes ({len(missing)}) : {missing[:5]}")
         if unexpected:
-            print(f"[RetinaModel] ⚠️  Clés inattendues ({len(unexpected)}) : {unexpected[:5]}")
+            print(f"[DRNet] ⚠️  Clés inattendues ({len(unexpected)}) : {unexpected[:5]}")
 
-    # Log des métriques d'entraînement si disponibles
-    val_metrics = checkpoint.get('val_metrics', {})
-    if val_metrics:
-        acc   = val_metrics.get('accuracy', 0) * 100
-        kappa = val_metrics.get('kappa_quad', 0)
-        print(f"[RetinaModel] Val Accuracy={acc:.2f}% | Kappa quadratique={kappa:.4f}")
+    # Log des métriques d'entraînement
+    val_acc  = checkpoint.get('val_acc',  0.0)
+    val_f1   = checkpoint.get('val_f1',   0.0)
+    test_acc = checkpoint.get('test_acc', 0.0)
+    test_f1  = checkpoint.get('test_f1',  0.0)
+    epoch    = checkpoint.get('epoch',    '?')
+    backbone = meta.get('backbone', 'efficientnetv2_s+swin_t')
 
-    class_weights = checkpoint.get('class_weights', [])
-    if class_weights:
-        print(f"[RetinaModel] Class weights utilisés à l'entraînement : "
-              f"{[round(w, 4) for w in class_weights]}")
+    print(f"[DRNet] Backbone : {backbone}")
+    print(f"[DRNet] Epoch    : {epoch}")
+    print(f"[DRNet] Val  Acc={val_acc:.4f}  F1={val_f1:.4f}")
+    print(f"[DRNet] Test Acc={test_acc:.4f}  F1={test_f1:.4f}")
 
     return model
 
 
-# ── Service d'inférence ────────────────────────────────────────────────────────
+# ── Service d'inférence ───────────────────────────────────────────────────────
 
 class InferenceService:
     def __init__(self, model_path: str, model_key: str):
@@ -270,19 +296,9 @@ class InferenceService:
             )
 
             # ── Lire les métadonnées du checkpoint ──────────────────────────
-            # Le notebook APTOS sauvegarde les clés directement à la racine du dict
-            # (pas sous 'metadata' comme l'ancien pipeline MultiModal).
             if isinstance(checkpoint, dict):
-                # Nouveau format APTOS (racine plate)
-                if 'class_names' in checkpoint:
-                    self._class_names = checkpoint['class_names']
-                if 'num_classes' in checkpoint:
-                    self._num_classes = int(checkpoint['num_classes'])
-                if 'img_size' in checkpoint:
-                    self._img_size = int(checkpoint['img_size'])
 
-                # Ancien format MultiModal (métadonnées sous 'metadata')
-                # Conservé pour compatibilité avec chest/lung/brain s'ils utilisent ce format
+                # Format DRNet : métadonnées sous 'metadata'
                 meta = checkpoint.get('metadata', {})
                 if isinstance(meta, dict):
                     if 'classes' in meta:
@@ -292,14 +308,28 @@ class InferenceService:
                     if 'img_size' in meta:
                         self._img_size = int(meta['img_size'])
 
-            # Cohérence num_classes / class_names
+                # Format ancien (chest/lung/brain) : clés à la racine ou sous 'metadata'
+                # Priorité à 'metadata' déjà lue ci-dessus
+                # Fallback sur clés racine si metadata vide
+                if not meta:
+                    if 'class_names' in checkpoint:
+                        self._class_names = checkpoint['class_names']
+                    if 'num_classes' in checkpoint:
+                        self._num_classes = int(checkpoint['num_classes'])
+                    if 'img_size' in checkpoint:
+                        self._img_size = int(checkpoint['img_size'])
+
+            # Cohérence
             if self._class_names and self._num_classes != len(self._class_names):
                 self._num_classes = len(self._class_names)
 
             # ── Construire et charger le modèle ─────────────────────────────
-            self._model = _build_model(self._model_key, self._num_classes, checkpoint)
+            self._model = _build_model(
+                self._model_key, self._num_classes, checkpoint
+            )
 
-            # Pour chest/lung/brain : chargement standard (retina géré dans _build_retina_model)
+            # Pour chest/lung/brain : chargement standard
+            # Pour retina (DRNet) : géré dans _build_drnet()
             if self._model_key != 'retina':
                 state_dict = checkpoint.get('model_state_dict', checkpoint)
                 if not isinstance(state_dict, dict):
@@ -309,13 +339,21 @@ class InferenceService:
                     print(f"[{self._model_key}] ✅ Chargement strict OK")
                 except RuntimeError as e:
                     print(f"[{self._model_key}] strict=True échoué → strict=False")
-                    missing, unexpected = self._model.load_state_dict(state_dict, strict=False)
-                    print(f"[{self._model_key}] missing={len(missing)} unexpected={len(unexpected)}")
+                    missing, unexpected = self._model.load_state_dict(
+                        state_dict, strict=False
+                    )
+                    print(
+                        f"[{self._model_key}] "
+                        f"missing={len(missing)} unexpected={len(unexpected)}"
+                    )
 
             self._model.to(settings.DEVICE)
             self._model.eval()
 
-            print(f"✅ [{self._model_key}] prêt — {self._num_classes} classes — {self._img_size}px")
+            print(
+                f"✅ [{self._model_key}] prêt — "
+                f"{self._num_classes} classes — {self._img_size}px"
+            )
             print(f"   Classes : {self._class_names}")
             print(f"   Device  : {settings.DEVICE}\n")
 
@@ -343,11 +381,11 @@ class InferenceService:
         if self._model is None:
             raise RuntimeError(
                 f"Modèle [{self._model_key}] non chargé. "
-                f"Vérifiez que '{MODEL_FILES[self._model_key]}' existe dans saved_models/"
+                f"Vérifiez que '{MODEL_FILES[self._model_key]}' "
+                f"existe dans saved_models/"
             )
 
-        # Tous les modèles utilisent maintenant la normalisation ImageNet
-        # (retina inclus — cf. preprocessing.py, _MODELS_DIV255_ONLY est vide)
+        # preprocessing.py applique Ben Graham pour model_key='retina'
         tensor = preprocess_image(
             image_bytes,
             img_size=self._img_size,
@@ -377,7 +415,9 @@ class InferenceService:
         }
 
         if with_gradcam:
-            result["gradcam_image"] = self._generate_gradcam(image_bytes, pred_idx)
+            result["gradcam_image"] = self._generate_gradcam(
+                image_bytes, pred_idx
+            )
 
         return result
 
@@ -389,18 +429,26 @@ class InferenceService:
                 img_size=self._img_size,
                 model_key=self._model_key,
             ).to(settings.DEVICE)
-            # MODIFIÉ : retina pointe maintenant sur backbone.blocks (EfficientNet-B3)
-            # comme brain et lung, et non plus sur un module CNN spécifique à MultiModal.
+
+            # ⚠️  CHANGEMENT pour retina :
+            # DRNet a 2 branches. On cible la branche CNN (EfficientNetV2-S)
+            # car elle capture les textures locales (microanévrysmes, exsudats)
+            # plus interprétables visuellement que le Transformer.
+            # 'cnn_backbone' (pas 'backbone.blocks' de l'ancien AptosModel)
             target = {
                 "chest":  "backbone.layer4",
                 "lung":   "backbone.blocks",
                 "brain":  "backbone.blocks",
-                "retina": "backbone.blocks",   # EfficientNet-B3 backbone
+                "retina": "cnn_backbone",     # ← MODIFIÉ : branche CNN de DRNet
             }.get(self._model_key, "backbone.layer4")
+
             return generate_gradcam_overlay(
-                image_bytes=image_bytes, model=self._model,
-                tensor=tensor_grad, class_idx=pred_idx,
-                device=settings.DEVICE, target_layer_name=target,
+                image_bytes=image_bytes,
+                model=self._model,
+                tensor=tensor_grad,
+                class_idx=pred_idx,
+                device=settings.DEVICE,
+                target_layer_name=target,
             )
         except Exception as e:
             print(f"⚠️  Grad-CAM [{self._model_key}] : {e}")
@@ -409,13 +457,16 @@ class InferenceService:
     def predict_topk(self, image_bytes: bytes, k: int = 3) -> Dict:
         result = self.predict(image_bytes)
         sorted_probs = sorted(
-            result["probabilities"].items(), key=lambda x: x[1], reverse=True
+            result["probabilities"].items(),
+            key=lambda x: x[1], reverse=True
         )
-        result["top_k"] = [{"class": c, "probability": p} for c, p in sorted_probs[:k]]
+        result["top_k"] = [
+            {"class": c, "probability": p} for c, p in sorted_probs[:k]
+        ]
         return result
 
 
-# ── Cache global ───────────────────────────────────────────────────────────────
+# ── Cache global ──────────────────────────────────────────────────────────────
 
 _services: Dict[str, InferenceService] = {}
 

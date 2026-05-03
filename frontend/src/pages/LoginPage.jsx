@@ -1,7 +1,10 @@
 // src/pages/LoginPage.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { motion } from "framer-motion";
+import "./HomePage.css";
+import chestXrayImage from '../assets/chest-xray.jpg';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -12,6 +15,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,1001 +57,360 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={styles.pageWrapper}>
-      <div style={styles.container}>
-        {/* ═══════════════════════════════════════════════════════
-            PANNEAU GAUCHE — MÉDICAL PROFESSIONNEL
-        ═══════════════════════════════════════════════════════ */}
-        <div style={styles.leftPanel}>
-          <div style={styles.imageOverlay}></div>
-          <img
-            src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=1200&q=90"
-            alt="Professional Medical Team"
-            style={styles.backgroundImage}
-          />
+    <div className="hp">
+      {/* Navigation premium */}
+      <motion.nav className={`hp-nav ${scrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: 0.5, type: "spring", stiffness: 100 }}>
+        <div className="hp-nav-logo" onClick={() => navigate("/")}>
+          <div className="hp-logo-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <path d="M12 4v12M8 8c-2 0-4 1-4 4s1 6 4 6M16 8c2 0 4 1 4 4s-1 6-4 6M8 8c1.5 0 3 1 4 2M16 8c-1.5 0-3 1-4 2"/>
+            </svg>
+          </div>
+          <span>Med<span className="accent">AI</span></span>
+        </div>
+       
+        <div className="hp-nav-actions">
+          <Link to="/register" className="hp-btn hp-btn-outline hp-btn-sm">S'inscrire</Link>
+        </div>
+      </motion.nav>
 
-          <div style={styles.leftContent}>
-            {/* Logo médical premium */}
-            <div style={styles.brandLogo}>
-              <div style={styles.logoCircle}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"
-                    fill="white" fillOpacity="0.9"/>
-                  <path d="M12 8v8M8 12h8" stroke="#0EA5E9" strokeWidth="2.5"
-                    strokeLinecap="round"/>
-                </svg>
-              </div>
-              <div>
-                <div style={styles.logoTitle}>MedAI</div>
-                <div style={styles.logoSubtitle}>MEDICAL INTELLIGENCE PLATFORM</div>
-              </div>
-            </div>
+      {/* Hero Section avec image médicale */}
+      <section className="hp-hero" style={{ minHeight: "100vh", position: "relative" }}>
+        <div className="hp-hero-grid-bg" />
+        <div className="hp-hero-glow hp-hero-glow-1" />
+        <div className="hp-hero-glow hp-hero-glow-2" />
+        <div className="hp-hero-glow hp-hero-glow-3" />
+        <div className="hp-hero-ring" style={{ width: "80%", height: "80%" }} />
+        <div className="hp-hero-ring" style={{ width: "65%", height: "65%", animationDirection: "reverse", animationDuration: "25s" }} />
+        <div className="hp-hero-ring" style={{ width: "50%", height: "50%", animationDuration: "20s", borderWidth: "0.5px" }} />
 
-            {/* Citation médicale premium */}
-            <div style={styles.quoteCard}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" style={styles.quoteIcon}>
-                <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"
-                  fill="rgba(255,255,255,0.15)"/>
-              </svg>
-              <p style={styles.quoteText}>
-                "L'IA transforme notre capacité à diagnostiquer avec précision et rapidité.
-                MedAI est devenu un outil indispensable dans notre pratique quotidienne."
-              </p>
-              <div style={styles.quoteAuthor}>
-                <div style={styles.authorAvatar}>
-                  <img
-                    src="https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&q=80"
-                    alt="Dr. Sarah Chen"
-                    style={styles.avatarImage}
+        {/* Image médicale en arrière-plan */}
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundImage: `url(${chestXrayImage})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          opacity: 0.15,
+          zIndex: 0
+        }} />
+
+        <div className="hp-hero-content" style={{ padding: "120px 64px 80px", position: "relative", zIndex: 2 }}>
+          <div style={{ maxWidth: 550, marginRight: "auto" }}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+              <div className="hp-badge" style={{ marginBottom: 24 }}>
+                <span className="hp-badge-dot" />
+                <span>ACCÈS SÉCURISÉ</span>
+                <span className="hp-badge-sep">•</span>
+                <span>SSL/TLS</span>
+              </div>
+            </motion.div>
+
+            <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+              Accédez à votre<br />
+              <span className="gd">espace médical</span>
+            </motion.h1>
+
+            <motion.p className="hp-hero-desc" style={{ maxWidth: 480 }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+            Plateforme de diagnostic assisté par IA. Connectez-vous pour accéder à vos outils médicaux.
+            </motion.p>
+
+            {/* Formulaire de connexion */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+              <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>
+                <div style={{ marginBottom: 20 }}>
+                  <input
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="Identifiant médical ou email"
+                    style={{
+                      width: "100%",
+                      padding: "14px 18px",
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1.5px solid rgba(255,255,255,0.2)",
+                      borderRadius: 14,
+                      fontSize: "0.95rem",
+                      color: "white",
+                      outline: "none",
+                      transition: "all 0.2s",
+                    }}
+                    onFocus={e => e.target.style.borderColor = "#FFD700"}
+                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
                   />
                 </div>
-                <div>
-                  <div style={styles.authorName}>Dr. Sarah Chen, MD</div>
-                  <div style={styles.authorTitle}>Radiologue Senior · CHU Paris-Sud</div>
-                  <div style={styles.authorExpertise}>
-                    Spécialiste en imagerie thoracique · 15 ans d'expérience
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Statistiques médicales premium */}
-            <div style={styles.statsGrid}>
-              <div style={styles.statCard}>
-                <div style={styles.statIcon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                    <path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </div>
-                <div style={styles.statValue}>2.4s</div>
-                <div style={styles.statLabel}>Temps d'analyse moyen</div>
-              </div>
-
-              <div style={styles.statCard}>
-                <div style={styles.statIcon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M9 11l3 3L22 4" stroke="currentColor" strokeWidth="2"
-                      strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                      strokeLinejoin="round"/>
-                  </svg>
-                </div>
-                <div style={styles.statValue}>98.7%</div>
-                <div style={styles.statLabel}>Précision diagnostique</div>
-              </div>
-
-              <div style={styles.statCard}>
-                <div style={styles.statIcon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                      strokeLinejoin="round"/>
-                    <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
-                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                      strokeLinejoin="round"/>
-                  </svg>
-                </div>
-                <div style={styles.statValue}>250K+</div>
-                <div style={styles.statLabel}>Patients analysés</div>
-              </div>
-            </div>
-
-            {/* Badges de certification médicale */}
-            <div style={styles.certBadges}>
-              <div style={styles.certBadge}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L3 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-                </svg>
-                <span>CE Médical IIa</span>
-              </div>
-              <div style={styles.certBadge}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M9 11.24V7.5a2.5 2.5 0 015 0v3.74c1.21.81 2 2.18 2 3.76 0 2.49-2.01 4.5-4.5 4.5S7 17.49 7 15c0-1.58.79-2.95 2-3.76z"/>
-                </svg>
-                <span>ISO 13485</span>
-              </div>
-              <div style={styles.certBadge}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                </svg>
-                <span>RGPD Conforme</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════
-            PANNEAU DROIT — FORMULAIRE MÉDICAL PREMIUM
-        ═══════════════════════════════════════════════════════ */}
-        <div style={styles.rightPanel}>
-          <div style={styles.formWrapper}>
-            {/* En-tête professionnel */}
-            <div style={styles.formHeader}>
-              <div style={styles.securityBadge}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                </svg>
-                <span>Connexion Sécurisée SSL/TLS</span>
-              </div>
-
-              <h1 style={styles.formTitle}>Accès Professionnel</h1>
-              <p style={styles.formSubtitle}>
-                Connectez-vous à votre espace médical MedAI pour accéder
-                aux outils de diagnostic assisté par IA.
-              </p>
-            </div>
-
-            {/* Formulaire */}
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeWidth="2"
-                      strokeLinecap="round" strokeLinejoin="round"/>
-                    <circle cx="12" cy="7" r="4" strokeWidth="2"/>
-                  </svg>
-                  Identifiant Médical
-                </label>
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  style={styles.input}
-                  placeholder="Numéro RPPS ou email professionnel"
-                  autoComplete="username"
-                />
-                <div style={styles.inputHint}>
-                  Format: dr.nom ou nom@etablissement.fr
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" strokeWidth="2"/>
-                    <path d="M7 11V7a5 5 0 0110 0v4" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                  Mot de Passe
-                </label>
-                <div style={styles.passwordWrapper}>
+                <div style={{ position: "relative", marginBottom: 20 }}>
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    style={styles.input}
-                    placeholder="••••••••••••"
-                    autoComplete="current-password"
+                    placeholder="Mot de passe"
+                    style={{
+                      width: "100%",
+                      padding: "14px 18px",
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1.5px solid rgba(255,255,255,0.2)",
+                      borderRadius: 14,
+                      fontSize: "0.95rem",
+                      color: "white",
+                      outline: "none",
+                      transition: "all 0.2s",
+                    }}
+                    onFocus={e => e.target.style.borderColor = "#FFD700"}
+                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    style={styles.passwordToggle}
-                    aria-label={showPassword ? "Masquer" : "Afficher"}
+                    style={{
+                      position: "absolute",
+                      right: 16,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      color: "rgba(255,255,255,0.6)",
+                      cursor: "pointer",
+                      fontSize: "1rem"
+                    }}
                   >
-                    {showPassword ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" strokeWidth="2"/>
-                        <line x1="1" y1="1" x2="23" y2="23" strokeWidth="2"/>
-                      </svg>
-                    ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeWidth="2"/>
-                        <circle cx="12" cy="12" r="3" strokeWidth="2"/>
-                      </svg>
-                    )}
+                    {showPassword ? "🙈" : "👁️"}
                   </button>
                 </div>
-              </div>
 
-              <div style={styles.formOptions}>
-                <label style={styles.checkboxLabel}>
-                  <input type="checkbox" style={styles.checkbox} />
-                  <span>Rester connecté (30 jours)</span>
-                </label>
-                <Link to="/forgot-password" style={styles.forgotLink}>
-                  Récupération d'accès
-                </Link>
-              </div>
-
-              {error && (
-                <div style={styles.errorAlert}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                  </svg>
-                  <div>
-                    <div style={styles.errorTitle}>Échec de connexion</div>
-                    <div style={styles.errorMessage}>{error}</div>
+                {error && (
+                  <div style={{
+                    padding: "12px 16px",
+                    background: "rgba(239,68,68,0.15)",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    borderRadius: 12,
+                    color: "#FEE2E2",
+                    fontSize: "0.85rem",
+                    marginBottom: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10
+                  }}>
+                    <span>⚠️</span> {error}
                   </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  ...styles.submitButton,
-                  ...(loading ? styles.submitButtonDisabled : {}),
-                }}
-              >
-                {loading ? (
-                  <>
-                    <span style={styles.spinner}></span>
-                    <span>Authentification en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" strokeWidth="2"
-                        strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M10 17l5-5-5-5M15 12H3" strokeWidth="2"
-                        strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    <span>Accéder à MedAI</span>
-                  </>
                 )}
-              </button>
-            </form>
 
-            {/* Divider */}
-            <div style={styles.divider}>
-              <span style={styles.dividerText}>Comptes de Démonstration</span>
-            </div>
-
-            {/* Demo accounts — 5 cartes sur 2 colonnes + 1 centrée */}
-            <div style={styles.demoSection}>
-              <div style={styles.demoGrid}>
-                <button onClick={() => fillDemo("dr.martin", "chest123")} style={styles.demoCard}>
-                  <div style={styles.demoAvatarWrapper}>
-                    <img
-                      src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&q=80"
-                      alt="Dr. Martin"
-                      style={styles.demoAvatar}
-                    />
-                    <div style={{...styles.demoStatus, backgroundColor: '#10B981'}}></div>
-                  </div>
-                  <div style={styles.demoInfo}>
-                    <div style={styles.demoName}>Dr. Sophie Martin</div>
-                    <div style={styles.demoRole}>Radiologue Senior</div>
-                    <div style={styles.demoSpecialty}>
-                      <span style={{...styles.demoTag, background: 'rgba(45,95,158,0.1)', color: '#2D5F9E'}}>🫁 Thorax</span>
-                    </div>
-                  </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="hp-btn hp-btn-gold"
+                  style={{ width: "100%", padding: "14px", fontSize: "0.95rem", justifyContent: "center" }}
+                >
+                  {loading ? (
+                    <><span className="hp-pulse" style={{ marginRight: 8 }} /> Connexion en cours...</>
+                  ) : (
+                    <>Accéder à MedAI →</>
+                  )}
                 </button>
+              </form>
+            </motion.div>
 
-                <button onClick={() => fillDemo("dr.lambert", "neuro123")} style={styles.demoCard}>
-                  <div style={styles.demoAvatarWrapper}>
-                    <img
-                      src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=100&q=80"
-                      alt="Dr. Lambert"
-                      style={styles.demoAvatar}
-                    />
-                    <div style={{...styles.demoStatus, backgroundColor: '#10B981'}}></div>
-                  </div>
-                  <div style={styles.demoInfo}>
-                    <div style={styles.demoName}>Dr. Jean Lambert</div>
-                    <div style={styles.demoRole}>Neurologue</div>
-                    <div style={styles.demoSpecialty}>
-                      <span style={{...styles.demoTag, background: 'rgba(107,79,160,0.1)', color: '#6B4FA0'}}>🧠 IRM cérébrale</span>
-                    </div>
-                  </div>
-                </button>
-
-                <button onClick={() => fillDemo("dr.benali", "lung123")} style={styles.demoCard}>
-                  <div style={styles.demoAvatarWrapper}>
-                    <img
-                      src="https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&q=80"
-                      alt="Dr. Benali"
-                      style={styles.demoAvatar}
-                    />
-                    <div style={{...styles.demoStatus, backgroundColor: '#10B981'}}></div>
-                  </div>
-                  <div style={styles.demoInfo}>
-                    <div style={styles.demoName}>Dr. Karim Benali</div>
-                    <div style={styles.demoRole}>Oncologue</div>
-                    <div style={styles.demoSpecialty}>
-                      <span style={{...styles.demoTag, background: 'rgba(214,40,40,0.1)', color: '#D62828'}}>🔬 Cancer pulm.</span>
-                    </div>
-                  </div>
-                </button>
-
-                <button onClick={() => fillDemo("dr.seddik", "retina123")} style={styles.demoCard}>
-                  <div style={styles.demoAvatarWrapper}>
-                    <img
-                      src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=100&q=80"
-                      alt="Dr. Seddik"
-                      style={styles.demoAvatar}
-                    />
-                    <div style={{...styles.demoStatus, backgroundColor: '#10B981'}}></div>
-                  </div>
-                  <div style={styles.demoInfo}>
-                    <div style={styles.demoName}>Dr. Nadia Seddik</div>
-                    <div style={styles.demoRole}>Ophtalmologue</div>
-                    <div style={styles.demoSpecialty}>
-                      <span style={{...styles.demoTag, background: 'rgba(14,116,144,0.1)', color: '#0E7490'}}>👁️ Rétinopathie</span>
-                    </div>
-                  </div>
-                </button>
-
-                <button onClick={() => fillDemo("patient", "patient123")} style={styles.demoCard}>
-                  <div style={styles.demoAvatarWrapper}>
-                    <img
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80"
-                      alt="Patient"
-                      style={styles.demoAvatar}
-                    />
-                    <div style={{...styles.demoStatus, backgroundColor: '#0EA5E9'}}></div>
-                  </div>
-                  <div style={styles.demoInfo}>
-                    <div style={styles.demoName}>Ahmed Ben Ali</div>
-                    <div style={styles.demoRole}>Patient</div>
-                    <div style={styles.demoSpecialty}>
-                      <span style={{...styles.demoTag, background: 'rgba(14,165,233,0.1)', color: '#0EA5E9'}}>👤 Espace personnel</span>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div style={styles.formFooter}>
-              <div style={styles.helpText}>
-                Nouveau praticien ?
-                <Link to="/register" style={styles.helpLink}> Demander un accès professionnel</Link>
-              </div>
-
-              <div style={styles.securityFooter}>
-                <div style={styles.securityItem}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/>
-                  </svg>
-                  <span>Cryptage AES-256</span>
-                </div>
-                <div style={styles.securityItem}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                  </svg>
-                  <span>Données de santé protégées</span>
+            {/* Comptes de démonstration */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} style={{ marginTop: 32 }}>
+              <div style={{
+                borderTop: "1px solid rgba(255,255,255,0.1)",
+                paddingTop: 24,
+                textAlign: "center"
+              }}>
+                <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: 16, letterSpacing: "1px" }}>
+                  COMPTES DE DÉMONSTRATION
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+                  {[
+                    { user: "dr.martin", pass: "chest123", label: "Dr. Martin", role: "Radiologue", icon: "🫁", color: "#2D5F9E" },
+                    { user: "dr.lambert", pass: "neuro123", label: "Dr. Lambert", role: "Neurologue", icon: "🧠", color: "#6B4FA0" },
+                    { user: "dr.benali", pass: "lung123", label: "Dr. Benali", role: "Oncologue", icon: "🔬", color: "#DC2626" },
+                    { user: "dr.seddik", pass: "retina123", label: "Dr. Seddik", role: "Ophtalmologue", icon: "👁️", color: "#0E7490" },
+                    { user: "patient", pass: "patient123", label: "Patient", role: "Espace patient", icon: "👤", color: "#0EA5E9" }
+                  ].map((demo, idx) => (
+                    <motion.button
+                      key={idx}
+                      onClick={() => fillDemo(demo.user, demo.pass)}
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 14px",
+                        background: `rgba(${parseInt(demo.color.slice(1,3),16)}, ${parseInt(demo.color.slice(3,5),16)}, ${parseInt(demo.color.slice(5,7),16)}, 0.1)`,
+                        border: `1px solid ${demo.color}40`,
+                        borderRadius: 12,
+                        cursor: "pointer",
+                        textAlign: "left"
+                      }}
+                    >
+                      <div style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        background: `${demo.color}20`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "1.2rem"
+                      }}>
+                        {demo.icon}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "white" }}>{demo.label}</div>
+                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.5)" }}>{demo.role}</div>
+                      </div>
+                    </motion.button>
+                  ))}
                 </div>
               </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} style={{ marginTop: 24, textAlign: "center" }}>
+              <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
+                Nouveau praticien ? <Link to="/register" style={{ color: "#FFD700", textDecoration: "none" }}>Demander un accès professionnel</Link>
+              </p>
+              <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  Cryptage AES-256
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  Données de santé protégées
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Image médicale à droite - effet visuel */}
+          <motion.div
+            className="hp-hero-visual"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            style={{ position: "relative" }}
+          >
+            <div className="hp-hero-img-wrapper">
+              <div className="hp-hero-img-glow" />
+              <div className="hp-hero-img">
+                <img
+                  src={chestXrayImage}
+                  alt="Medical Imaging"
+                  className="hp-hero-main-img"
+                  style={{ width: "100%", height: "auto", borderRadius: 24 }}
+                />
+                <div className="hp-img-overlay">
+                  <div className="hp-scan-line" />
+                  <div className="hp-hotspot hp-hotspot-1" />
+                  <div className="hp-hotspot hp-hotspot-2" />
+                  <div className="hp-hotspot hp-hotspot-3" />
+                </div>
+              </div>
+            </div>
+
+            {/* Cartes flottantes */}
+            <motion.div
+              className="hp-fcard hp-fc1"
+              animate={{ y: [0, -12, 0] }}
+              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+            >
+              <div className="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+              <div><div className="v">2.4s</div><div className="l">Temps d'analyse</div></div>
+            </motion.div>
+
+            <motion.div
+              className="hp-fcard hp-fc2"
+              animate={{ y: [0, -8, 0], x: [0, 5, 0] }}
+              transition={{ repeat: Infinity, duration: 5, delay: 1, ease: "easeInOut" }}
+            >
+              <div className="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+              <div><div className="v">98.7%</div><div className="l">Précision</div></div>
+            </motion.div>
+
+            <motion.div
+              className="hp-fcard hp-fc3"
+              animate={{ boxShadow: ["0 0 0px rgba(255,215,0,0.15)", "0 0 25px rgba(255,215,0,0.4)", "0 0 0px rgba(255,215,0,0.15)"] }}
+              transition={{ repeat: Infinity, duration: 2.5 }}
+            >
+              <div className="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg></div>
+              <div><div className="v">250K+</div><div className="l">Patients</div></div>
+            </motion.div>
+          </motion.div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="hp-hero-scroll">
+          <span>Scroll to explore</span>
+          <div className="hp-scroll-mouse">
+            <div className="hp-scroll-wheel" />
+          </div>
+        </div>
+      </section>
+
+      {/* Footer premium */}
+      <footer className="hp-footer">
+        <div className="hp-footer-inner">
+          <div className="hp-footer-grid">
+            <div className="hp-footer-brand">
+              <div className="hp-nav-logo" style={{ marginBottom: 16 }}>
+                <div className="hp-logo-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <path d="M12 4v12M8 8c-2 0-4 1-4 4s1 6 4 6M16 8c2 0 4 1 4 4s-1 6-4 6M8 8c1.5 0 3 1 4 2M16 8c-1.5 0-3 1-4 2"/>
+                  </svg>
+                </div>
+                <span style={{ color: "#fff" }}>Med<span style={{ color: "#FFD700" }}>AI</span></span>
+              </div>
+              <p>Plateforme médicale de diagnostic assisté par IA. Transformant la radiologie avec l'apprentissage profond depuis 2024.</p>
+              <div className="hp-footer-socials">
+                {["LI", "TW", "GH", "YT", "IN"].map((s, i) => (
+                  <div className="hp-footer-social" key={i}>{s}</div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4>PRODUIT</h4>
+              {["Analyse IA", "Radiologues", "API Access", "Mobile App", "Tarifs"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
+            </div>
+            <div>
+              <h4>ENTREPRISE</h4>
+              {["À propos", "Carrières", "Recherche", "Blog", "Contact"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
+            </div>
+            <div>
+              <h4>RESSOURCES</h4>
+              {["Documentation", "Études de cas", "Whitepapers", "Support", "Statut"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
+            </div>
+          </div>
+          <div className="hp-footer-bottom">
+            <span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span>
+            <div className="hp-footer-bottom-links">
+              {["Confidentialité", "Conditions", "Sécurité", "HIPAA", "RGPD", "Contact"].map(x => <a href="#" key={x}>{x}</a>)}
             </div>
           </div>
         </div>
-      </div>
+      </footer>
+
+      <style>{`
+        .hp-nav-logo span { color: white; }
+        .hp-nav-links a { color: rgba(255,255,255,0.7); }
+        .hp-nav-links a:hover { color: white; }
+        .hp-nav-actions .hp-btn-outline { border-color: rgba(255,255,255,0.3); color: white; }
+        .hp-nav-actions .hp-btn-outline:hover { background: white; color: var(--navy); border-color: white; }
+        .hp-nav.scrolled .hp-nav-links a { color: var(--txt2); }
+        .hp-nav.scrolled .hp-nav-links a:hover { color: var(--navy); }
+        .hp-nav.scrolled .hp-nav-actions .hp-btn-outline { border-color: var(--navy); color: var(--navy); }
+        .hp-nav.scrolled .hp-nav-actions .hp-btn-outline:hover { background: var(--navy); color: white; }
+      `}</style>
     </div>
   );
 }
-
-const styles = {
-  pageWrapper: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #0A2647 0%, #1B3B6F 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px',
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-  },
-
-  container: {
-    display: 'flex',
-    maxWidth: '1400px',
-    width: '100%',
-    minHeight: '85vh',
-    borderRadius: '24px',
-    overflow: 'hidden',
-    boxShadow: '0 40px 80px -20px rgba(0, 0, 0, 0.5)',
-  },
-
-  leftPanel: {
-    flex: 1,
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    padding: '60px',
-    overflow: 'hidden',
-  },
-
-  backgroundImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    zIndex: 1,
-  },
-
-  imageOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'linear-gradient(135deg, rgba(10, 38, 71, 0.97) 0%, rgba(27, 59, 111, 0.93) 50%, rgba(45, 95, 158, 0.90) 100%)',
-    backdropFilter: 'blur(2px)',
-    zIndex: 2,
-  },
-
-  leftContent: {
-    position: 'relative',
-    zIndex: 3,
-    maxWidth: '600px',
-    color: 'white',
-  },
-
-  brandLogo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '18px',
-    marginBottom: '60px',
-  },
-
-  logoCircle: {
-    width: '64px',
-    height: '64px',
-    borderRadius: '18px',
-    background: 'rgba(255, 255, 255, 0.12)',
-    backdropFilter: 'blur(20px)',
-    border: '1.5px solid rgba(255, 255, 255, 0.25)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-  },
-
-  logoTitle: {
-    fontSize: '36px',
-    fontWeight: '800',
-    letterSpacing: '-1px',
-    lineHeight: 1,
-  },
-
-  logoSubtitle: {
-    fontSize: '10px',
-    letterSpacing: '3px',
-    opacity: 0.85,
-    fontWeight: '600',
-    marginTop: '6px',
-  },
-
-  quoteCard: {
-    background: 'rgba(255, 255, 255, 0.08)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: '24px',
-    padding: '40px',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
-    marginBottom: '50px',
-    position: 'relative',
-  },
-
-  quoteIcon: {
-    position: 'absolute',
-    top: '20px',
-    right: '20px',
-    opacity: 0.3,
-  },
-
-  quoteText: {
-    fontSize: '19px',
-    lineHeight: 1.8,
-    marginBottom: '32px',
-    fontStyle: 'italic',
-    opacity: 0.95,
-    fontWeight: '400',
-  },
-
-  quoteAuthor: {
-    display: 'flex',
-    gap: '18px',
-    alignItems: 'center',
-    paddingTop: '24px',
-    borderTop: '1px solid rgba(255, 255, 255, 0.15)',
-  },
-
-  authorAvatar: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '50%',
-    overflow: 'hidden',
-    border: '3px solid rgba(255, 255, 255, 0.3)',
-    flexShrink: 0,
-  },
-
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-
-  authorName: {
-    fontSize: '17px',
-    fontWeight: '700',
-    marginBottom: '4px',
-  },
-
-  authorTitle: {
-    fontSize: '14px',
-    opacity: 0.85,
-    marginBottom: '6px',
-  },
-
-  authorExpertise: {
-    fontSize: '12px',
-    opacity: 0.7,
-    lineHeight: 1.4,
-  },
-
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '16px',
-    marginBottom: '40px',
-  },
-
-  statCard: {
-    background: 'rgba(255, 255, 255, 0.08)',
-    backdropFilter: 'blur(10px)',
-    borderRadius: '16px',
-    padding: '24px 20px',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
-    textAlign: 'center',
-  },
-
-  statIcon: {
-    color: '#0EA5E9',
-    marginBottom: '12px',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-
-  statValue: {
-    fontSize: '28px',
-    fontWeight: '800',
-    marginBottom: '6px',
-    letterSpacing: '-0.5px',
-  },
-
-  statLabel: {
-    fontSize: '12px',
-    opacity: 0.8,
-    lineHeight: 1.4,
-  },
-
-  certBadges: {
-    display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap',
-  },
-
-  certBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 16px',
-    background: 'rgba(16, 185, 129, 0.15)',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(16, 185, 129, 0.3)',
-    borderRadius: '12px',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#6EE7B7',
-  },
-
-  rightPanel: {
-    width: '580px',
-    background: '#FFFFFF',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px 36px',
-    overflowY: 'auto',
-  },
-
-  formWrapper: {
-    width: '100%',
-    maxWidth: '480px',
-  },
-
-  formHeader: {
-    marginBottom: '36px',
-  },
-
-  securityBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 16px',
-    background: '#F0FDF4',
-    border: '1px solid #BBF7D0',
-    borderRadius: '12px',
-    color: '#059669',
-    fontSize: '12px',
-    fontWeight: '600',
-    marginBottom: '24px',
-  },
-
-  formTitle: {
-    fontSize: '36px',
-    fontWeight: '800',
-    color: '#0A2647',
-    marginBottom: '12px',
-    letterSpacing: '-1px',
-    lineHeight: 1.1,
-  },
-
-  formSubtitle: {
-    fontSize: '15px',
-    color: '#64748B',
-    lineHeight: 1.6,
-  },
-
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-
-  inputGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-  },
-
-  label: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    fontSize: '14px',
-    fontWeight: '700',
-    color: '#1E293B',
-    letterSpacing: '-0.2px',
-  },
-
-  input: {
-    width: '100%',
-    padding: '16px 18px',
-    border: '2px solid #E2E8F0',
-    borderRadius: '14px',
-    fontSize: '15px',
-    transition: 'all 0.2s',
-    boxSizing: 'border-box',
-    outline: 'none',
-    background: '#F8FAFC',
-    fontFamily: 'inherit',
-    fontWeight: '500',
-  },
-
-  inputHint: {
-    fontSize: '12px',
-    color: '#94A3B8',
-    marginTop: '-4px',
-    fontFamily: "'JetBrains Mono', monospace",
-  },
-
-  passwordWrapper: {
-    position: 'relative',
-  },
-
-  passwordToggle: {
-    position: 'absolute',
-    right: '16px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#64748B',
-    padding: '6px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'color 0.2s',
-    borderRadius: '8px',
-  },
-
-  formOptions: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: '-8px',
-  },
-
-  checkboxLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    fontSize: '14px',
-    color: '#475569',
-    cursor: 'pointer',
-    fontWeight: '500',
-  },
-
-  checkbox: {
-    width: '18px',
-    height: '18px',
-    cursor: 'pointer',
-    accentColor: '#2D5F9E',
-  },
-
-  forgotLink: {
-    fontSize: '14px',
-    color: '#2D5F9E',
-    textDecoration: 'none',
-    fontWeight: '600',
-    transition: 'color 0.2s',
-  },
-
-  errorAlert: {
-    display: 'flex',
-    gap: '14px',
-    padding: '16px 18px',
-    background: '#FEF2F2',
-    border: '1.5px solid #FCA5A5',
-    borderRadius: '14px',
-    color: '#DC2626',
-  },
-
-  errorTitle: {
-    fontSize: '14px',
-    fontWeight: '700',
-    marginBottom: '4px',
-  },
-
-  errorMessage: {
-    fontSize: '13px',
-    opacity: 0.9,
-  },
-
-  submitButton: {
-    width: '100%',
-    padding: '18px',
-    background: 'linear-gradient(135deg, #0A2647 0%, #2D5F9E 100%)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '14px',
-    fontSize: '16px',
-    fontWeight: '700',
-    cursor: 'pointer',
-    transition: 'all 0.3s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    letterSpacing: '0.3px',
-    boxShadow: '0 8px 24px rgba(10, 38, 71, 0.3)',
-  },
-
-  submitButtonDisabled: {
-    opacity: 0.6,
-    cursor: 'not-allowed',
-    boxShadow: 'none',
-  },
-
-  spinner: {
-    width: '18px',
-    height: '18px',
-    border: '2px solid rgba(255,255,255,0.3)',
-    borderTopColor: 'white',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-
-  divider: {
-    position: 'relative',
-    textAlign: 'center',
-    margin: '30px 0 24px',
-    borderTop: '1.5px solid #E2E8F0',
-  },
-
-  dividerText: {
-    display: 'inline-block',
-    background: 'white',
-    padding: '0 20px',
-    fontSize: '13px',
-    color: '#94A3B8',
-    fontWeight: '600',
-    position: 'relative',
-    top: '-12px',
-    letterSpacing: '0.3px',
-  },
-
-  demoSection: {
-    marginBottom: '30px',
-  },
-
-  // Grille 2 colonnes pour les 5 cartes (dernière centrée via CSS)
-  demoGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '12px',
-  },
-
-  demoCard: {
-    display: 'flex',
-    gap: '12px',
-    padding: '14px',
-    border: '2px solid #E2E8F0',
-    borderRadius: '14px',
-    background: '#FAFBFC',
-    cursor: 'pointer',
-    transition: 'all 0.3s',
-    textAlign: 'left',
-    alignItems: 'center',
-  },
-
-  demoAvatarWrapper: {
-    position: 'relative',
-    flexShrink: 0,
-  },
-
-  demoAvatar: {
-    width: '46px',
-    height: '46px',
-    borderRadius: '50%',
-    objectFit: 'cover',
-    border: '3px solid white',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-  },
-
-  demoStatus: {
-    position: 'absolute',
-    bottom: '2px',
-    right: '2px',
-    width: '13px',
-    height: '13px',
-    borderRadius: '50%',
-    border: '2px solid white',
-    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
-  },
-
-  demoInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  demoName: {
-    fontSize: '13px',
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: '2px',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-
-  demoRole: {
-    fontSize: '11px',
-    color: '#64748B',
-    fontWeight: '600',
-    marginBottom: '5px',
-  },
-
-  demoSpecialty: {
-    display: 'flex',
-    alignItems: 'center',
-  },
-
-  demoTag: {
-    fontSize: '11px',
-    fontWeight: '600',
-    padding: '2px 8px',
-    borderRadius: '6px',
-    whiteSpace: 'nowrap',
-  },
-
-  formFooter: {
-    borderTop: '1.5px solid #E2E8F0',
-    paddingTop: '24px',
-  },
-
-  helpText: {
-    fontSize: '14px',
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: '18px',
-  },
-
-  helpLink: {
-    color: '#2D5F9E',
-    textDecoration: 'none',
-    fontWeight: '700',
-    transition: 'color 0.2s',
-  },
-
-  securityFooter: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '28px',
-    flexWrap: 'wrap',
-  },
-
-  securityItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '12px',
-    color: '#10B981',
-    fontWeight: '600',
-  },
-};
-
-const styleSheet = document.createElement("style");
-styleSheet.textContent = `
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  input:focus {
-    border-color: #2D5F9E !important;
-    background-color: white !important;
-    box-shadow: 0 0 0 3px rgba(45, 95, 158, 0.1) !important;
-  }
-
-  button[type="submit"]:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 32px rgba(10, 38, 71, 0.4) !important;
-  }
-
-  a:hover {
-    color: #1B3B6F !important;
-  }
-
-  /* 5e carte demo : centrer dans la grille 2 colonnes */
-  [style*="demoGrid"] > button:nth-child(5) {
-    grid-column: 1 / -1;
-    max-width: 50%;
-    margin: 0 auto;
-    justify-self: center;
-  }
-
-  [style*="demoCard"]:hover {
-    border-color: #2D5F9E !important;
-    background: white !important;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(10, 38, 71, 0.12) !important;
-  }
-
-  @media (max-width: 1200px) {
-    [style*="leftPanel"] {
-      display: none !important;
-    }
-    [style*="rightPanel"] {
-      width: 100% !important;
-      max-width: 600px !important;
-      margin: 0 auto !important;
-    }
-  }
-
-  @media (max-width: 640px) {
-    [style*="demoGrid"] {
-      grid-template-columns: 1fr !important;
-    }
-    [style*="demoGrid"] > button:nth-child(5) {
-      max-width: 100% !important;
-    }
-  }
-`;
-document.head.appendChild(styleSheet);

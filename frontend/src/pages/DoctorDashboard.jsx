@@ -1,1332 +1,644 @@
-// src/pages/DoctorDashboard.jsx — VERSION COMPLÈTE
-// ✅ Explainable AI (Gemini streaming)
-// ✅ Téléchargement rapport PDF
-// ✅ Clôture de dossier avec notes
-// ✅ GradCAM viewer
-// ✅ Distribution probabilités
-// ✅ Panel analyse complet
-// ✅ Toutes les actions médecin
-
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+// DoctorDashboard.jsx — Version Finale Complète (Premium Gold/Navy)
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
+import "./patient/PatientDashboard.css";
 import { useAuth } from "../context/AuthContext";
 
 const API = "http://localhost:8000/api/v1";
 
-// ─────────────────────────────────────────────────────────────────
-// CONFIGURATION
-// ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════
+// SVG ICONS
+// ═══════════════════════════════════════
+const Svg = ({ children, size = 24, color = "currentColor", sw = 1.6 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+);
+
+const I = {
+  Lungs: p => <Svg {...p}><path d="M12 4.5v11M8.5 8c-1.8 0-3.5.8-3.5 3.5S7 16 8.5 16M15.5 8c1.8 0 3.5.8 3.5 3.5S17 16 15.5 16M8.5 8c1.2 0 2.5.8 3.5 2M15.5 8c-1.2 0-2.5.8-3.5 2"/></Svg>,
+  Brain: p => <Svg {...p}><path d="M12 5a3.5 3.5 0 0 1 3.5 3.5c0 1.4-.8 2.5-1.8 3.2v2.3a1.8 1.8 0 0 1-3.4 0v-2.3c-1-.7-1.8-1.8-1.8-3.2A3.5 3.5 0 0 1 12 5zM12 5v14"/></Svg>,
+  Heart: p => <Svg {...p}><path d="M3 11.5h3l2-5 2 10 2-7.5 2 4 2-6 2 4.5h3"/></Svg>,
+  Shield: p => <Svg {...p}><path d="M12 21s7.5-3.6 7.5-9V5.5L12 3 4.5 5.5V12c0 5.4 7.5 9 7.5 9z"/><polyline points="9 11.5 11 13.5 15 9.5"/></Svg>,
+  Scan: p => <Svg {...p}><path d="M3.5 7V5.5a2 2 0 0 1 2-2h2M16.5 3.5h2a2 2 0 0 1 2 2V7M20.5 17v1.5a2 2 0 0 1-2 2h-2M7.5 20.5h-2a2 2 0 0 1-2-2V17"/><circle cx="12" cy="12" r="4.5"/></Svg>,
+  Clock: p => <Svg {...p}><circle cx="12" cy="12" r="9.5"/><polyline points="12 6.5 12 12 15.5 14"/></Svg>,
+  Upload: p => <Svg {...p}><path d="M20.5 14.5v3.8a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8v-3.8"/><polyline points="16.5 8 12 3.5 7.5 8"/><line x1="12" y1="3.5" x2="12" y2="14.5"/></Svg>,
+  Folder: p => <Svg {...p}><path d="M21.5 18.5a1.8 1.8 0 0 1-1.8 1.8H4.3a1.8 1.8 0 0 1-1.8-1.8V5.5a1.8 1.8 0 0 1 1.8-1.8h5l2 2.8h7.2a1.8 1.8 0 0 1 1.8 1.8z"/></Svg>,
+  Message: p => <Svg {...p}><path d="M20.5 14.5a1.8 1.8 0 0 1-1.8 1.8H7.5l-4 3.8V5.5a1.8 1.8 0 0 1 1.8-1.8h13.4a1.8 1.8 0 0 1 1.8 1.8z"/></Svg>,
+  Calendar: p => <Svg {...p}><rect x="3.5" y="4.5" width="17" height="16.5" rx="2"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3.5" y1="10" x2="20.5" y2="10"/></Svg>,
+  Activity: p => <Svg {...p}><polyline points="21.5 12 18 12 15.5 20 9.5 4 6.5 12 2.5 12"/></Svg>,
+  Bell: p => <Svg {...p}><path d="M17.5 8A5.5 5.5 0 0 0 6.5 8c0 6.5-2.8 8.5-2.8 8.5h16.6s-2.8-2-2.8-8.5M13.2 20.5a1.8 1.8 0 0 1-3.4 0"/></Svg>,
+  User: p => <Svg {...p}><path d="M19.5 20.5v-1.8a3.6 3.6 0 0 0-3.6-3.6H8.1a3.6 3.6 0 0 0-3.6 3.6v1.8"/><circle cx="12" cy="7.5" r="3.6"/></Svg>,
+  LogOut: p => <Svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Svg>,
+  Navigation: p => <Svg {...p}><polygon points="3 11 22 2 13 21 11 13 3 11"/></Svg>,
+  Phone: p => <Svg {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></Svg>,
+  ChevronRight: p => <Svg {...p} sw={2.5}><polyline points="9 18 15 12 9 6"/></Svg>,
+  ChevronLeft: p => <Svg {...p} sw={2.5}><polyline points="15 18 9 12 15 6"/></Svg>,
+  X: p => <Svg {...p} sw={2}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Svg>,
+  Sparkles: p => <Svg {...p}><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"/></Svg>,
+  Eye: p => <Svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></Svg>,
+  Download: p => <Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>,
+  Send: p => <Svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></Svg>,
+  Check: p => <Svg {...p}><circle cx="12" cy="12" r="9.5"/><polyline points="8 12 10.5 14.5 16 9"/></Svg>,
+  Search: p => <Svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Svg>,
+  Hospital: p => <Svg {...p}><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zM12 8v8M8 12h8"/></Svg>,
+  Map: p => <Svg {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></Svg>,
+  Star: p => <Svg {...p}><polygon points="12 2.5 15.1 8.8 22 9.8 17 14.6 18.2 21.5 12 18.3 5.8 21.5 7 14.6 2 9.8 8.9 8.8"/></Svg>,
+  Users: p => <Svg {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Svg>,
+  AlertTriangle: p => <Svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>,
+  FileText: p => <Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Svg>,
+  Image: p => <Svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></Svg>,
+  BarChart: p => <Svg {...p}><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></Svg>,
+};
+
+// ═══════════════════════════════════════
+// Helper: Display name without double Dr.
+// ═══════════════════════════════════════
+const getDisplayName = (fullName) => {
+  if (!fullName) return "Médecin";
+  const cleanName = fullName.trim();
+  // Check if already starts with "Dr." or "Dr "
+  if (/^dr[.\s]/i.test(cleanName)) return cleanName;
+  return `Dr. ${cleanName}`;
+};
+
+const getFirstName = (fullName) => {
+  if (!fullName) return "Médecin";
+  // Remove "Dr." prefix if present
+  const cleanName = fullName.replace(/^dr[.\s]+/i, "").trim();
+  return cleanName.split(" ")[0];
+};
+
+// ═══════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════
+const MODEL_CONFIG = {
+  brain:  { label: "IRM Cérébrale", color: "#8B5CF6", icon: <I.Brain size={18} />, bg: "rgba(139,92,246,0.08)" },
+  lung:   { label: "Scanner CT",    color: "#EC4899", icon: <I.Scan size={18} />, bg: "rgba(236,72,153,0.08)" },
+  chest:  { label: "Radio Thorax",  color: "#3B82F6", icon: <I.Lungs size={18} />, bg: "rgba(59,130,246,0.08)" },
+  retina: { label: "Fond d'œil",    color: "#06B6D4", icon: <I.Eye size={18} />, bg: "rgba(6,182,212,0.08)" },
+};
 
 const STATUS_CONFIG = {
-  pending:  { label: "En attente",  color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A", icon: "⏳" },
-  accepted: { label: "Acceptée",    color: "#3B82F6", bg: "#EFF6FF", border: "#BFDBFE", icon: "✅" },
-  analyzed: { label: "Analysée",    color: "#10B981", bg: "#ECFDF5", border: "#A7F3D0", icon: "🧬" },
-  closed:   { label: "Terminée",    color: "#6B7280", bg: "#F9FAFB", border: "#E5E7EB", icon: "🔒" },
-  rejected: { label: "Rejetée",     color: "#EF4444", bg: "#FEF2F2", border: "#FECACA", icon: "❌" },
+  pending:  { label: "En attente", color: "#F59E0B", bg: "#FFFBEB", icon: <I.Clock size={12} /> },
+  accepted: { label: "En cours",   color: "#3B82F6", bg: "#EFF6FF", icon: <I.Check size={12} /> },
+  analyzed: { label: "Résultats",  color: "#10B981", bg: "#ECFDF5", icon: <I.Check size={12} /> },
+  closed:   { label: "Terminé",   color: "#6B7280", bg: "#F9FAFB", icon: <I.Shield size={12} /> },
 };
 
 const URGENCY_CONFIG = {
-  critical: { label: "CRITIQUE", color: "#DC2626", bg: "#FEE2E2", border: "#FCA5A5", priority: 4 },
-  urgent:   { label: "URGENT",   color: "#EA580C", bg: "#FFF7ED", border: "#FDBA74", priority: 3 },
-  normal:   { label: "NORMAL",   color: "#10B981", bg: "#F0FDF4", border: "#86EFAC", priority: 1 },
+  critical: { label: "CRITIQUE", color: "#EF4444", bg: "#FEE2E2" },
+  urgent:   { label: "URGENT",   color: "#F59E0B", bg: "#FEF3C7" },
+  normal:   { label: "NORMAL",   color: "#10B981", bg: "#D1FAE5" },
 };
 
-const MODEL_CONFIG = {
-  brain:  { label: "IRM Cérébrale",      color: "#7C3AED", gradient: "linear-gradient(135deg,#7C3AED,#6D28D9)", icon: "🧠", bg: "#F5F3FF" },
-  lung:   { label: "Scanner CT",         color: "#DC2626", gradient: "linear-gradient(135deg,#DC2626,#B91C1C)", icon: "🔬", bg: "#FEF2F2" },
-  chest:  { label: "Radio Thoracique",   color: "#0369A1", gradient: "linear-gradient(135deg,#0EA5E9,#0369A1)", icon: "🫁", bg: "#F0F9FF" },
-  retina: { label: "Fond d'œil",         color: "#0E7490", gradient: "linear-gradient(135deg,#0E7490,#0891B2)", icon: "👁️", bg: "#ECFEFF" },
+// ═══════════════════════════════════════
+// Particles
+// ═══════════════════════════════════════
+const Particles = () => {
+  const p = useMemo(() => Array.from({length:35}, (_,i) => ({ id:i, left:`${Math.random()*100}%`, w:`${Math.random()*3+1}px`, h:`${Math.random()*3+1}px`, dur:`${Math.random()*14+8}s`, delay:`${Math.random()*10}s`, bottom:`-${Math.random()*40}px`, glow:i%5===0 })), []);
+  return <div className="pd3-hero-particles">{p.map(x => <div key={x.id} className="pd3-particle" style={{left:x.left,width:x.w,height:x.h,animationDuration:x.dur,animationDelay:x.delay,bottom:x.bottom,boxShadow:x.glow?'0 0 10px rgba(255,215,0,0.6)':'none'}} />)}</div>;
 };
 
-// ─────────────────────────────────────────────────────────────────
-// MINI COMPOSANTS
-// ─────────────────────────────────────────────────────────────────
+const Reveal = ({ children, delay=0 }) => (
+  <motion.div initial={{opacity:0,y:40}} whileInView={{opacity:1,y:0}} viewport={{once:true,margin:"-50px"}} transition={{duration:.65,delay,ease:[.22,.61,.36,1]}}>{children}</motion.div>
+);
 
-function Spinner({ size = 28, color = "#0F172A" }) {
-  return (
-    <div style={{
-      width: size, height: size,
-      border: `3px solid rgba(0,0,0,0.08)`,
-      borderTopColor: color, borderRadius: "50%",
-      animation: "spin .7s linear infinite", flexShrink: 0,
-    }} />
-  );
-}
+// ═══════════════════════════════════════
+// Status Badge
+// ═══════════════════════════════════════
+const StatusBadge = ({ status }) => {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  return <span className="pd3-badge" style={{background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}30`}}>{cfg.icon} {cfg.label}</span>;
+};
 
-function StatCard({ icon, label, value, color, bg, onClick, trend, subtitle }) {
-  return (
-    <div onClick={onClick} style={{
-      background: "white", borderRadius: 20, padding: "24px",
-      border: "1px solid #F1F5F9", cursor: onClick ? "pointer" : "default",
-      transition: "all 0.3s ease", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-      position: "relative", overflow: "hidden",
-    }}
-      onMouseEnter={e => onClick && Object.assign(e.currentTarget.style, { transform: "translateY(-4px)", boxShadow: "0 12px 24px rgba(0,0,0,0.08)" })}
-      onMouseLeave={e => onClick && Object.assign(e.currentTarget.style, { transform: "translateY(0)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" })}
-    >
-      <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: bg, opacity: 0.3 }} />
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: "2rem" }}>{icon}</span>
-          {trend && (
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: trend > 0 ? "#10B981" : "#EF4444", background: trend > 0 ? "#ECFDF5" : "#FEF2F2", padding: "4px 8px", borderRadius: 20 }}>
-              {trend > 0 ? "+" : ""}{trend}%
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: "2rem", fontWeight: 800, color, lineHeight: 1, marginBottom: 8 }}>{value}</div>
-        <div style={{ fontSize: "0.85rem", color: "#64748B", fontWeight: 600 }}>{label}</div>
-        {subtitle && <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: 4 }}>{subtitle}</div>}
-      </div>
-    </div>
-  );
-}
-
-function ConsultationCard({ consultation, onClick }) {
+// ═══════════════════════════════════════
+// Consultation Card
+// ═══════════════════════════════════════
+const ConsultationCard = ({ consultation, onClick, onAccept, onReject, actionLoading, compact }) => {
   const model = MODEL_CONFIG[consultation.model_key] || MODEL_CONFIG.chest;
-  const status = STATUS_CONFIG[consultation.status] || STATUS_CONFIG.pending;
   const urgency = URGENCY_CONFIG[consultation.urgency] || URGENCY_CONFIG.normal;
-  const waitTime = () => {
-    if (!consultation.created_at) return "—";
-    const diff = Math.floor((Date.now() - new Date(consultation.created_at)) / 60000);
-    if (diff < 1) return "À l'instant";
-    if (diff < 60) return `${diff} min`;
-    if (diff < 1440) return `${Math.floor(diff / 60)}h`;
-    return `${Math.floor(diff / 1440)}j`;
-  };
+  const isPending = consultation.status === "pending";
+  
   return (
-    <div onClick={onClick} style={{
-      background: "white", borderRadius: 16, padding: "20px",
-      border: "1px solid #F1F5F9", cursor: "pointer",
-      transition: "all 0.3s ease", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-      borderLeft: `4px solid ${urgency.color}`,
-    }}
-      onMouseEnter={e => Object.assign(e.currentTarget.style, { transform: "translateY(-2px)", boxShadow: "0 8px 20px rgba(0,0,0,0.07)" })}
-      onMouseLeave={e => Object.assign(e.currentTarget.style, { transform: "translateY(0)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" })}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ width: 52, height: 52, borderRadius: 14, background: model.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", flexShrink: 0 }}>
-          {model.icon}
+    <motion.div onClick={onClick} whileHover={{x:4}} style={{
+      background:"#fff",borderRadius:16,padding:compact?"14px 16px":"18px 20px",border:"1px solid #E5E7EB",
+      borderLeft:`4px solid ${urgency.color}`,cursor:"pointer",display:"flex",
+      alignItems:"center",gap:compact?12:14,transition:"all 0.2s ease",boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
+    }}>
+      <div style={{width:compact?40:48,height:compact?40:48,borderRadius:14,background:model.bg,color:model.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{model.icon}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+          <span style={{fontWeight:700,fontSize:compact?"0.82rem":"0.9rem",color:"#0A1628"}}>{consultation.patient_name}</span>
+          <span style={{fontSize:"0.65rem",color:"#8899AA"}}>#{consultation.id}</span>
+          <span style={{padding:"2px 8px",borderRadius:12,fontSize:"0.6rem",fontWeight:600,background:urgency.bg,color:urgency.color}}>{urgency.label}</span>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0F172A" }}>{consultation.patient_name || "Patient"}</span>
-            <span style={{ fontSize: "0.7rem", color: "#94A3B8", fontFamily: "monospace" }}>#{consultation.id}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: "0.7rem", fontWeight: 600, background: status.bg, color: status.color, border: `1px solid ${status.border}` }}>
-              {status.icon} {status.label}
-            </span>
-            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: "0.7rem", fontWeight: 600, background: urgency.bg, color: urgency.color }}>
-              {urgency.label}
-            </span>
-            <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>⏱ {waitTime()}</span>
-          </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <StatusBadge status={consultation.status}/>
+          <span style={{fontSize:"0.7rem",color:"#8899AA"}}>{model.label}</span>
+          {consultation.created_at && <span style={{fontSize:"0.65rem",color:"#CBD5E1"}}>
+            {(() => { const diff = Math.floor((Date.now()-new Date(consultation.created_at))/60000); return diff<1?"À l'instant":diff<60?`${diff}min`:diff<1440?`${Math.floor(diff/60)}h`:`${Math.floor(diff/1440)}j`; })()}
+          </span>}
         </div>
-        {consultation.status === "analyzed" && (
-          <div style={{ padding: "4px 12px", background: "#ECFDF5", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700, color: "#059669", flexShrink: 0 }}>
-            Résultats prêts
-          </div>
-        )}
       </div>
-    </div>
-  );
-}
-
-function MessageBubble({ message, isDoctor }) {
-  const isMine = (isDoctor && message.sender_role === "Medecin") || (!isDoctor && message.sender_role === "Patient");
-  return (
-    <div style={{ display: "flex", justifyContent: isMine ? "flex-end" : "flex-start", marginBottom: 12 }}>
-      {!isMine && (
-        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#64748B,#475569)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "0.7rem", fontWeight: 700, marginRight: 8, flexShrink: 0 }}>
-          {message.sender_name?.charAt(0) || "P"}
+      {isPending && onAccept && onReject && (
+        <div style={{display:"flex",gap:8,flexShrink:0}}>
+          <button onClick={e=>{e.stopPropagation();onAccept();}} disabled={actionLoading} className="pd3-btn pd3-btn-gold pd3-btn-sm">{actionLoading?"...":"Accepter"}</button>
+          <button onClick={e=>{e.stopPropagation();onReject();}} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{color:"#EF4444",borderColor:"#FCA5A5"}}>Refuser</button>
         </div>
       )}
-      <div style={{
-        maxWidth: "72%", padding: "11px 15px",
-        borderRadius: isMine ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-        background: isMine ? "#0F172A" : "#F8FAFC",
-        border: isMine ? "none" : "1px solid #E2E8F0",
-        color: isMine ? "white" : "#0F172A",
-        fontSize: "0.85rem", lineHeight: 1.5,
-      }}>
-        {!isMine && <div style={{ fontSize: "0.65rem", color: "#94A3B8", marginBottom: 3, fontWeight: 600 }}>{message.sender_name}</div>}
-        {message.content}
-        <div style={{ fontSize: "0.6rem", color: isMine ? "rgba(255,255,255,0.4)" : "#CBD5E1", marginTop: 4, textAlign: "right" }}>
-          {new Date(message.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+      {consultation.status === "analyzed" && (
+        <div style={{padding:"4px 12px",background:"#ECFDF5",borderRadius:20,fontSize:"0.68rem",fontWeight:700,color:"#059669",flexShrink:0,display:"flex",alignItems:"center",gap:4}}>
+          <I.Check size={12} color="#059669"/> Résultats
         </div>
+      )}
+    </motion.div>
+  );
+};
+
+// ═══════════════════════════════════════
+// Message Bubble
+// ═══════════════════════════════════════
+const MessageBubble = ({ message, isDoctor }) => {
+  const isMine = (isDoctor && message.sender_role === "Medecin") || (!isDoctor && message.sender_role === "Patient");
+  const time = new Date(message.created_at).toLocaleTimeString("fr-FR", {hour:"2-digit",minute:"2-digit"});
+  return (
+    <div style={{display:"flex",justifyContent:isMine?"flex-end":"flex-start",marginBottom:6}}>
+      <div style={{maxWidth:"75%",padding:"10px 14px",borderRadius:isMine?"14px 14px 4px 14px":"14px 14px 14px 4px",background:isMine?"rgba(255,215,0,0.15)":"rgba(255,255,255,0.08)",color:"#fff",fontSize:"0.84rem",lineHeight:1.5}}>
+        {!isMine && <div style={{fontSize:"0.65rem",color:"rgba(255,255,255,0.4)",marginBottom:3,fontWeight:600}}>{message.sender_name}</div>}
+        {message.content}
+        <div style={{fontSize:"0.6rem",color:"rgba(255,255,255,0.3)",marginTop:4,textAlign:"right"}}>{time}</div>
       </div>
     </div>
   );
-}
+};
 
-// ─────────────────────────────────────────────────────────────────
-// EXPLAINABLE AI — PANEL COMPLET
-// ─────────────────────────────────────────────────────────────────
-
-function AnalysisPanel({
-  analysis, consultationData, model,
-  analysisLoading, onRunAnalysis,
-  onCloseConsultation, onDownloadPDF,
-  pdfLoading, closeLoading,
-  explainText, explaining, explainError,
-  showGradcam, onToggleGradcam,
-}) {
-  const [showExplain, setShowExplain] = useState(true);
-  const explainEndRef = useRef(null);
-
-  useEffect(() => {
-    if (explainEndRef.current && explaining) {
-      explainEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [explainText, explaining]);
-
-  const probs = useMemo(() => {
+// ═══════════════════════════════════════
+// Analysis Section (developed)
+// ═══════════════════════════════════════
+const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, onRunAnalysis, onDownloadPDF, consultationData, model }) => {
+  // Parse probabilities
+  const probabilities = useMemo(() => {
     if (!analysis?.probabilities) return [];
     let p = analysis.probabilities;
     if (typeof p === "string") { try { p = JSON.parse(p); } catch { return []; } }
-    return Object.entries(p).sort(([, a], [, b]) => b - a);
+    return Object.entries(p).sort(([,a],[,b]) => b - a);
   }, [analysis]);
 
-  const maxProb = probs[0]?.[1] || 1;
-
-  // Parse sections markdown de l'explication
-  const parsedSections = useMemo(() => {
+  // Parse explain sections
+  const sections = useMemo(() => {
     if (!explainText) return [];
-    const sections = [];
+    const result = [];
     let current = null;
     let lines = [];
     for (const line of explainText.split("\n")) {
       if (line.startsWith("## ")) {
-        if (current) sections.push({ title: current, content: lines.join("\n").trim() });
-        current = line.replace(/^## /, "").trim();
+        if (current) result.push({title:current,content:lines.join("\n").trim()});
+        current = line.replace(/^## /,"").trim();
         lines = [];
       } else if (current) {
         lines.push(line);
       }
     }
-    if (current) sections.push({ title: current, content: lines.join("\n").trim() });
-    return sections;
+    if (current) result.push({title:current,content:lines.join("\n").trim()});
+    return result;
   }, [explainText]);
 
   if (!consultationData) {
     return (
-      <div style={{ background: "white", borderRadius: 20, border: "1px solid #F1F5F9", padding: "40px 20px", textAlign: "center", color: "#94A3B8" }}>
-        <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>🤖</div>
-        <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>Sélectionnez une consultation</div>
+      <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
+        <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
+        <div className="pd3-health-content" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
+          <div style={{color:"rgba(255,255,255,0.4)"}}>
+            <I.Brain size={48} color="rgba(255,255,255,0.15)" style={{marginBottom:16}}/>
+            <div style={{fontWeight:600,fontSize:"0.95rem",color:"rgba(255,255,255,0.5)",marginBottom:4}}>Analyse IA</div>
+            <div style={{fontSize:"0.8rem"}}>Sélectionnez une consultation pour voir l'analyse</div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ background: "white", borderRadius: 20, border: "1px solid #F1F5F9", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", height: "calc(100vh - 180px)" }}>
+    <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
+      <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
+      <div className="pd3-health-content" style={{flex:1,display:"flex",flexDirection:"column"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <I.Brain size={18} color="#FFD700"/>
+            <span style={{fontWeight:700,color:"#FFD700",fontSize:"0.9rem"}}>Analyse IA</span>
+            {analysis && !analysisLoading && <span style={{fontSize:"0.65rem",padding:"2px 8px",borderRadius:10,background:"rgba(16,185,129,0.15)",color:"#10B981",fontWeight:600}}>Complète</span>}
+          </div>
+          {analysis && <span style={{fontSize:"0.65rem",color:"rgba(255,255,255,0.4)"}}>{model?.label}</span>}
+        </div>
+
+        {/* Content */}
+        <div style={{flex:1,overflowY:"auto"}}>
+          {analysisLoading ? (
+            <div style={{textAlign:"center",padding:"30px 0"}}>
+              <motion.div animate={{rotate:360}} transition={{repeat:Infinity,duration:1.5,ease:"linear"}}>
+                <I.Sparkles size={32} color="#FFD700"/>
+              </motion.div>
+              <div style={{marginTop:12,color:"rgba(255,255,255,0.6)",fontSize:"0.85rem"}}>Analyse en cours...</div>
+              <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.3)",marginTop:4}}>Traitement par le modèle {model?.label}</div>
+            </div>
+          ) : analysis ? (
+            <>
+              {/* Prediction Card */}
+              <div style={{padding:14,background:"rgba(16,185,129,0.08)",borderRadius:14,border:"1px solid rgba(16,185,129,0.2)",marginBottom:14}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <I.Check size={16} color="#10B981"/>
+                  <span style={{fontWeight:700,color:"#10B981",fontSize:"0.9rem"}}>Diagnostic : {analysis.prediction}</span>
+                </div>
+                <div style={{marginBottom:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{fontSize:"0.68rem",color:"rgba(255,255,255,0.4)"}}>Confiance</span>
+                    <span style={{fontSize:"0.72rem",fontWeight:700,color:"#fff"}}>{(analysis.confidence*100).toFixed(1)}%</span>
+                  </div>
+                  <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3}}>
+                    <motion.div style={{height:"100%",background:"linear-gradient(90deg,#10B981,#34D399)",borderRadius:3}} initial={{width:0}} animate={{width:`${analysis.confidence*100}%`}} transition={{duration:1,delay:.3}}/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Probabilities */}
+              {probabilities.length > 0 && (
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Distribution des probabilités</div>
+                  {probabilities.slice(0,6).map(([cls,prob])=>(
+                    <div key={cls} style={{marginBottom:6}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                        <span style={{fontSize:"0.72rem",color:cls===analysis.prediction?"#10B981":"rgba(255,255,255,0.5)",fontWeight:cls===analysis.prediction?700:400}}>{cls===analysis.prediction&&"► "}{cls}</span>
+                        <span style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,0.6)"}}>{(prob*100).toFixed(1)}%</span>
+                      </div>
+                      <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+                        <motion.div style={{height:"100%",background:cls===analysis.prediction?"#10B981":"rgba(255,255,255,0.15)",borderRadius:2}} initial={{width:0}} animate={{width:`${(prob/Math.max(...probabilities.map(([,p])=>p)))*100}%`}} transition={{duration:.8,delay:.4}}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Explain Text */}
+              {sections.length > 0 ? (
+                <div>
+                  <div style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Explication clinique</div>
+                  {sections.map((sec,idx)=>(
+                    <div key={idx} style={{marginBottom:12}}>
+                      <div style={{padding:"6px 12px",background:"rgba(255,215,0,0.08)",borderLeft:"3px solid #FFD700",borderRadius:"0 8px 8px 0",marginBottom:6,fontSize:"0.72rem",fontWeight:700,color:"#FFD700"}}>{sec.title}</div>
+                      <div style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.55)",lineHeight:1.7,padding:"0 8px",whiteSpace:"pre-wrap"}}>{sec.content}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : explainText ? (
+                <div style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.55)",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{explainText}</div>
+              ) : null}
+
+              {explaining && (
+                <div style={{display:"flex",gap:4,padding:"8px 0"}}>
+                  {[0,0.15,0.3].map((d,i)=>(<div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#FFD700",animation:`typing 1s ease-in-out ${d}s infinite`}}/>))}
+                </div>
+              )}
+            </>
+          ) : consultationData?.status === "accepted" ? (
+            <div style={{textAlign:"center",padding:"30px 0"}}>
+              <I.Brain size={40} color="rgba(255,255,255,0.2)" style={{marginBottom:14}}/>
+              <div style={{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.6)",marginBottom:6}}>Prêt pour l'analyse</div>
+              <div style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.35)",marginBottom:16,lineHeight:1.5}}>Lancez l'analyse IA pour obtenir<br/>le diagnostic et l'explication.</div>
+              <button onClick={onRunAnalysis} className="pd3-btn pd3-btn-gold" style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                <I.Sparkles size={16}/> Lancer l'analyse IA
+              </button>
+            </div>
+          ) : (
+            <div style={{textAlign:"center",padding:"30px 0",color:"rgba(255,255,255,0.3)"}}>
+              <I.Clock size={36} style={{marginBottom:12}}/>
+              <div style={{fontSize:"0.85rem",fontWeight:600}}>Analyse non disponible</div>
+              <div style={{fontSize:"0.72rem",marginTop:4}}>Acceptez d'abord la consultation</div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        {analysis && (
+          <div style={{paddingTop:12,borderTop:"1px solid rgba(232,184,48,0.1)",flexShrink:0}}>
+            <button onClick={onDownloadPDF} className="pd3-btn pd3-btn-gold" style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <I.Download size={14}/> Télécharger le rapport PDF
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════
+// Chat Section (developed)
+// ═══════════════════════════════════════
+const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend, canMessage, onClose, model, loading }) => {
+  const messagesEndRef = useRef(null);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
+
+  if (!consultationData) {
+    return (
+      <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
+        <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
+        <div className="pd3-health-content" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
+          <div style={{color:"rgba(255,255,255,0.4)"}}>
+            <I.Message size={48} color="rgba(255,255,255,0.15)" style={{marginBottom:16}}/>
+            <div style={{fontWeight:600,fontSize:"0.95rem",color:"rgba(255,255,255,0.5)",marginBottom:4}}>Messagerie</div>
+            <div style={{fontSize:"0.8rem"}}>Sélectionnez une consultation pour voir les messages</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
       {/* Header */}
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid #F1F5F9", background: "linear-gradient(135deg,#F8FAFC,white)", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0F172A" }}>🧬 Analyse IA</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {analysis?.gradcam_b64 && (
-              <button onClick={onToggleGradcam} style={{
-                padding: "5px 12px", borderRadius: 8, fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                background: showGradcam ? "#FEF2F2" : "#EFF6FF",
-                border: showGradcam ? "1px solid #FECACA" : "1px solid #BFDBFE",
-                color: showGradcam ? "#DC2626" : "#2563EB",
-              }}>
-                {showGradcam ? "🖼 Image orig." : "🔥 Grad-CAM"}
-              </button>
-            )}
-            {analysis && (
-              <button onClick={() => setShowExplain(!showExplain)} style={{
-                padding: "5px 12px", borderRadius: 8, fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                background: "#F5F3FF", border: "1px solid #DDD6FE", color: "#7C3AED",
-              }}>
-                {showExplain ? "📊 Stats" : "🔍 Explication"}
-              </button>
-            )}
+      <div style={{padding:"14px 20px",borderBottom:"1px solid rgba(232,184,48,0.1)",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          {model?.icon||<I.Scan size={18} color="#FFD700"/>}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,color:"#fff",fontSize:"0.9rem"}}>{consultationData.patient_name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
+            <span style={{fontSize:"0.65rem",color:"rgba(255,255,255,0.4)"}}>#{consultationData.id}</span>
+            <StatusBadge status={consultationData.status}/>
           </div>
         </div>
-        {/* Patient info */}
-        <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-          <span style={{ fontWeight: 700, color: "#0F172A" }}>{consultationData.patient_name}</span>
-          {" · "}#{consultationData.id}
-          {" · "}{model?.label}
-          {" · "}<span style={{ color: STATUS_CONFIG[consultationData.status]?.color, fontWeight: 600 }}>
-            {STATUS_CONFIG[consultationData.status]?.label}
-          </span>
-        </div>
-      </div>
-
-      {/* Scrollable content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-
-        {/* GradCAM image */}
-        {analysis?.gradcam_b64 && showGradcam && (
-          <div style={{ marginBottom: 16, borderRadius: 12, overflow: "hidden", background: "#0F172A" }}>
-            <div style={{ padding: "8px 12px", background: "rgba(220,38,38,0.9)", fontSize: "0.68rem", fontWeight: 700, color: "white", display: "flex", alignItems: "center", gap: 6 }}>
-              🔥 GRAD-CAM — Zones d'attention du modèle IA
-            </div>
-            <img src={`data:image/jpeg;base64,${analysis.gradcam_b64}`} alt="GradCAM" style={{ width: "100%", display: "block" }} />
-            {/* Heatmap scale */}
-            <div style={{ padding: "8px 12px", background: "#0F172A" }}>
-              <div style={{ height: 8, borderRadius: 4, background: "linear-gradient(90deg,#0000FF,#00FFFF,#00FF00,#FFFF00,#FF0000)", marginBottom: 4 }} />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem", color: "rgba(255,255,255,0.5)" }}>
-                <span>Faible attention</span><span>Forte attention</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Image originale du dossier */}
-        {consultationData.image_path && !showGradcam && (
-          <div style={{ marginBottom: 16, borderRadius: 12, overflow: "hidden", background: "#0F172A" }}>
-            <div style={{ padding: "8px 12px", background: "#1E293B", fontSize: "0.68rem", fontWeight: 600, color: "rgba(255,255,255,.6)" }}>
-              🖼 Image médicale soumise
-            </div>
-            <img
-              src={`http://localhost:8000/${consultationData.image_path}`}
-              alt="Image médicale"
-              style={{ width: "100%", maxHeight: 200, objectFit: "contain", display: "block" }}
-              onError={e => e.target.style.display = "none"}
-            />
-          </div>
-        )}
-
-        {/* Pas encore d'analyse */}
-        {!analysis && !analysisLoading && (
-          <div style={{ textAlign: "center", padding: "30px 0" }}>
-            <div style={{ fontSize: "2.5rem", marginBottom: 10 }}>🤖</div>
-            <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>Analyse non disponible</div>
-            <div style={{ fontSize: "0.78rem", color: "#94A3B8", lineHeight: 1.6, marginBottom: 16, maxWidth: 220, margin: "0 auto 16px" }}>
-              {consultationData.status === "accepted"
-                ? "Lancez l'analyse IA pour obtenir le diagnostic."
-                : "La consultation doit être acceptée avant l'analyse."}
-            </div>
-            {consultationData.status === "accepted" && (
-              <button onClick={onRunAnalysis} disabled={analysisLoading} style={{
-                padding: "10px 24px", background: "linear-gradient(135deg,#7C3AED,#6D28D9)",
-                border: "none", borderRadius: 12, color: "white",
-                fontSize: "0.85rem", fontWeight: 700, cursor: "pointer",
-                display: "inline-flex", alignItems: "center", gap: 8,
-              }}>
-                <span>🤖</span> Lancer l'analyse IA
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Loading analyse */}
-        {analysisLoading && (
-          <div style={{ textAlign: "center", padding: "30px 0" }}>
-            <Spinner size={42} color="#7C3AED" />
-            <div style={{ marginTop: 14, fontSize: "0.85rem", fontWeight: 700, color: "#7C3AED" }}>Analyse en cours…</div>
-            <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: 4 }}>Traitement par modèle IA · {model?.label}</div>
-          </div>
-        )}
-
-        {/* Résultat analyse */}
-        {analysis && !analysisLoading && (
-          <>
-            {/* Warning */}
-            {analysis.warning && (
-              <div style={{ padding: "10px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, marginBottom: 12, fontSize: "0.78rem", color: "#92400E" }}>
-                ⚠️ {analysis.warning}
-              </div>
-            )}
-
-            {/* Main result card */}
-            <div style={{ padding: "16px", borderRadius: 14, background: analysis.out_of_domain ? "#FEF2F2" : "#F0FDF4", border: `1px solid ${analysis.out_of_domain ? "#FECACA" : "#BBF7D0"}`, marginBottom: 14 }}>
-              <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
-                {analysis.out_of_domain ? "⚠️ HORS DOMAINE" : "DIAGNOSTIC PRINCIPAL"}
-              </div>
-              <div style={{ fontSize: "1.3rem", fontWeight: 800, color: analysis.out_of_domain ? "#DC2626" : "#059669", marginBottom: 10 }}>
-                {analysis.prediction}
-              </div>
-              {/* Confidence bar */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: "0.7rem", color: "#64748B" }}>Confiance</span>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#0F172A" }}>
-                    {(analysis.confidence * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div style={{ height: 7, background: "#E2E8F0", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{
-                    width: `${analysis.confidence * 100}%`, height: "100%",
-                    background: analysis.confidence > 0.8 ? "#059669" : analysis.confidence > 0.5 ? "#F59E0B" : "#DC2626",
-                    borderRadius: 4, transition: "width .8s ease",
-                  }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Switch: Stats vs Explication */}
-            {showExplain ? (
-              /* EXPLAINABLE AI — Sections Gemini */
-              <div>
-                <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>🔍</span> Explication clinique IA
-                  {explaining && <span style={{ fontWeight: 500, color: "#94A3B8", animation: "pulse 1.5s infinite" }}>• génération…</span>}
-                </div>
-
-                {explainError && (
-                  <div style={{ padding: "10px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, fontSize: "0.75rem", color: "#DC2626", marginBottom: 10 }}>
-                    ⚠️ {explainError}
-                  </div>
-                )}
-
-                {!explainText && !explaining && !explainError && (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: "#CBD5E1", fontSize: "0.8rem" }}>
-                    L'explication clinique sera générée lors de l'analyse.
-                  </div>
-                )}
-
-                {/* Sections parsées */}
-                {parsedSections.length > 0 && parsedSections.map((section, idx) => (
-                  <div key={idx} style={{ marginBottom: 14 }}>
-                    <div style={{
-                      padding: "6px 12px", background: "linear-gradient(90deg,#EFF6FF,#F8FAFC)",
-                      borderLeft: "3px solid #2563EB", borderRadius: "0 8px 8px 0",
-                      marginBottom: 8, fontSize: "0.72rem", fontWeight: 700, color: "#2563EB",
-                    }}>
-                      {section.title}
-                    </div>
-                    <div style={{
-                      fontSize: "0.8rem", color: "#475569", lineHeight: 1.7,
-                      padding: "8px 12px", background: "#F8FAFC", borderRadius: 8,
-                    }}
-                      dangerouslySetInnerHTML={{
-                        __html: section.content
-                          .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#0F172A;font-weight:700">$1</strong>')
-                          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                          .split("\n").join("<br/>")
-                      }}
-                    />
-                  </div>
-                ))}
-
-                {/* Streaming text (pas encore parsé) */}
-                {explaining && parsedSections.length === 0 && explainText && (
-                  <div style={{ fontSize: "0.8rem", color: "#475569", lineHeight: 1.7, padding: "8px 12px", background: "#F8FAFC", borderRadius: 8 }}>
-                    {explainText}
-                    <span style={{ display: "inline-block", width: 2, height: "1.1em", background: "#7C3AED", marginLeft: 3, verticalAlign: "middle", animation: "cursorBlink 1s step-end infinite" }} />
-                  </div>
-                )}
-
-                {/* Typing indicator */}
-                {explaining && !explainText && (
-                  <div style={{ display: "flex", gap: 5, padding: "8px 12px" }}>
-                    {[0, 0.2, 0.4].map((d, i) => (
-                      <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#7C3AED", animation: `typing 1s ease-in-out ${d}s infinite` }} />
-                    ))}
-                  </div>
-                )}
-
-                <div ref={explainEndRef} />
-              </div>
-            ) : (
-              /* STATS — Distribution probabilités */
-              <div>
-                <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10 }}>
-                  Distribution des probabilités
-                </div>
-                {probs.slice(0, 8).map(([cls, prob]) => (
-                  <div key={cls} style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ fontSize: "0.78rem", color: cls === analysis.prediction ? "#0F172A" : "#64748B", fontWeight: cls === analysis.prediction ? 700 : 400 }}>
-                        {cls === analysis.prediction && "► "}{cls}
-                      </span>
-                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: cls === analysis.prediction ? "#059669" : "#94A3B8" }}>
-                        {(prob * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div style={{ height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{
-                        width: `${(prob / maxProb) * 100}%`, height: "100%",
-                        background: cls === analysis.prediction ? "linear-gradient(90deg,#059669,#10B981)" : "#CBD5E1",
-                        borderRadius: 3, transition: "width .6s ease",
-                      }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+        {canMessage && (
+          <button onClick={onClose} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{color:"#fff",borderColor:"rgba(255,255,255,0.2)"}}>
+            <I.Shield size={14}/> Clôturer
+          </button>
         )}
       </div>
 
-      {/* Actions footer */}
-      {consultationData.status !== "closed" && consultationData.status !== "rejected" && (
-        <div style={{ padding: "14px 16px", borderTop: "1px solid #F1F5F9", background: "#FAFBFC", flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Messages */}
+      <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        {messages.length === 0 ? (
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",textAlign:"center",color:"rgba(255,255,255,0.3)"}}>
+            <I.Message size={40} style={{marginBottom:12}}/>
+            <div style={{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.4)"}}>Aucun message</div>
+            <div style={{fontSize:"0.75rem",marginTop:4}}>Commencez la discussion avec le patient</div>
+          </div>
+        ) : (
+          messages.map(m => <MessageBubble key={m.id} message={m} isDoctor={true}/>)
+        )}
+        <div ref={messagesEndRef}/>
+      </div>
 
-          {/* Lancer analyse */}
-          {consultationData.status === "accepted" && !analysis && (
-            <button onClick={onRunAnalysis} disabled={analysisLoading} style={{
-              width: "100%", padding: "11px", background: analysisLoading ? "#E2E8F0" : "linear-gradient(135deg,#7C3AED,#6D28D9)",
-              border: "none", borderRadius: 11, color: "white", fontSize: "0.85rem",
-              fontWeight: 700, cursor: analysisLoading ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}>
-              {analysisLoading ? <><Spinner size={16} color="white" /> Analyse en cours…</> : "🤖 Lancer l'analyse IA"}
-            </button>
-          )}
-
-          {/* Relancer analyse */}
-          {consultationData.status === "analyzed" && (
-            <button onClick={onRunAnalysis} disabled={analysisLoading} style={{
-              width: "100%", padding: "9px", background: "white",
-              border: "1.5px solid #7C3AED", borderRadius: 11, color: "#7C3AED",
-              fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
-            }}>
-              🔄 Relancer l'analyse
-            </button>
-          )}
-
-          {/* Télécharger rapport PDF */}
-          {analysis && (
-            <button onClick={onDownloadPDF} disabled={pdfLoading || explaining} style={{
-              width: "100%", padding: "11px",
-              background: pdfLoading ? "#E2E8F0" : "linear-gradient(135deg,#0369A1,#0284C7)",
-              border: "none", borderRadius: 11, color: pdfLoading ? "#94A3B8" : "white",
-              fontSize: "0.85rem", fontWeight: 700, cursor: pdfLoading || explaining ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}>
-              {pdfLoading
-                ? <><Spinner size={16} color="#94A3B8" /> Génération PDF…</>
-                : "📄 Télécharger le rapport PDF"}
-            </button>
-          )}
-          {explaining && (
-            <div style={{ fontSize: "0.68rem", color: "#94A3B8", textAlign: "center" }}>
-              ⏳ Attendez la fin de l'explication Gemini pour un rapport complet…
-            </div>
-          )}
-
-          {/* Clôturer la consultation */}
-          {(consultationData.status === "analyzed" || consultationData.status === "accepted") && (
-            <button onClick={onCloseConsultation} disabled={closeLoading} style={{
-              width: "100%", padding: "9px", background: "white",
-              border: "1.5px solid #E2E8F0", borderRadius: 11, color: "#6B7280",
-              fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            }}>
-              {closeLoading ? <><Spinner size={14} color="#6B7280" /> Clôture…</> : "🔒 Clôturer la consultation"}
-            </button>
-          )}
+      {/* Input */}
+      {canMessage ? (
+        <div style={{padding:"12px 16px",borderTop:"1px solid rgba(232,184,48,0.1)",display:"flex",gap:8,flexShrink:0,background:"rgba(0,0,0,0.1)"}}>
+          <input 
+            value={msgInput} 
+            onChange={e=>setMsgInput(e.target.value)} 
+            onKeyDown={e=>e.key==="Enter"&&onSend()} 
+            placeholder="Écrire un message au patient..." 
+            style={{flex:1,padding:"10px 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#fff",outline:"none",fontFamily:"inherit",fontSize:"0.85rem"}} 
+          />
+          <button onClick={onSend} disabled={!msgInput.trim()} className="pd3-btn pd3-btn-gold pd3-btn-sm" style={{width:42,height:42,minWidth:42,padding:0}}>
+            <I.Send size={14}/>
+          </button>
+        </div>
+      ) : (
+        <div style={{padding:"12px 20px",background:"rgba(0,0,0,0.1)",borderTop:"1px solid rgba(232,184,48,0.1)",fontSize:"0.75rem",color:"rgba(255,255,255,0.3)",textAlign:"center",flexShrink:0}}>
+          Messages disponibles après acceptation de la consultation
         </div>
       )}
     </div>
   );
-}
+};
 
-// ─────────────────────────────────────────────────────────────────
-// MODAL CLÔTURE
-// ─────────────────────────────────────────────────────────────────
-
-function CloseModal({ onConfirm, onCancel, loading }) {
-  const [notes, setNotes] = useState("");
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: "white", borderRadius: 20, padding: 28, maxWidth: 460, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.2)", animation: "fadeUp .2s ease" }}>
-        <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0F172A", marginBottom: 6 }}>🔒 Clôturer la consultation</div>
-        <div style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: 18, lineHeight: 1.6 }}>
-          Ajoutez des notes finales pour le patient (recommandations, suivi…). La consultation sera marquée comme terminée.
-        </div>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Notes de clôture, recommandations, prescriptions…"
-          rows={4}
-          style={{ width: "100%", padding: "12px 14px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 12, fontSize: "0.85rem", color: "#0F172A", resize: "none", fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 18 }}
-          onFocus={e => e.target.style.borderColor = "#0F172A"}
-          onBlur={e => e.target.style.borderColor = "#E2E8F0"}
-        />
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: "11px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 12, color: "#64748B", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}>
-            Annuler
-          </button>
-          <button onClick={() => onConfirm(notes)} disabled={loading} style={{
-            flex: 1, padding: "11px", background: loading ? "#E2E8F0" : "#0F172A",
-            border: "none", borderRadius: 12, color: "white", fontSize: "0.85rem", fontWeight: 700,
-            cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}>
-            {loading ? <><Spinner size={14} color="white" /> Clôture…</> : "🔒 Confirmer la clôture"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────
-// DASHBOARD PRINCIPAL
-// ─────────────────────────────────────────────────────────────────
-
+// ═══════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════
 export default function DoctorDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const token = localStorage.getItem("medai-token");
 
-  // Views & UI
-  const [activeView, setActiveView] = useState("dashboard");
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [filterUrgency, setFilterUrgency] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showGradcam, setShowGradcam] = useState(false);
+  const displayName = getDisplayName(user?.full_name);
+  const firstName = getFirstName(user?.full_name);
 
-  // Data
+  const [greeting, setGreeting] = useState("");
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [activeTab, setActiveTab] = useState("overview");
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
   const [queue, setQueue] = useState([]);
   const [assigned, setAssigned] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  // Consultation courante
+  const [actionLoading, setActionLoading] = useState(null);
   const [selectedConsultation, setSelectedConsultation] = useState(null);
   const [consultationData, setConsultationData] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [analysis, setAnalysis] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
-
-  // Actions loading
-  const [actionLoading, setActionLoading] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [closeLoading, setCloseLoading] = useState(false);
-  const [showCloseModal, setShowCloseModal] = useState(false);
-
-  // Explainable AI
   const [explainText, setExplainText] = useState("");
   const [explaining, setExplaining] = useState(false);
-  const [explainError, setExplainError] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeNotes, setCloseNotes] = useState("");
 
-  const messagesEndRef = useRef(null);
   const notifRef = useRef(null);
   const profileRef = useRef(null);
 
-  // ── FETCH ──────────────────────────────────────────────────────
-  const fetchQueue = useCallback(async () => {
+  const { scrollYProgress } = useScroll();
+  const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -50]);
+  const sY = useSpring(heroY, { stiffness: 80, damping: 25 });
+
+  useEffect(() => { const h = new Date().getHours(); setGreeting(h<12?"Bonjour":h<18?"Bon après-midi":"Bonsoir"); }, []);
+  useEffect(() => { const i = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(i); }, []);
+  useEffect(() => { const h = () => setIsScrolled(window.scrollY > 40); window.addEventListener("scroll",h,{passive:true}); return () => window.removeEventListener("scroll",h); }, []);
+  useEffect(() => { const h = e => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false); if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false); }; document.addEventListener("mousedown",h); return () => document.removeEventListener("mousedown",h); }, []);
+
+  const fetchAll = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/consultations/queue`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        setQueue((data.consultations || []).sort((a, b) => {
-          const uA = URGENCY_CONFIG[a.urgency]?.priority || 0;
-          const uB = URGENCY_CONFIG[b.urgency]?.priority || 0;
-          return uA !== uB ? uB - uA : new Date(b.created_at) - new Date(a.created_at);
-        }));
-      }
-    } catch (e) {}
+      const [qRes, aRes, nRes] = await Promise.all([
+        fetch(`${API}/consultations/queue`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/consultations/assigned`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/consultations/notifications/me?unread_only=false`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (qRes.ok) setQueue((await qRes.json()).consultations || []);
+      if (aRes.ok) setAssigned((await aRes.json()).consultations || []);
+      if (nRes.ok) setNotifications((await nRes.json()).notifications || []);
+    } catch (e) {} finally { setLoading(false); }
   }, [token]);
 
-  const fetchAssigned = useCallback(async () => {
-    try {
-      const res = await fetch(`${API}/consultations/assigned`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) { const data = await res.json(); setAssigned(data.consultations || []); }
-    } catch (e) {}
-  }, [token]);
+  useEffect(() => { fetchAll(); const i = setInterval(fetchAll, 30000); return () => clearInterval(i); }, [fetchAll]);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res = await fetch(`${API}/consultations/notifications/me?unread_only=false`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) { const data = await res.json(); setNotifications(data.notifications || []); setUnreadCount(data.unread || 0); }
-    } catch (e) {}
-  }, [token]);
-
-  const fetchConsultationDetails = useCallback(async (id) => {
-    if (!id) return;
-    try {
-      const res = await fetch(`${API}/consultations/${id}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        setConsultationData(data.consultation);
-        setMessages(data.messages || []);
-        setAnalysis(data.analysis);
-        // Si une analyse existe déjà, reconstruire l'explication depuis explain_text
-        if (data.analysis?.explain_text && !explainText) {
-          setExplainText(data.analysis.explain_text);
-        }
-      }
-    } catch (e) {}
-  }, [token, explainText]);
-
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    await Promise.all([fetchQueue(), fetchAssigned(), fetchNotifications()]);
-    setLoading(false);
-  }, [fetchQueue, fetchAssigned, fetchNotifications]);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
-  useEffect(() => { if (selectedConsultation) { setExplainText(""); setExplainError(""); fetchConsultationDetails(selectedConsultation); } }, [selectedConsultation]);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => {
-    const h = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifications(false);
-      if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchQueue(); fetchAssigned(); fetchNotifications();
-      if (selectedConsultation) fetchConsultationDetails(selectedConsultation);
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [selectedConsultation, fetchQueue, fetchAssigned, fetchNotifications, fetchConsultationDetails]);
+    if (!selectedConsultation) { setConsultationData(null); setMessages([]); setAnalysis(null); setExplainText(""); return; }
+    fetch(`${API}/consultations/${selectedConsultation}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) { setConsultationData(d.consultation); setMessages(d.messages || []); setAnalysis(d.analysis); if (d.analysis?.explain_text) setExplainText(d.analysis.explain_text); } });
+  }, [selectedConsultation, token]);
 
-  // ── ACTIONS ────────────────────────────────────────────────────
+  const handleAccept = async (id) => { setActionLoading(id); await fetch(`${API}/consultations/${id}/accept`, {method:"POST",headers:{Authorization:`Bearer ${token}`}}); setActionLoading(null); fetchAll(); setSelectedConsultation(id); setActiveTab("messages"); };
+  const handleReject = async (id) => { setActionLoading(id); await fetch(`${API}/consultations/${id}/reject`, {method:"POST",headers:{Authorization:`Bearer ${token}`},body:new URLSearchParams({reason:""})}); setActionLoading(null); fetchAll(); };
 
-  const handleAccept = async (id) => {
-    setActionLoading(`accept-${id}`);
-    try {
-      await fetch(`${API}/consultations/${id}/accept`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-      await loadAll();
-      setSelectedConsultation(id);
-      setActiveView("messages");
-    } catch (e) {}
-    finally { setActionLoading(null); }
+  const handleSendMessage = async () => {
+    if (!msgInput.trim() || !selectedConsultation) return;
+    await fetch(`${API}/consultations/${selectedConsultation}/messages`, {method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({content:msgInput.trim(),msg_type:"text"})});
+    setMsgInput("");
+    const r = await fetch(`${API}/consultations/${selectedConsultation}`, {headers:{Authorization:`Bearer ${token}`}});
+    if (r.ok) setMessages((await r.json()).messages || []);
   };
 
-  const handleReject = async (id, reason = "") => {
-    setActionLoading(`reject-${id}`);
-    try {
-      const form = new FormData();
-      form.append("reason", reason);
-      await fetch(`${API}/consultations/${id}/reject`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
-      await loadAll();
-      if (selectedConsultation === id) { setSelectedConsultation(null); setActiveView("dashboard"); }
-    } catch (e) {}
-    finally { setActionLoading(null); }
-  };
-
-  // ── ANALYSE IA + GEMINI STREAMING ──────────────────────────────
   const handleRunAnalysis = async () => {
-    if (!selectedConsultation || !consultationData) return;
-    setAnalysisLoading(true);
-    setExplainText("");
-    setExplainError("");
-
+    setAnalysisLoading(true); setExplainText(""); setExplaining(true);
     try {
-      const imagePath = consultationData.image_path;
-      if (!imagePath) throw new Error("Aucune image trouvée.");
-
-      const imageRes = await fetch(`http://localhost:8000/${imagePath}`);
-      if (!imageRes.ok) throw new Error("Impossible de charger l'image.");
-      const imageBlob = await imageRes.blob();
-      const file = new File([imageBlob], "image.jpg", { type: imageBlob.type || "image/jpeg" });
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const modelKey = consultationData.model_key || "chest";
-      const predictRes = await fetch(`${API}/predict?model=${modelKey}&gradcam=true&explain=true`, {
-        method: "POST", body: formData,
-      });
-      if (!predictRes.ok) throw new Error(`Erreur API: ${predictRes.status}`);
-
-      const reader = predictRes.body.getReader();
-      const decoder = new TextDecoder();
-      let predictionData = null;
-      let buffer = "";
-      let fullExplain = "";
-      let hasStartedExplain = false;
-
-      setAnalysisLoading(false); // Prediction will come first
-
+      const res = await fetch(`${API}/consultations/${selectedConsultation}/run-analysis`, {method:"POST",headers:{Authorization:`Bearer ${token}`}});
+      const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = "", fullExplain = "";
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === "[DONE]") continue;
-          try {
-            const event = JSON.parse(jsonStr);
-
-            if (event.type === "prediction") {
-              predictionData = event;
-              // Save prediction to backend
-              const saveForm = new FormData();
-              saveForm.append("prediction", event.prediction);
-              saveForm.append("confidence", String(event.confidence));
-              saveForm.append("probabilities", JSON.stringify(event.probabilities || {}));
-              saveForm.append("explain_text", "");
-              saveForm.append("gradcam_b64", event.gradcam_image || "");
-              saveForm.append("out_of_domain", String(event.out_of_domain || false));
-              saveForm.append("warning", event.warning || "");
-              await fetch(`${API}/consultations/${selectedConsultation}/analysis`, {
-                method: "POST", headers: { Authorization: `Bearer ${token}` }, body: saveForm,
-              });
-              await fetchConsultationDetails(selectedConsultation);
-              await fetchAssigned();
-            }
-
-            if (event.type === "explain_chunk") {
-              if (!hasStartedExplain) { setExplaining(true); hasStartedExplain = true; }
-              fullExplain += event.text;
-              setExplainText(fullExplain);
-            }
-
-            if (event.type === "invalid_image") {
-              setExplainError("⛔ " + event.warning);
-              setExplaining(false);
-            }
-
-            if (event.type === "explain_error") {
-              setExplainError(event.error);
-              setExplaining(false);
-            }
-
-            if (event.type === "done") {
-              setExplaining(false);
-              // Save explain_text to backend
-              if (fullExplain && predictionData) {
-                const updateForm = new FormData();
-                updateForm.append("prediction", predictionData.prediction);
-                updateForm.append("confidence", String(predictionData.confidence));
-                updateForm.append("probabilities", JSON.stringify(predictionData.probabilities || {}));
-                updateForm.append("explain_text", fullExplain);
-                updateForm.append("gradcam_b64", predictionData.gradcam_image || "");
-                updateForm.append("out_of_domain", String(predictionData.out_of_domain || false));
-                updateForm.append("warning", predictionData.warning || "");
-                await fetch(`${API}/consultations/${selectedConsultation}/analysis`, {
-                  method: "POST", headers: { Authorization: `Bearer ${token}` }, body: updateForm,
-                });
-              }
-            }
-          } catch {}
-        }
+        const {done, value} = await reader.read(); if (done) break;
+        buffer += decoder.decode(value, {stream:true}); const lines = buffer.split("\n"); buffer = lines.pop();
+        for (const line of lines) { if (line.startsWith("data: ")) { try { const evt = JSON.parse(line.slice(6)); if (evt.type === "explain_chunk") { fullExplain += evt.text; setExplainText(fullExplain); } if (evt.type === "done"||evt.type==="saved") setExplaining(false); } catch {} } }
       }
-    } catch (e) {
-      console.error("❌ Erreur analyse:", e);
-      setExplainError(e.message);
-    } finally {
-      setAnalysisLoading(false);
-      setExplaining(false);
-    }
+      const dR = await fetch(`${API}/consultations/${selectedConsultation}`, {headers:{Authorization:`Bearer ${token}`}});
+      if (dR.ok) { const d = await dR.json(); setAnalysis(d.analysis); setConsultationData(d.consultation); }
+    } catch (e) {} finally { setAnalysisLoading(false); setExplaining(false); }
   };
 
-  // ── CLÔTURE ────────────────────────────────────────────────────
-  const handleCloseConsultation = async (notes) => {
-    setCloseLoading(true);
-    try {
-      const form = new FormData();
-      form.append("doctor_notes", notes);
-      await fetch(`${API}/consultations/${selectedConsultation}/close`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form,
-      });
-      setShowCloseModal(false);
-      await loadAll();
-      await fetchConsultationDetails(selectedConsultation);
-    } catch (e) {}
-    finally { setCloseLoading(false); }
-  };
-
-  // ── TÉLÉCHARGEMENT PDF ─────────────────────────────────────────
   const handleDownloadPDF = async () => {
     if (!analysis || !consultationData) return;
     setPdfLoading(true);
     try {
-      const imagePath = consultationData.image_path;
-      let imageFile = null;
-      if (imagePath) {
-        const imgRes = await fetch(`http://localhost:8000/${imagePath}`);
-        if (imgRes.ok) {
-          const blob = await imgRes.blob();
-          imageFile = new File([blob], consultationData.image_path?.split("/").pop() || "image.jpg", { type: blob.type || "image/jpeg" });
-        }
-      }
-      if (!imageFile) throw new Error("Image non disponible.");
-
-      const probs = (() => {
-        if (!analysis.probabilities) return {};
-        if (typeof analysis.probabilities === "string") { try { return JSON.parse(analysis.probabilities); } catch { return {}; } }
-        return analysis.probabilities;
-      })();
-
-      const formData = new FormData();
-      formData.append("file", imageFile);
-      formData.append("explain_text", explainText || analysis.explain_text || "");
-      formData.append("gradcam_image", analysis.gradcam_b64 || "");
-
-      const params = new URLSearchParams({
-        model: consultationData.model_key || "chest",
-        patient_id: consultationData.patient_name || `PAT-${consultationData.patient_id}`,
-        prediction: analysis.prediction,
-        confidence: String(analysis.confidence),
-        probabilities: JSON.stringify(probs),
-        report_id: `MED-${consultationData.id}-${Date.now().toString(36).toUpperCase()}`,
-      });
-
-      const res = await fetch(`${API}/report?${params}`, { method: "POST", body: formData });
-      if (!res.ok) { const err = await res.text(); throw new Error(`Erreur PDF: ${err}`); }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `rapport_${consultationData.patient_name?.replace(/\s+/g, "_") || "patient"}_${consultationData.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Erreur lors de la génération du PDF : " + e.message);
-    } finally {
-      setPdfLoading(false);
-    }
+      const imgRes = await fetch(`http://localhost:8000/${consultationData.image_path}`);
+      const blob = await imgRes.blob();
+      const form = new FormData(); form.append("file", new File([blob], "image.jpg", {type:blob.type}));
+      form.append("explain_text", explainText || analysis.explain_text || "");
+      const params = new URLSearchParams({model:consultationData.model_key||"chest",patient_id:consultationData.patient_name||"Patient",prediction:analysis.prediction,confidence:String(analysis.confidence),probabilities:JSON.stringify(analysis.probabilities||{}),report_id:`DOC-${Date.now().toString(36).toUpperCase()}`});
+      const res = await fetch(`${API}/report?${params}`, {method:"POST",body:form});
+      const pdfBlob = await res.blob();
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a"); a.href = url; a.download = `rapport_${consultationData.id}.pdf`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch (e) { alert("Erreur PDF: " + e.message); } finally { setPdfLoading(false); }
   };
 
-  // ── MESSAGE ────────────────────────────────────────────────────
-  const handleSendMessage = async () => {
-    if (!msgInput.trim() || !selectedConsultation) return;
-    try {
-      await fetch(`${API}/consultations/${selectedConsultation}/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ content: msgInput.trim(), msg_type: "text" }),
-      });
-      setMsgInput("");
-      await fetchConsultationDetails(selectedConsultation);
-    } catch (e) {}
+  const handleClose = async () => {
+    const form = new FormData(); form.append("doctor_notes", closeNotes);
+    await fetch(`${API}/consultations/${selectedConsultation}/close`, {method:"POST",headers:{Authorization:`Bearer ${token}`},body:form});
+    setShowCloseModal(false); setCloseNotes(""); fetchAll();
   };
 
-  // ── COMPUTED ───────────────────────────────────────────────────
-  const stats = useMemo(() => ({
-    queue: queue.length,
-    critical: queue.filter(c => c.urgency === "critical").length,
-    active: assigned.filter(c => c.status === "accepted" || c.status === "analyzed").length,
-    analyzed: assigned.filter(c => c.status === "analyzed").length,
-    closed: assigned.filter(c => c.status === "closed").length,
-    totalPatients: assigned.length + queue.length,
-  }), [queue, assigned]);
-
-  const filteredQueue = useMemo(() => queue.filter(c => {
-    const mU = filterUrgency === "all" || c.urgency === filterUrgency;
-    const mS = !searchQuery || c.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) || String(c.id).includes(searchQuery);
-    return mU && mS;
-  }), [queue, filterUrgency, searchQuery]);
-
-  const userDomains = user?.domains || [];
+  const unreadCount = notifications.filter(n => !n.is_read).length;
   const model = consultationData ? MODEL_CONFIG[consultationData.model_key] || MODEL_CONFIG.chest : null;
   const canMessage = consultationData && (consultationData.status === "accepted" || consultationData.status === "analyzed");
 
-  // ── RENDER ─────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    queue: queue.length, critical: queue.filter(c=>c.urgency==="critical").length,
+    active: assigned.filter(c=>c.status==="accepted"||c.status==="analyzed").length,
+    analyzed: assigned.filter(c=>c.status==="analyzed").length,
+    closed: assigned.filter(c=>c.status==="closed").length,
+  }), [queue, assigned]);
+
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#F8FAFC 0%,#F1F5F9 50%,#E2E8F0 100%)", fontFamily: "'DM Sans','Inter',system-ui,sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.12)} }
-        @keyframes spin { to { transform:rotate(360deg); } }
-        @keyframes typing { 0%,100%{opacity:.3;transform:translateY(0)} 50%{opacity:1;transform:translateY(-4px)} }
-        @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
-        *{scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent}
-        *::-webkit-scrollbar{width:6px} *::-webkit-scrollbar-track{background:transparent} *::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
-      `}</style>
-
-      {/* ══════ HEADER ══════ */}
-      <header style={{
-        background: "linear-gradient(135deg,#0A2647 0%,#144272 50%,#205295 100%)",
-        padding: "16px 32px", color: "white", position: "sticky", top: 0, zIndex: 100,
-        boxShadow: "0 4px 20px rgba(10,38,71,0.3)",
-      }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-          {/* Logo + Doctor */}
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <div onClick={() => navigate("/")} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.15)", border: "2px solid rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>🏥</div>
-              <div>
-                <div style={{ fontSize: "1.1rem", fontWeight: 800, letterSpacing: "-.02em" }}>Med<span style={{ color: "#38BDF8" }}>AI</span></div>
-                <div style={{ fontSize: "0.58rem", opacity: .5, letterSpacing: ".1em", fontFamily: "monospace" }}>MÉDECIN</div>
-              </div>
-            </div>
-            <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#38BDF8,#0EA5E9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", fontWeight: 700 }}>
-                {user?.full_name?.charAt(0)?.toUpperCase() || "M"}
-              </div>
-              <div>
-                <div style={{ fontSize: "0.88rem", fontWeight: 700 }}>Dr. {user?.full_name || "Médecin"}</div>
-                <div style={{ fontSize: "0.68rem", opacity: .65 }}>{user?.specialty || "Médecin"} · {userDomains.map(d => MODEL_CONFIG[d]?.icon).filter(Boolean).join(" ")}</div>
-              </div>
-            </div>
+    <div className="pd3">
+      {/* NAVIGATION */}
+      <motion.nav className={`pd3-nav ${isScrolled?"scrolled":""}`} initial={{y:-80}} animate={{y:0}} transition={{duration:.5,type:"spring",stiffness:100}}>
+        <div className="pd3-nav-brand" onClick={()=>navigate("/")}>
+          <div className="pd3-nav-logo"><div className="pd3-nav-logo-inner"><I.Lungs size={22} color="#0A1628"/></div></div>
+          <span className="pd3-nav-name">Med<span className="accent">AI</span></span>
+        </div>
+        <div className="pd3-nav-links">
+          {[{id:"overview",label:"Vue d'ensemble"},{id:"consultations",label:"Consultations"},{id:"messages",label:"Messages & Analyse"},{id:"analytics",label:"Statistiques"}].map(tab=>(
+            <button key={tab.id} className={`pd3-nav-link ${activeTab===tab.id?"active":""}`} onClick={()=>setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>{tab.label}</button>
+          ))}
+        </div>
+        <div className="pd3-nav-actions">
+          <div ref={profileRef} style={{position:"relative"}}>
+            <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={()=>setShowProfileMenu(!showProfileMenu)}>
+              <I.User size={15}/> {firstName}
+            </button>
+            <AnimatePresence>
+              {showProfileMenu && (
+                <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} style={{position:"absolute",top:"calc(100% + 8px)",right:0,width:240,background:"#fff",borderRadius:16,border:"1px solid #E5E7EB",boxShadow:"0 12px 40px rgba(0,0,0,0.12)",overflow:"hidden",zIndex:1001}}>
+                  <div style={{padding:"16px 20px",borderBottom:"1px solid #F1F5F9",background:"#FAFBFC"}}>
+                    <div style={{fontWeight:700,fontSize:"0.88rem",color:"#0A1628"}}>{displayName}</div>
+                    <div style={{fontSize:"0.72rem",color:"#8899AA"}}>{user?.specialty}</div>
+                  </div>
+                  <button onClick={()=>{setShowProfileMenu(false);logout();navigate("/login");}} style={{width:"100%",padding:"10px 14px",border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:"0.82rem",color:"#EF4444",fontWeight:600,fontFamily:"inherit"}}><I.LogOut size={16}/> Déconnexion</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-
-          {/* Nav */}
-          <nav style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            {[
-              { key: "dashboard",     icon: "📊", label: "Vue d'ensemble" },
-              { key: "consultations", icon: "👥", label: "Consultations",  badge: stats.queue },
-              { key: "messages",      icon: "💬", label: "Messages" },
-              { key: "analytics",     icon: "📈", label: "Statistiques" },
-            ].map(tab => (
-              <button key={tab.key} onClick={() => setActiveView(tab.key)} style={{
-                padding: "8px 16px", borderRadius: 10, border: "none",
-                background: activeView === tab.key ? "rgba(255,255,255,.2)" : "transparent",
-                color: "white", fontSize: "0.82rem", fontWeight: activeView === tab.key ? 700 : 500,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all .2s",
-              }}>
-                {tab.icon} {tab.label}
-                {tab.badge > 0 && <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: "0.68rem", fontWeight: 800, background: "#EF4444", color: "white" }}>{tab.badge}</span>}
-              </button>
-            ))}
-          </nav>
-
-          {/* Right */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Notifs */}
-            <div ref={notifRef} style={{ position: "relative" }}>
-              <button onClick={() => setShowNotifications(!showNotifications)} style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", color: "white", fontSize: "1rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                🔔
-                {unreadCount > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, background: "#EF4444", color: "white", fontSize: "0.62rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #0A2647", animation: "pulse 2s infinite" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}
-              </button>
-              {showNotifications && (
-                <div style={{ position: "absolute", top: 50, right: 0, width: 360, maxHeight: 400, background: "white", borderRadius: 16, border: "1px solid #E2E8F0", boxShadow: "0 20px 40px rgba(0,0,0,.15)", overflow: "hidden", animation: "fadeUp .2s ease", zIndex: 200 }}>
-                  <div style={{ padding: "14px 18px", borderBottom: "1px solid #F1F5F9", background: "#FAFBFC", display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontWeight: 800, color: "#0F172A", fontSize: ".88rem" }}>Notifications</span>
-                    {unreadCount > 0 && <button style={{ background: "none", border: "none", color: "#3B82F6", fontSize: ".75rem", fontWeight: 600, cursor: "pointer" }}>Tout lire</button>}
-                  </div>
-                  <div style={{ overflowY: "auto", maxHeight: 340 }}>
-                    {notifications.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: "#94A3B8" }}>Aucune notification</div> : notifications.slice(0, 10).map(n => (
-                      <div key={n.id} style={{ padding: "12px 18px", borderBottom: "1px solid #F8FAFC", cursor: "pointer", background: n.is_read ? "white" : "#F0F9FF" }}
-                        onClick={() => { try { const d = typeof n.data === "string" ? JSON.parse(n.data) : n.data; if (d.consultation_id) { setSelectedConsultation(d.consultation_id); setActiveView("messages"); } } catch {} setShowNotifications(false); }}>
-                        <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#0F172A" }}>{n.title}</div>
-                        <div style={{ fontSize: ".73rem", color: "#64748B" }}>{n.message?.slice(0, 60)}…</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Profile */}
-            <div ref={profileRef} style={{ position: "relative" }}>
-              <button onClick={() => setShowProfile(!showProfile)} style={{ width: 40, height: 40, borderRadius: 11, background: "linear-gradient(135deg,#38BDF8,#0EA5E9)", border: "2px solid rgba(255,255,255,.3)", color: "white", fontSize: ".9rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {user?.full_name?.charAt(0)?.toUpperCase() || "M"}
-              </button>
-              {showProfile && (
-                <div style={{ position: "absolute", top: 50, right: 0, width: 260, background: "white", borderRadius: 16, border: "1px solid #E2E8F0", boxShadow: "0 20px 40px rgba(0,0,0,.15)", overflow: "hidden", animation: "fadeUp .2s ease", zIndex: 200 }}>
-                  <div style={{ padding: "18px", background: "linear-gradient(135deg,#0A2647,#205295)", color: "white" }}>
-                    <div style={{ fontSize: ".95rem", fontWeight: 700 }}>Dr. {user?.full_name}</div>
-                    <div style={{ fontSize: ".78rem", opacity: .7, marginTop: 2 }}>{user?.specialty}</div>
-                    <div style={{ fontSize: ".65rem", opacity: .5, fontFamily: "monospace", marginTop: 4 }}>@{user?.username}</div>
-                  </div>
-                  <div style={{ padding: "10px" }}>
-                    {userDomains.map(d => { const m = MODEL_CONFIG[d]; return m ? <div key={d} style={{ padding: "7px 10px", borderRadius: 8, background: m.bg, marginBottom: 5, display: "flex", alignItems: "center", gap: 8 }}><span>{m.icon}</span><span style={{ fontSize: ".78rem", fontWeight: 600, color: m.color }}>{m.label}</span></div> : null; })}
-                    <button onClick={() => { localStorage.clear(); window.location.href = "/login"; }} style={{ width: "100%", padding: "9px", background: "#FEF2F2", border: "none", borderRadius: 10, color: "#EF4444", fontSize: ".82rem", fontWeight: 600, cursor: "pointer", marginTop: 4 }}>🚪 Se déconnecter</button>
-                  </div>
-                </div>
-              )}
-            </div>
+          <div ref={notifRef} style={{position:"relative"}}>
+            <motion.button className="pd3-btn-icon" onClick={()=>setShowNotif(!showNotif)} whileHover={{scale:1.05}}>
+              <I.Bell size={18} color="#fff"/>
+              {unreadCount>0 && <span className="pd3-btn-badge">{unreadCount>9?"9+":unreadCount}</span>}
+            </motion.button>
+            <AnimatePresence>{showNotif&&(<motion.div className="pd3-notif-panel" initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><div className="pd3-notif-header"><span className="pd3-notif-title"><I.Bell size={15} color="#D4A500"/> Notifications</span><button onClick={()=>setShowNotif(false)} className="pd3-notif-action"><I.X size={16}/></button></div><div className="pd3-notif-body" style={{maxHeight:350,overflowY:"auto"}}>{notifications.length===0?<div className="pd3-notif-empty"><I.Bell size={26} color="#D4A500"/><div className="pd3-notif-empty-text">Aucune notification</div></div>:notifications.map(n=><div key={n.id} className="pd3-notif-item" onClick={()=>{try{const d=JSON.parse(n.data||"{}");if(d.consultation_id){setSelectedConsultation(d.consultation_id);setActiveTab("messages")}}catch{}setShowNotif(false)}}><div className="pd3-notif-item-content"><div className="pd3-notif-item-title">{n.title}</div><div className="pd3-notif-item-msg">{n.message?.substring(0,80)}</div></div></div>)}</div></motion.div>)}</AnimatePresence>
           </div>
         </div>
-      </header>
+      </motion.nav>
 
-      {/* ══════ CONTENT ══════ */}
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px" }}>
-
-        {/* ── VUE: DASHBOARD ── */}
-        {activeView === "dashboard" && (
-          <div style={{ animation: "fadeUp .4s ease" }}>
-            {stats.critical > 0 && (
-              <div style={{ padding: "16px 20px", background: "linear-gradient(135deg,#FEF2F2,#FFF1F2)", border: "1.5px solid #FCA5A5", borderRadius: 16, marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: "1.4rem" }}>🚨</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: ".9rem", fontWeight: 800, color: "#991B1B" }}>{stats.critical} cas critique{stats.critical > 1 ? "s" : ""} en attente !</div>
-                  <div style={{ fontSize: ".78rem", color: "#B91C1C" }}>Intervention immédiate requise.</div>
-                </div>
-                <button onClick={() => { setFilterUrgency("critical"); setActiveView("consultations"); }} style={{ padding: "8px 16px", background: "#DC2626", border: "none", borderRadius: 10, color: "white", fontSize: ".8rem", fontWeight: 700, cursor: "pointer" }}>Voir →</button>
-              </div>
-            )}
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
-              <StatCard icon="👥" label="Total Patients"  value={stats.totalPatients} color="#0F172A" bg="#F1F5F9" trend={12} />
-              <StatCard icon="⏳" label="En Attente"      value={stats.queue}          color="#F59E0B" bg="#FFFBEB" onClick={() => setActiveView("consultations")} />
-              <StatCard icon="✅" label="En Cours"        value={stats.active}         color="#3B82F6" bg="#EFF6FF" subtitle={`${stats.analyzed} analysées`} />
-              <StatCard icon="🔒" label="Terminées"       value={stats.closed}         color="#10B981" bg="#ECFDF5" />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
-              {[
-                { icon: "🔬", label: "Analyse Libre", desc: "Classifier une image", color: "#7C3AED", bg: "#F5F3FF", action: () => navigate("/classification") },
-                { icon: "📋", label: "File d'Attente", desc: "Gérer les demandes", color: "#F59E0B", bg: "#FFFBEB", action: () => setActiveView("consultations"), count: stats.queue },
-                { icon: "💬", label: "Messages", desc: "Communiquer", color: "#3B82F6", bg: "#EFF6FF", action: () => setActiveView("messages") },
-                { icon: "📈", label: "Statistiques", desc: "Vue globale", color: "#10B981", bg: "#ECFDF5", action: () => setActiveView("analytics") },
-              ].map(a => (
-                <button key={a.label} onClick={a.action} style={{ background: "white", borderRadius: 18, padding: "18px", border: "1px solid #F1F5F9", cursor: "pointer", textAlign: "left", transition: "all .3s", display: "flex", alignItems: "center", gap: 14, position: "relative", boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}
-                  onMouseEnter={e => Object.assign(e.currentTarget.style, { transform: "translateY(-4px)", boxShadow: `0 12px 24px ${a.color}15`, borderColor: a.color })}
-                  onMouseLeave={e => Object.assign(e.currentTarget.style, { transform: "translateY(0)", boxShadow: "0 2px 8px rgba(0,0,0,.04)", borderColor: "#F1F5F9" })}
-                >
-                  <div style={{ width: 50, height: 50, borderRadius: 14, background: a.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", flexShrink: 0 }}>{a.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: ".88rem", fontWeight: 700, color: "#0F172A", marginBottom: 3 }}>{a.label}</div>
-                    <div style={{ fontSize: ".75rem", color: "#94A3B8" }}>{a.desc}</div>
-                  </div>
-                  {a.count > 0 && <span style={{ position: "absolute", top: 10, right: 10, padding: "3px 10px", borderRadius: 20, fontSize: ".7rem", fontWeight: 700, background: a.color, color: "white" }}>{a.count}</span>}
-                </button>
-              ))}
-            </div>
-
-            {/* Recent consultations */}
-            <div style={{ background: "white", borderRadius: 20, border: "1px solid #F1F5F9", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}>
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#0F172A" }}>📋 Consultations récentes</h2>
-                <button onClick={() => setActiveView("consultations")} style={{ background: "none", border: "1px solid #E2E8F0", borderRadius: 10, padding: "6px 14px", color: "#3B82F6", fontSize: ".8rem", fontWeight: 600, cursor: "pointer" }}>
-                  Voir tout →
-                </button>
-              </div>
-              <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-                {loading ? (
-                  <div style={{ textAlign: "center", padding: 40, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                    <Spinner size={32} />
-                    <div style={{ color: "#94A3B8" }}>Chargement…</div>
-                  </div>
-                ) : [...assigned.slice(0, 3), ...queue.slice(0, 2)].slice(0, 5).length === 0 ? (
-                  <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>
-                    <div style={{ fontSize: "2rem", marginBottom: 8 }}>📋</div>
-                    <div>Aucune consultation</div>
-                  </div>
-                ) : (
-                  [...assigned.slice(0, 3), ...queue.slice(0, 2)].slice(0, 5).map(c => (
-                    <ConsultationCard key={c.id} consultation={c} onClick={() => { setSelectedConsultation(c.id); setActiveView("messages"); }} />
-                  ))
-                )}
-              </div>
-            </div>
+      {/* HERO */}
+      <motion.section className="pd3-hero" style={{y:sY}}>
+        <div className="pd3-hero-grid"/><div className="pd3-hero-orb pd3-hero-orb-1"/><div className="pd3-hero-orb pd3-hero-orb-2"/><div className="pd3-hero-orb pd3-hero-orb-3"/>
+        <div className="pd3-hero-ring pd3-hero-ring-1"/><div className="pd3-hero-ring pd3-hero-ring-2"/><div className="pd3-hero-ring pd3-hero-ring-3"/>
+        <Particles/>
+        <div className="pd3-hero-content">
+          <div>
+            <motion.div initial={{opacity:0,y:25}} animate={{opacity:1,y:0}}><div className="pd3-hero-status"><span className="pd3-status-pulse"/><span>ESPACE MÉDECIN</span><span className="pd3-status-sep"/><span>CERTIFIÉ CE MÉDICAL</span></div></motion.div>
+            <motion.h1 className="pd3-hero-welcome" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.1}}>{greeting},<br/><span className="highlight">{firstName}</span></motion.h1>
+            <motion.div className="pd3-hero-date" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.2}}><I.Calendar size={14} color="rgba(255,255,255,0.5)"/> {currentTime.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} <span style={{margin:"0 8px",opacity:.3}}>•</span> {currentTime.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</motion.div>
+            <motion.p className="pd3-hero-subtitle" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.25}}>{user?.specialty||"Spécialiste"} · Gérez vos consultations et analyses médicales</motion.p>
+            <motion.div className="pd3-hero-actions" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.35}}>
+              <button className="pd3-btn pd3-btn-gold pd3-btn-lg" onClick={()=>setActiveTab("consultations")}><I.Folder size={18}/> File d'attente ({stats.queue})</button>
+              <button className="pd3-btn pd3-btn-outline-light pd3-btn-lg" onClick={()=>navigate("/classification")}><I.Scan size={16}/> Analyse libre</button>
+            </motion.div>
           </div>
-        )}
-
-        {/* ── VUE: CONSULTATIONS ── */}
-        {activeView === "consultations" && (
-          <div style={{ animation: "fadeUp .4s ease" }}>
-            <div style={{ marginBottom: 20 }}>
-              <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0F172A", marginBottom: 12 }}>👥 File d'attente</h1>
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                {["all", "critical", "urgent"].map(f => (
-                  <button key={f} onClick={() => setFilterUrgency(f)} style={{
-                    padding: "8px 16px", borderRadius: 10, border: "1px solid",
-                    borderColor: filterUrgency === f ? "transparent" : "#E2E8F0",
-                    background: filterUrgency === f ? (f === "critical" ? "#DC2626" : f === "urgent" ? "#EA580C" : "#0F172A") : "white",
-                    color: filterUrgency === f ? "white" : "#64748B",
-                    fontSize: ".8rem", fontWeight: 600, cursor: "pointer",
-                  }}>
-                    {f === "all" ? "Tous" : f === "critical" ? "Critiques" : "Urgents"}
-                    ({f === "all" ? queue.length : queue.filter(c => c.urgency === f).length})
-                  </button>
-                ))}
-                <div style={{ flex: 1 }} />
-                <input placeholder="🔍 Rechercher…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ padding: "8px 16px", borderRadius: 10, border: "1.5px solid #E2E8F0", fontSize: ".85rem", width: 240, outline: "none" }} />
+          <motion.div className="pd3-hero-visual" initial={{opacity:0,x:40}} animate={{opacity:1,x:0}} transition={{duration:.7,delay:.3}}>
+            <div className="pd3-hero-card">
+              <div className="pd3-hero-card-header"><span className="pd3-card-title">ANALYSE EN TEMPS RÉEL</span><span className="pd3-card-badge"><span className="pd3-status-pulse"/> IA Active</span></div>
+              <div className="pd3-mini-chart">{[35,55,40,70,45,65,80,50,75,60,85,55,70,90,65,50,75,60,80,55].map((h,i)=>(<motion.div key={i} className={`pd3-chart-bar ${i>=14?"highlight":""}`} style={{height:`${h}%`}} initial={{height:0}} animate={{height:`${h}%`}} transition={{delay:.6+i*.04,duration:.5}}/>))}</div>
+              <div className="pd3-mini-stats">
+                <motion.div className="pd3-mini-stat" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.8}}><div className="pd3-mini-stat-value">{stats.queue}</div><div className="pd3-mini-stat-label">EN ATTENTE</div></motion.div>
+                <motion.div className="pd3-mini-stat" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:.9}}><div className="pd3-mini-stat-value">{stats.active}</div><div className="pd3-mini-stat-label">EN COURS</div></motion.div>
+                <motion.div className="pd3-mini-stat" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:1.0}}><div className="pd3-mini-stat-value">{stats.analyzed}</div><div className="pd3-mini-stat-label">ANALYSÉS</div></motion.div>
               </div>
+              <motion.div className="pd3-progress-section" initial={{opacity:0}} animate={{opacity:1}} transition={{delay:1.1}}><div className="pd3-progress-header"><span className="pd3-progress-label">Dossiers traités</span><span className="pd3-progress-value">{stats.closed+stats.analyzed} dossiers</span></div><div className="pd3-progress-bar"><motion.div className="pd3-progress-fill" initial={{width:0}} animate={{width:`${Math.min(((stats.closed+stats.analyzed)/Math.max(queue.length+assigned.length,1))*100,100)}%`}} transition={{delay:1.2,duration:1}}/></div></motion.div>
+              <div className="pd3-live-indicator"><div className="pd3-live-dot"/><span className="pd3-live-text">SYSTÈME OPÉRATIONNEL</span><span style={{fontSize:"0.6rem",color:"rgba(255,255,255,0.3)",marginLeft:"auto"}}>98.5% uptime</span></div>
             </div>
+            <motion.div className="pd3-float-card pd3-float-1" animate={{y:[0,-14,0]}} transition={{repeat:Infinity,duration:4.5}}><div className="pd3-float-card-icon" style={{background:"rgba(232,184,48,0.12)",color:"#FFD700"}}><I.Brain size={20}/></div><div><div className="pd3-float-card-value">98.5%</div><div className="pd3-float-card-label">Précision IA</div></div></motion.div>
+            <motion.div className="pd3-float-card pd3-float-2" animate={{y:[0,-10,0],x:[0,6,0]}} transition={{repeat:Infinity,duration:5,delay:1.2}}><div className="pd3-float-card-icon" style={{background:"rgba(16,185,129,0.12)",color:"#10B981"}}><I.Clock size={20}/></div><div><div className="pd3-float-card-value">&lt; 30s</div><div className="pd3-float-card-label">Analyse rapide</div></div></motion.div>
+            <motion.div className="pd3-float-card pd3-float-3" animate={{boxShadow:["0 0 0px rgba(232,184,48,0.15)","0 0 35px rgba(232,184,48,0.4)","0 0 0px rgba(232,184,48,0.15)"]}} transition={{repeat:Infinity,duration:2.5}}><div className="pd3-float-card-icon" style={{background:"rgba(139,92,246,0.12)",color:"#8B5CF6"}}><I.Activity size={20}/></div><div><div className="pd3-float-card-value">28+</div><div className="pd3-float-card-label">Pathologies</div></div></motion.div>
+          </motion.div>
+        </div>
+        <div className="pd3-scroll-down"><span className="pd3-scroll-text">Découvrir</span><div className="pd3-scroll-icon"><div className="pd3-scroll-wheel"/></div></div>
+      </motion.section>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {filteredQueue.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 60, background: "white", borderRadius: 16, border: "1px solid #F1F5F9" }}>
-                  <div style={{ fontSize: "3rem", marginBottom: 12 }}>✅</div>
-                  <div style={{ color: "#64748B" }}>Aucune consultation en attente</div>
-                </div>
-              ) : filteredQueue.map(c => (
-                <div key={c.id} style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 16, boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <ConsultationCard consultation={c} onClick={() => { setSelectedConsultation(c.id); setActiveView("messages"); }} />
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <button onClick={e => { e.stopPropagation(); handleAccept(c.id); }} disabled={actionLoading === `accept-${c.id}`} style={{ padding: "8px 16px", background: actionLoading === `accept-${c.id}` ? "#E2E8F0" : "linear-gradient(135deg,#10B981,#059669)", border: "none", borderRadius: 10, color: "white", fontSize: ".8rem", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                      {actionLoading === `accept-${c.id}` ? <Spinner size={14} color="white" /> : "✅ Accepter"}
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); handleReject(c.id); }} disabled={actionLoading === `reject-${c.id}`} style={{ padding: "8px 16px", border: "1.5px solid #FCA5A5", borderRadius: 10, color: "#EF4444", fontSize: ".8rem", fontWeight: 600, cursor: "pointer", background: "white" }}>
-                      ❌ Refuser
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* BODY */}
+      <div className="pd3-body">
+        <Reveal><div className="pd3-tabs">{[{id:"overview",label:"Vue d'ensemble",icon:<I.Activity size={16}/>},{id:"consultations",label:"Consultations",icon:<I.Folder size={16}/>},{id:"messages",label:"Messages & Analyse",icon:<I.Message size={16}/>},{id:"analytics",label:"Statistiques",icon:<I.Star size={16}/>}].map(tab=>(<button key={tab.id} className={`pd3-tab ${activeTab===tab.id?"active":""}`} onClick={()=>setActiveTab(tab.id)}><span className="pd3-tab-icon">{tab.icon}</span> {tab.label}</button>))}</div></Reveal>
 
-            {/* Assigned */}
-            {assigned.length > 0 && (
-              <div style={{ marginTop: 28 }}>
-                <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#0F172A", marginBottom: 12 }}>📂 Mes dossiers actifs</h2>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {assigned.filter(c => c.status !== "closed").map(c => (
-                    <ConsultationCard key={c.id} consultation={c} onClick={() => { setSelectedConsultation(c.id); setActiveView("messages"); }} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {activeTab==="overview"&&(<motion.div key="overview" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Activity size={12}/> VUE D'ENSEMBLE</div><h2 className="pd3-section-title">Tableau de bord <span className="accent">médecin</span></h2><p className="pd3-section-sub">Gérez vos consultations en temps réel</p></div></Reveal><div className="pd3-metrics-grid">{[{icon:I.Folder,label:"En attente",value:stats.queue,color:"#D4A500",bg:"rgba(212,165,0,0.08)"},{icon:I.Clock,label:"En cours",value:stats.active,color:"#3B82F6",bg:"rgba(59,130,246,0.08)"},{icon:I.Check,label:"Analysées",value:stats.analyzed,color:"#10B981",bg:"rgba(16,185,129,0.08)"},{icon:I.Shield,label:"Terminées",value:stats.closed,color:"#6B7280",bg:"rgba(107,114,128,0.08)"}].map((s,i)=>(<Reveal key={i} delay={i*.06}><motion.div className="pd3-metric" style={{"--metric-color":s.color}} whileHover={{y:-6}}><div className="pd3-metric-icon" style={{background:s.bg,color:s.color}}><s.icon size={24}/></div><div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div><div className="pd3-metric-label">{s.label}</div></motion.div></Reveal>))}</div><Reveal delay={.1}><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Sparkles size={16} color="#D4A500"/> Actions rapides</span></div></Reveal><div className="pd3-actions-grid">{[{icon:I.Folder,label:"File d'attente",desc:"Gérer les demandes",color:"#D4A500",bg:"rgba(212,165,0,0.08)",action:()=>setActiveTab("consultations")},{icon:I.Scan,label:"Analyse libre",desc:"Classifier une image",color:"#8B5CF6",bg:"rgba(139,92,246,0.08)",action:()=>navigate("/classification")},{icon:I.Message,label:"Messages",desc:"Communiquer avec patients",color:"#10B981",bg:"rgba(16,185,129,0.08)",action:()=>setActiveTab("messages")},{icon:I.BarChart,label:"Statistiques",desc:"Vue globale",color:"#3B82F6",bg:"rgba(59,130,246,0.08)",action:()=>setActiveTab("analytics")}].map((a,i)=>(<Reveal key={i} delay={.12+i*.06}><motion.button className="pd3-action" onClick={a.action} whileHover={{y:-5}}><div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color}}><a.icon size={22}/></div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div><div className="pd3-action-label">{a.label}</div><div className="pd3-action-desc">{a.desc}</div></motion.button></Reveal>))}</div><Reveal delay={.15}><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Folder size={16} color="#D4A500"/> Consultations récentes</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{loading?<div style={{textAlign:"center",padding:40}}><I.Sparkles size={32} color="#D4A500"/></div>:[...assigned.slice(0,3),...queue.slice(0,2)].slice(0,5).map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}}/>)}</div></Reveal></motion.div>)}
 
-        {/* ── VUE: MESSAGES + ANALYSE ── */}
-        {activeView === "messages" && (
-          <div style={{ animation: "fadeUp .4s ease", display: "grid", gridTemplateColumns: "1fr 400px", gap: 20 }}>
-            {/* Messages Panel */}
-            <div style={{ background: "white", borderRadius: 20, border: "1px solid #F1F5F9", display: "flex", flexDirection: "column", height: "calc(100vh - 180px)", boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}>
-              {!selectedConsultation ? (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#94A3B8", padding: 40 }}>
-                  <div style={{ fontSize: "3rem", marginBottom: 12 }}>💬</div>
-                  <div style={{ fontSize: ".9rem", fontWeight: 600 }}>Sélectionnez une consultation</div>
-                  <div style={{ fontSize: ".8rem", marginTop: 4, textAlign: "center" }}>depuis la liste des consultations ou depuis le tableau de bord</div>
-                  <button onClick={() => setActiveView("consultations")} style={{ marginTop: 16, padding: "8px 20px", background: "#0F172A", border: "none", borderRadius: 10, color: "white", fontSize: ".82rem", fontWeight: 600, cursor: "pointer" }}>
-                    Voir les consultations
-                  </button>
-                </div>
-              ) : consultationData ? (
-                <>
-                  {/* Header */}
-                  <div style={{ padding: "14px 20px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: model?.gradient || "linear-gradient(135deg,#64748B,#475569)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>
-                      {model?.icon || "🏥"}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: ".95rem", fontWeight: 700, color: "#0F172A" }}>
-                        {consultationData.patient_name}
-                        <span style={{ fontSize: ".7rem", color: "#94A3B8", marginLeft: 8 }}>#{consultationData.id}</span>
-                      </div>
-                      <div style={{ fontSize: ".73rem", color: "#64748B", display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ color: STATUS_CONFIG[consultationData.status]?.color, fontWeight: 700 }}>{STATUS_CONFIG[consultationData.status]?.icon} {STATUS_CONFIG[consultationData.status]?.label}</span>
-                        <span>·</span><span>{model?.label}</span>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => navigate(`/video/${consultationData.id}`)} style={{ padding: "7px 14px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 9, color: "#0369A1", fontSize: ".75rem", fontWeight: 700, cursor: "pointer" }}>
-                        📹 Vidéo
-                      </button>
-                      {(consultationData.status === "analyzed" || consultationData.status === "accepted") && (
-                        <button onClick={() => setShowCloseModal(true)} style={{ padding: "7px 14px", background: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 9, color: "#6B7280", fontSize: ".75rem", fontWeight: 700, cursor: "pointer" }}>
-                          🔒 Clôturer
-                        </button>
-                      )}
-                    </div>
-                  </div>
+          {activeTab==="consultations"&&(<motion.div key="consultations" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Folder size={12}/> CONSULTATIONS</div><h2 className="pd3-section-title">File d'attente <span className="accent">({queue.length})</span></h2></div></Reveal><div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:32}}>{queue.map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}} onAccept={()=>handleAccept(c.id)} onReject={()=>handleReject(c.id)} actionLoading={actionLoading===c.id}/>)}</div>{assigned.filter(c=>c.status!=="closed").length>0&&<><Reveal><h2 className="pd3-section-title" style={{marginBottom:24}}>Mes dossiers <span className="accent">actifs</span></h2></Reveal><div style={{display:"flex",flexDirection:"column",gap:8}}>{assigned.filter(c=>c.status!=="closed").map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}}/>)}</div></>}</motion.div>)}
 
-                  {/* Notes patient */}
-                  {consultationData.patient_notes && (
-                    <div style={{ padding: "10px 20px", background: "#FFFBEB", borderBottom: "1px solid #FDE68A", fontSize: ".78rem", color: "#92400E", flexShrink: 0 }}>
-                      📋 <strong>Notes patient :</strong> {consultationData.patient_notes}
-                    </div>
-                  )}
+          {activeTab==="messages"&&(<motion.div key="messages" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} style={{display:"grid",gridTemplateColumns:"1fr 420px",gap:20}}>
+            <ChatSection consultationData={consultationData} messages={messages} msgInput={msgInput} setMsgInput={setMsgInput} onSend={handleSendMessage} canMessage={canMessage} onClose={()=>setShowCloseModal(true)} model={model} loading={loading}/>
+            <AnalysisSection analysis={analysis} analysisLoading={analysisLoading} explainText={explainText} explaining={explaining} onRunAnalysis={handleRunAnalysis} onDownloadPDF={handleDownloadPDF} consultationData={consultationData} model={model}/>
+          </motion.div>)}
 
-                  {/* Messages */}
-                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-                    {messages.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>
-                        <div style={{ fontSize: "1.8rem", marginBottom: 8 }}>💬</div>
-                        <div style={{ fontSize: ".85rem" }}>Aucun message</div>
-                        <div style={{ fontSize: ".75rem", marginTop: 4 }}>Commencez la discussion avec le patient</div>
-                      </div>
-                    ) : messages.map(m => <MessageBubble key={m.id} message={m} isDoctor={true} />)}
-                    <div ref={messagesEndRef} />
-                  </div>
+          {activeTab==="analytics"&&(<motion.div key="analytics" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Star size={12}/> STATISTIQUES</div><h2 className="pd3-section-title">Vue <span className="accent">globale</span></h2></div></Reveal><div className="pd3-metrics-grid">{[{icon:I.Folder,label:"Total",value:queue.length+assigned.length,color:"#0A1628"},{icon:I.Clock,label:"En attente",value:stats.queue,color:"#D4A500"},{icon:I.Activity,label:"En cours",value:stats.active,color:"#3B82F6"},{icon:I.Check,label:"Analysées",value:stats.analyzed,color:"#10B981"}].map((s,i)=><Reveal key={i} delay={i*.06}><motion.div className="pd3-metric"><div className="pd3-metric-icon" style={{background:`${s.color}15`,color:s.color}}><s.icon size={24}/></div><div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div><div className="pd3-metric-label">{s.label}</div></motion.div></Reveal>)}</div></motion.div>)}
+        </AnimatePresence>
 
-                  {/* Input */}
-                  {canMessage ? (
-                    <div style={{ padding: "12px 16px", borderTop: "1px solid #F1F5F9", display: "flex", gap: 8, flexShrink: 0 }}>
-                      <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendMessage()}
-                        placeholder="Écrire un message au patient…"
-                        style={{ flex: 1, padding: "10px 16px", borderRadius: 12, border: "1.5px solid #E2E8F0", fontSize: ".85rem", outline: "none", background: "#F8FAFC" }}
-                        onFocus={e => e.target.style.borderColor = "#0F172A"} onBlur={e => e.target.style.borderColor = "#E2E8F0"}
-                      />
-                      <button onClick={handleSendMessage} disabled={!msgInput.trim()} style={{ width: 42, height: 42, borderRadius: 12, background: msgInput.trim() ? "#0F172A" : "#E2E8F0", border: "none", color: msgInput.trim() ? "white" : "#94A3B8", fontSize: "1rem", cursor: msgInput.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        ➤
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ padding: "10px 20px", background: "#F8FAFC", borderTop: "1px solid #F1F5F9", fontSize: ".78rem", color: "#94A3B8", textAlign: "center", flexShrink: 0 }}>
-                      💬 Messages disponibles après acceptation de la consultation
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ textAlign: "center", color: "#94A3B8", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                    <Spinner />
-                    <span>Chargement…</span>
-                  </div>
-                </div>
-              )}
-            </div>
+        <Reveal><section className="pd3-platform"><div className="pd3-platform-grid">{[{icon:I.Scan,value:50000,suffix:"+",label:"Radiographies analysées"},{icon:I.Brain,value:98,suffix:".5%",label:"Précision de détection"},{icon:I.Lungs,value:14,suffix:"+",label:"Pathologies couvertes"},{icon:I.Shield,value:100,suffix:"%",label:"Données sécurisées"}].map((s,i)=><motion.div key={i} className="pd3-platform-item" whileHover={{y:-4}}><div className="pd3-platform-icon"><s.icon size={30} color="#D4A500"/></div><div className="pd3-platform-value">{s.value}{s.suffix}</div><div className="pd3-platform-label">{s.label}</div>{i<3&&<div className="pd3-platform-div"/>}</motion.div>)}</div></section></Reveal>
 
-            {/* ══ ANALYSIS PANEL ══ */}
-            <AnalysisPanel
-              analysis={analysis}
-              consultationData={consultationData}
-              model={model}
-              analysisLoading={analysisLoading}
-              onRunAnalysis={handleRunAnalysis}
-              onCloseConsultation={() => setShowCloseModal(true)}
-              onDownloadPDF={handleDownloadPDF}
-              pdfLoading={pdfLoading}
-              closeLoading={closeLoading}
-              explainText={explainText}
-              explaining={explaining}
-              explainError={explainError}
-              showGradcam={showGradcam}
-              onToggleGradcam={() => setShowGradcam(!showGradcam)}
-            />
-          </div>
-        )}
-
-        {/* ── VUE: ANALYTICS ── */}
-        {activeView === "analytics" && (
-          <div style={{ animation: "fadeUp .4s ease" }}>
-            <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0F172A", marginBottom: 24 }}>📈 Statistiques</h1>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 24 }}>
-              {[
-                { l: "Total consultations",    v: assigned.length + queue.length, ic: "📋", color: "#0F172A" },
-                { l: "Taux d'analyse",          v: assigned.length ? `${Math.round((stats.analyzed / assigned.length) * 100)}%` : "0%", ic: "🧬", color: "#059669" },
-                { l: "En cours",                v: stats.active,                    ic: "⚡", color: "#3B82F6" },
-                { l: "Cas critiques traités",   v: assigned.filter(c => c.urgency === "critical").length, ic: "🚨", color: "#DC2626" },
-                { l: "Consultations terminées", v: stats.closed,                    ic: "🔒", color: "#6B7280" },
-                { l: "Domaines couverts",        v: userDomains.length,              ic: "🏥", color: "#7C3AED" },
-              ].map(s => (
-                <div key={s.l} style={{ background: "white", borderRadius: 16, padding: "20px", border: "1px solid #F1F5F9", boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontSize: "1.4rem" }}>{s.ic}</span>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: s.color }}>{s.v}</span>
-                  </div>
-                  <div style={{ fontSize: ".8rem", color: "#64748B", fontWeight: 500 }}>{s.l}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Domaines */}
-            <div style={{ background: "white", borderRadius: 20, padding: "24px", border: "1px solid #F1F5F9", boxShadow: "0 2px 8px rgba(0,0,0,.04)" }}>
-              <div style={{ fontSize: ".95rem", fontWeight: 800, color: "#0F172A", marginBottom: 16 }}>🏥 Mes domaines de spécialité</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
-                {userDomains.map(d => {
-                  const m = MODEL_CONFIG[d];
-                  if (!m) return null;
-                  const count = assigned.filter(c => c.model_key === d).length;
-                  return (
-                    <div key={d} style={{ padding: "16px", borderRadius: 14, background: m.bg, border: `1px solid ${m.color}30`, display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 14, background: m.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>{m.icon}</div>
-                      <div>
-                        <div style={{ fontSize: ".88rem", fontWeight: 700, color: m.color }}>{m.label}</div>
-                        <div style={{ fontSize: ".75rem", color: "#64748B", marginTop: 2 }}>{count} consultation{count !== 1 ? "s" : ""} traitée{count !== 1 ? "s" : ""}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        <footer className="hp-footer" style={{marginTop:40}}><div className="hp-footer-inner"><div className="hp-footer-grid"><div className="hp-footer-brand"><div className="hp-nav-logo" style={{marginBottom:16}}><div className="hp-logo-icon"><I.Lungs size={18} color="#fff"/></div><span style={{color:"#fff"}}>Med<span style={{color:"#FFD700"}}>AI</span></span></div><p>Plateforme médicale de diagnostic assisté par IA. Transformant la radiologie avec l'apprentissage profond depuis 2024.</p><div className="hp-footer-socials">{["LI","TW","GH","YT","IN"].map((s,i)=><div className="hp-footer-social" key={i}>{s}</div>)}</div></div><div><h4>PRODUIT</h4>{["Analyse IA","Radiologues","API Access","Mobile App","Tarifs"].map(x=><a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div><div><h4>ENTREPRISE</h4>{["À propos","Carrières","Recherche","Blog","Contact"].map(x=><a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div><div><h4>RESSOURCES</h4>{["Documentation","Études de cas","Whitepapers","Support","Statut"].map(x=><a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div></div><div className="hp-footer-bottom"><span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span><div className="hp-footer-bottom-links">{["Confidentialité","Conditions","Sécurité","HIPAA","RGPD","Contact"].map(x=><a href="#" key={x}>{x}</a>)}</div></div></div></footer>
       </div>
 
-      {/* ══ MODAL CLÔTURE ══ */}
-      {showCloseModal && (
-        <CloseModal
-          onConfirm={handleCloseConsultation}
-          onCancel={() => setShowCloseModal(false)}
-          loading={closeLoading}
-        />
-      )}
+      <AnimatePresence>{showCloseModal&&(<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><motion.div initial={{scale:.95}} animate={{scale:1}} style={{background:"#fff",borderRadius:20,padding:28,maxWidth:460,width:"100%"}}><h2 style={{fontWeight:800,color:"#0A1628",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><I.Shield size={20} color="#6B7280"/> Clôturer la consultation</h2><textarea value={closeNotes} onChange={e=>setCloseNotes(e.target.value)} placeholder="Notes de clôture, recommandations..." rows={4} style={{width:"100%",padding:12,borderRadius:12,border:"1.5px solid #E5E7EB",fontSize:"0.85rem",fontFamily:"inherit",resize:"none",outline:"none",marginBottom:18,boxSizing:"border-box"}}/><div style={{display:"flex",gap:10}}><button onClick={()=>{setShowCloseModal(false);setCloseNotes("");}} className="pd3-btn pd3-btn-outline" style={{flex:1}}>Annuler</button><button onClick={handleClose} className="pd3-btn pd3-btn-gold" style={{flex:1}}>Confirmer la clôture</button></div></motion.div></motion.div>)}</AnimatePresence>
     </div>
   );
 }

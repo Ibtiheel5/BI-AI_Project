@@ -1,4 +1,3 @@
-// PatientDashboard.jsx - Version Sans Rafraîchissement Automatique
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { usePatientData } from "../../hooks/usePatientData";
@@ -7,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import "./PatientDashboard.css";
 import "leaflet/dist/leaflet.css";
+
 // ═══════════════════════════════════════
 // DYNAMIC LEAFLET IMPORT
 // ═══════════════════════════════════════
@@ -61,6 +61,7 @@ const I = {
 // ═══════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════
+
 const CITY_COORDS = {
   "Tunis": [36.8065, 10.1815], "Sfax": [34.7398, 10.7600], "Sousse": [35.8254, 10.6369],
   "Ariana": [36.8625, 10.1956], "Bizerte": [37.2744, 9.8739], "Monastir": [35.7643, 10.8113],
@@ -506,14 +507,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
   }, []);
   
   // ── Click outside pour fermer les notifications ───────────────────────────
-  useEffect(() => { 
-    const handleClick = e => { 
-      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false); 
-    }; 
-    document.addEventListener("mousedown", handleClick); 
-    return () => document.removeEventListener("mousedown", handleClick); 
-  }, []);
-  
+
   // ── Scroll listener avec throttle pour performance ────────────────────────
   useEffect(() => { 
     let ticking = false;
@@ -636,6 +630,11 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     { icon:I.Lungs, value:14, suffix:"+", label:"Pathologies couvertes" },
     { icon:I.Shield, value:100, suffix:"%", label:"Données sécurisées" },
   ];
+  const handleLogout = () => {
+  localStorage.removeItem("medai-token");
+  localStorage.removeItem("medai-user");
+  window.location.href = "/";
+};
 
   if (cLoading) {
     return (
@@ -1168,9 +1167,46 @@ export default function PatientDashboard({ initialTab = "overview" }) {
           </section>
         </Reveal>
 
-        <footer className="pd3-footer">
-          <span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span>
-          <span>En cas d'urgence : <span className="pd3-footer-emergency">15 (SAMU)</span></span>
+        {/* ========== FOOTER PREMIUM (IDENTIQUE À HOMEPAGE) ========== */}
+        <footer className="hp-footer">
+          <div className="hp-footer-inner">
+            <div className="hp-footer-grid">
+              <div className="hp-footer-brand">
+                <div className="hp-nav-logo" style={{ marginBottom: 16 }}>
+                  <div className="hp-logo-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                      <path d="M12 4v12M8 8c-2 0-4 1-4 4s1 6 4 6M16 8c2 0 4 1 4 4s-1 6-4 6M8 8c1.5 0 3 1 4 2M16 8c-1.5 0-3 1-4 2"/>
+                    </svg>
+                  </div>
+                  <span style={{ color: "#fff" }}>Med<span style={{ color: "#FFD700" }}>AI</span></span>
+                </div>
+                <p>Plateforme médicale de diagnostic assisté par IA. Transformant la radiologie avec l'apprentissage profond depuis 2024.</p>
+                <div className="hp-footer-socials">
+                  {["LI", "TW", "GH", "YT", "IN"].map((s, i) => (
+                    <div className="hp-footer-social" key={i}>{s}</div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4>PRODUIT</h4>
+                {["Analyse IA", "Radiologues", "API Access", "Mobile App", "Tarifs"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
+              </div>
+              <div>
+                <h4>ENTREPRISE</h4>
+                {["À propos", "Carrières", "Recherche", "Blog", "Contact"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
+              </div>
+              <div>
+                <h4>RESSOURCES</h4>
+                {["Documentation", "Études de cas", "Whitepapers", "Support", "Statut"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
+              </div>
+            </div>
+            <div className="hp-footer-bottom">
+              <span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span>
+              <div className="hp-footer-bottom-links">
+                {["Confidentialité", "Conditions", "Sécurité", "HIPAA", "RGPD", "Contact"].map(x => <a href="#" key={x}>{x}</a>)}
+              </div>
+            </div>
+          </div>
         </footer>
       </div>
     </div>
