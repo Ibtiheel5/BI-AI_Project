@@ -72,7 +72,7 @@ export default function LoginPage() {
                 </svg>
               </div>
               <div>
-                <div style={styles.logoTitle}>ChestAI</div>
+                <div style={styles.logoTitle}>MedAI</div>
                 <div style={styles.logoSubtitle}>MEDICAL INTELLIGENCE PLATFORM</div>
               </div>
             </div>
@@ -85,7 +85,7 @@ export default function LoginPage() {
               </svg>
               <p style={styles.quoteText}>
                 "L'IA transforme notre capacité à diagnostiquer avec précision et rapidité.
-                ChestAI est devenu un outil indispensable dans notre pratique quotidienne."
+                MedAI est devenu un outil indispensable dans notre pratique quotidienne."
               </p>
               <div style={styles.quoteAuthor}>
                 <div style={styles.authorAvatar}>
@@ -189,7 +189,7 @@ export default function LoginPage() {
 
               <h1 style={styles.formTitle}>Accès Professionnel</h1>
               <p style={styles.formSubtitle}>
-                Connectez-vous à votre espace médical ChestAI pour accéder
+                Connectez-vous à votre espace médical MedAI pour accéder
                 aux outils de diagnostic assisté par IA.
               </p>
             </div>
@@ -299,7 +299,7 @@ export default function LoginPage() {
                       <path d="M10 17l5-5-5-5M15 12H3" strokeWidth="2"
                         strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    <span>Accéder à ChestAI</span>
+                    <span>Accéder à MedAI</span>
                   </>
                 )}
               </button>

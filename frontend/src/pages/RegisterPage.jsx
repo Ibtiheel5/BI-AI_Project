@@ -10,7 +10,7 @@ export default function RegisterPage() {
   const [role, setRole] = useState(null);
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState({
-    fullName: "",
+    fullName: "",        // ✅ camelCase — correspond à ce qu'attend AuthContext.register()
     username: "",
     email: "",
     password: "",
@@ -28,6 +28,9 @@ export default function RegisterPage() {
   };
 
   const toggleDomain = (key) => {
+    // ✅ "retina" n'existe pas dans le backend — on filtre pour ne garder que les 3 valides
+    const VALID_BACKEND_DOMAINS = ["chest", "lung", "brain"];
+    if (!VALID_BACKEND_DOMAINS.includes(key)) return;
     setFormData(prev => ({
       ...prev,
       domains: prev.domains.includes(key)
@@ -39,9 +42,7 @@ export default function RegisterPage() {
   const validateStep1 = () => {
     if (!formData.fullName.trim()) return "Veuillez entrer votre nom complet";
     if (!formData.username.match(/^[a-zA-Z0-9._-]{3,50}$/))
-      return "Identifiant invalide (3-50 caractères)";
-    if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
-      return "Email invalide";
+      return "Identifiant invalide (3-50 caractères, lettres/chiffres/points/tirets)";
     if (formData.password.length < 6)
       return "Le mot de passe doit contenir au moins 6 caractères";
     if (formData.password !== formData.confirmPassword)
@@ -59,26 +60,28 @@ export default function RegisterPage() {
     setError("");
 
     try {
+      // ✅ FIX PRINCIPAL : on passe fullName (camelCase) comme AuthContext.register() l'attend.
+      // AuthContext convertit ensuite full_name → backend.
+      // On NE passe PAS email/institution/phone car le backend RegisterRequest ne les connaît pas.
       await register({
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        full_name: formData.fullName,
-        role: role,
-        domains: role === "Patient" ? [] : formData.domains,
-        specialty: formData.specialty,
-        institution: formData.institution,
-        phone: formData.phone,
+        username:  formData.username,
+        password:  formData.password,
+        fullName:  formData.fullName,          // ✅ camelCase ← c'est ce qu'attend AuthContext
+        domains:   role === "Patient" ? [] : formData.domains,
+        specialty: formData.specialty || "",
+        role:      role,
+        // ❌ NE PAS envoyer : email, institution, phone
+        // Le backend auth.py → RegisterRequest ne les accepte pas → 422
       });
       setStep(3);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Une erreur est survenue");
     } finally {
       setLoading(false);
     }
   };
 
-  // ── 4 domaines médicaux disponibles ──────────────────────────────
+  // ── Domaines — "retina" retiré car absent du backend ─────────────
   const DOMAIN_OPTIONS = [
     {
       key: "chest",
@@ -104,14 +107,7 @@ export default function RegisterPage() {
       color: "#D62828",
       bg: "rgba(214,40,40,0.08)",
     },
-    {
-      key: "retina",
-      label: "Rétinopathie Diabétique",
-      icon: "👁️",
-      desc: "Classification de 5 stades de rétinopathie (APTOS 2019)",
-      color: "#0E7490",
-      bg: "rgba(14,116,144,0.08)",
-    },
+    // ❌ "retina" supprimé — n'existe pas dans auth.py (domaines valides: chest, lung, brain)
   ];
 
   return (
@@ -135,15 +131,18 @@ export default function RegisterPage() {
             Rejoignez la plateforme de diagnostic assisté par IA
           </p>
 
-          {/* Aperçu des spécialités disponibles */}
           <div style={styles.domainPreview}>
             {[
-              { icon: "🫁", label: "Thorax", color: "#2D5F9E" },
+              { icon: "🫁", label: "Thorax",     color: "#2D5F9E" },
               { icon: "🧠", label: "Neurologie", color: "#6B4FA0" },
-              { icon: "🔬", label: "Oncologie", color: "#D62828" },
-              { icon: "👁️", label: "Rétinopathie", color: "#0E7490" },
+              { icon: "🔬", label: "Oncologie",  color: "#D62828" },
             ].map(d => (
-              <div key={d.label} style={{...styles.domainPill, borderColor: d.color + "40", color: d.color, background: d.color + "15"}}>
+              <div key={d.label} style={{
+                ...styles.domainPill,
+                borderColor: d.color + "40",
+                color: d.color,
+                background: d.color + "15",
+              }}>
                 <span style={{fontSize: '16px'}}>{d.icon}</span>
                 <span style={{fontSize: '12px', fontWeight: 600}}>{d.label}</span>
               </div>
@@ -165,16 +164,22 @@ export default function RegisterPage() {
               </div>
 
               <div style={styles.roleContainer}>
-                <button onClick={() => { setRole("Medecin"); setStep(1); }} style={styles.roleCard}>
+                <button
+                  onClick={() => { setRole("Medecin"); setStep(1); }}
+                  style={styles.roleCard}
+                >
                   <span style={styles.roleIcon}>👨‍⚕️</span>
                   <div>
                     <div style={styles.roleTitle}>Professionnel de santé</div>
-                    <div style={styles.roleDesc}>Médecin, radiologue, neurologue, ophtalmologue...</div>
+                    <div style={styles.roleDesc}>Médecin, radiologue, neurologue...</div>
                   </div>
                   <span style={styles.roleArrow}>→</span>
                 </button>
 
-                <button onClick={() => { setRole("Patient"); setStep(1); }} style={styles.roleCard}>
+                <button
+                  onClick={() => { setRole("Patient"); setStep(1); }}
+                  style={styles.roleCard}
+                >
                   <span style={styles.roleIcon}>👤</span>
                   <div>
                     <div style={styles.roleTitle}>Patient</div>
@@ -185,7 +190,8 @@ export default function RegisterPage() {
               </div>
 
               <p style={styles.loginLink}>
-                Déjà un compte ? <Link to="/login" style={styles.link}>Se connecter</Link>
+                Déjà un compte ?{" "}
+                <Link to="/login" style={styles.link}>Se connecter</Link>
               </p>
             </>
           )}
@@ -198,13 +204,15 @@ export default function RegisterPage() {
                 <div style={styles.formIcon}>📋</div>
                 <h2 style={styles.formTitle}>Informations</h2>
                 <p style={styles.formSubtitle}>
-                  {role === "Medecin" ? "Créez votre compte professionnel" : "Créez votre compte patient"}
+                  {role === "Medecin"
+                    ? "Créez votre compte professionnel"
+                    : "Créez votre compte patient"}
                 </p>
               </div>
 
               <form onSubmit={(e) => e.preventDefault()} style={styles.form}>
                 <div style={styles.inputGroup}>
-                  <label style={styles.label}>Nom complet</label>
+                  <label style={styles.label}>Nom complet *</label>
                   <input
                     type="text"
                     value={formData.fullName}
@@ -215,7 +223,7 @@ export default function RegisterPage() {
                 </div>
 
                 <div style={styles.inputGroup}>
-                  <label style={styles.label}>Identifiant</label>
+                  <label style={styles.label}>Identifiant *</label>
                   <input
                     type="text"
                     value={formData.username}
@@ -225,30 +233,34 @@ export default function RegisterPage() {
                   />
                 </div>
 
+                {/* ✅ Email conservé dans le formulaire mais NON envoyé au backend */}
                 <div style={styles.inputGroup}>
-                  <label style={styles.label}>Email</label>
+                  <label style={styles.label}>Email (optionnel)</label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => updateForm("email", e.target.value)}
-                    style={styles.input}
+                    style={{...styles.input, borderStyle: "dashed", opacity: 0.7}}
                     placeholder="votre@email.com"
                   />
+                  <span style={{fontSize: "11px", color: "#94A3B8", marginTop: "2px"}}>
+                    ℹ️ Non requis par le système actuellement
+                  </span>
                 </div>
 
                 <div style={styles.inputGroup}>
-                  <label style={styles.label}>Mot de passe</label>
+                  <label style={styles.label}>Mot de passe *</label>
                   <input
                     type="password"
                     value={formData.password}
                     onChange={(e) => updateForm("password", e.target.value)}
                     style={styles.input}
-                    placeholder="••••••••"
+                    placeholder="••••••••  (6 caractères min.)"
                   />
                 </div>
 
                 <div style={styles.inputGroup}>
-                  <label style={styles.label}>Confirmer le mot de passe</label>
+                  <label style={styles.label}>Confirmer le mot de passe *</label>
                   <input
                     type="password"
                     value={formData.confirmPassword}
@@ -259,29 +271,16 @@ export default function RegisterPage() {
                 </div>
 
                 {role === "Medecin" && (
-                  <>
-                    <div style={styles.inputGroup}>
-                      <label style={styles.label}>Spécialité (optionnel)</label>
-                      <input
-                        type="text"
-                        value={formData.specialty}
-                        onChange={(e) => updateForm("specialty", e.target.value)}
-                        style={styles.input}
-                        placeholder="Radiologie, Neurologie, Ophtalmologie..."
-                      />
-                    </div>
-
-                    <div style={styles.inputGroup}>
-                      <label style={styles.label}>Établissement (optionnel)</label>
-                      <input
-                        type="text"
-                        value={formData.institution}
-                        onChange={(e) => updateForm("institution", e.target.value)}
-                        style={styles.input}
-                        placeholder="CHU de ..."
-                      />
-                    </div>
-                  </>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Spécialité (optionnel)</label>
+                    <input
+                      type="text"
+                      value={formData.specialty}
+                      onChange={(e) => updateForm("specialty", e.target.value)}
+                      style={styles.input}
+                      placeholder="Radiologie, Neurologie..."
+                    />
+                  </div>
                 )}
 
                 {error && (
@@ -299,9 +298,12 @@ export default function RegisterPage() {
                     else setStep(2);
                   }}
                   disabled={loading}
-                  style={styles.submitButton}
+                  style={{
+                    ...styles.submitButton,
+                    ...(loading ? {opacity: 0.7, cursor: "not-allowed"} : {}),
+                  }}
                 >
-                  {loading ? "Création..." : "Continuer →"}
+                  {loading ? "Création..." : role === "Patient" ? "Créer mon compte →" : "Continuer →"}
                 </button>
               </form>
             </>
@@ -314,7 +316,9 @@ export default function RegisterPage() {
                 <button onClick={() => setStep(1)} style={styles.backButton}>← Retour</button>
                 <div style={styles.formIcon}>🏥</div>
                 <h2 style={styles.formTitle}>Domaines médicaux</h2>
-                <p style={styles.formSubtitle}>Sélectionnez vos spécialités (plusieurs possibles)</p>
+                <p style={styles.formSubtitle}>
+                  Sélectionnez vos spécialités (plusieurs possibles)
+                </p>
               </div>
 
               <div style={styles.domainsContainer}>
@@ -335,15 +339,18 @@ export default function RegisterPage() {
                     >
                       <span style={styles.domainIcon}>{domain.icon}</span>
                       <div style={styles.domainInfo}>
-                        <div style={{...styles.domainLabel, ...(selected ? {color: domain.color} : {})}}>
+                        <div style={{
+                          ...styles.domainLabel,
+                          ...(selected ? {color: domain.color} : {}),
+                        }}>
                           {domain.label}
                         </div>
                         <div style={styles.domainDesc}>{domain.desc}</div>
                       </div>
                       <div style={{
                         ...styles.domainCheck,
-                        background: selected ? domain.color : '#E2E8F0',
-                        color: selected ? 'white' : 'transparent',
+                        background: selected ? domain.color : "#E2E8F0",
+                        color: selected ? "white" : "transparent",
                       }}>
                         {selected && "✓"}
                       </div>
@@ -358,9 +365,9 @@ export default function RegisterPage() {
                     const d = DOMAIN_OPTIONS.find(o => o.key === k);
                     return d ? (
                       <span key={k} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                        padding: '4px 10px', borderRadius: '8px', fontSize: '12px',
-                        fontWeight: 600, background: d.color + '15', color: d.color,
+                        display: "inline-flex", alignItems: "center", gap: "4px",
+                        padding: "4px 10px", borderRadius: "8px", fontSize: "12px",
+                        fontWeight: 600, background: d.color + "15", color: d.color,
                         border: `1px solid ${d.color}40`,
                       }}>
                         {d.icon} {d.label}
@@ -382,10 +389,14 @@ export default function RegisterPage() {
                 style={{
                   ...styles.submitButton,
                   marginTop: "20px",
-                  ...(formData.domains.length === 0 ? {opacity: 0.5, cursor: 'not-allowed'} : {}),
+                  ...(formData.domains.length === 0 || loading
+                    ? {opacity: 0.5, cursor: "not-allowed"}
+                    : {}),
                 }}
               >
-                {loading ? "Création en cours..." : `Créer mon compte (${formData.domains.length} domaine${formData.domains.length > 1 ? 's' : ''})`}
+                {loading
+                  ? "Création en cours..."
+                  : `Créer mon compte (${formData.domains.length} domaine${formData.domains.length > 1 ? "s" : ""})`}
               </button>
             </>
           )}
@@ -399,15 +410,15 @@ export default function RegisterPage() {
               </h2>
               <p style={styles.successMessage}>
                 {role === "Medecin"
-                  ? "Votre demande a été transmise à l'administrateur. Vous recevrez une confirmation par email une fois votre compte validé."
-                  : "Votre compte patient a été créé avec succès. Vous pouvez vous connecter dès maintenant."
-                }
+                  ? "Votre demande a été transmise à l'administrateur. Votre compte sera validé sous peu."
+                  : "Votre compte patient a été créé avec succès. Vous pouvez vous connecter dès maintenant."}
               </p>
               <button onClick={() => navigate("/login")} style={styles.submitButton}>
                 Se connecter →
               </button>
             </div>
           )}
+
         </div>
       </div>
     </div>
@@ -553,24 +564,15 @@ const styles = {
     transition: "all 0.3s",
     textAlign: "left",
   },
-  roleIcon: {
-    fontSize: "40px",
-  },
+  roleIcon: { fontSize: "40px" },
   roleTitle: {
     fontSize: "16px",
     fontWeight: "bold",
     color: "#0A2647",
     marginBottom: "4px",
   },
-  roleDesc: {
-    fontSize: "13px",
-    color: "#64748B",
-  },
-  roleArrow: {
-    fontSize: "20px",
-    color: "#2D5F9E",
-    marginLeft: "auto",
-  },
+  roleDesc: { fontSize: "13px", color: "#64748B" },
+  roleArrow: { fontSize: "20px", color: "#2D5F9E", marginLeft: "auto" },
   form: {
     display: "flex",
     flexDirection: "column",
@@ -640,13 +642,8 @@ const styles = {
     transition: "all 0.25s",
     textAlign: "left",
   },
-  domainIcon: {
-    fontSize: "28px",
-    flexShrink: 0,
-  },
-  domainInfo: {
-    flex: 1,
-  },
+  domainIcon: { fontSize: "28px", flexShrink: 0 },
+  domainInfo: { flex: 1 },
   domainLabel: {
     fontSize: "14px",
     fontWeight: "bold",
@@ -654,11 +651,7 @@ const styles = {
     marginBottom: "3px",
     transition: "color 0.25s",
   },
-  domainDesc: {
-    fontSize: "12px",
-    color: "#64748B",
-    lineHeight: 1.4,
-  },
+  domainDesc: { fontSize: "12px", color: "#64748B", lineHeight: 1.4 },
   domainCheck: {
     width: "24px",
     height: "24px",
@@ -677,13 +670,8 @@ const styles = {
     gap: "8px",
     marginBottom: "8px",
   },
-  successContainer: {
-    textAlign: "center",
-  },
-  successIcon: {
-    fontSize: "64px",
-    marginBottom: "20px",
-  },
+  successContainer: { textAlign: "center" },
+  successIcon: { fontSize: "64px", marginBottom: "20px" },
   successTitle: {
     fontSize: "24px",
     fontWeight: "bold",

@@ -1,0 +1,2927 @@
+// PatientDashboard.jsx — Version Production Ultime
+// Interface médicale de luxe • Design System Premium • Expérience Patient Pro
+// Animations fluides • Composants riches • Accessibilité optimisée
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+const API_BASE = "http://localhost:8000/api/v1";
+
+// ═══════════════════════════════════════════════════════════════
+// DESIGN SYSTEM — Palette Médicale Premium
+// ═══════════════════════════════════════════════════════════════
+
+const THEME = {
+  colors: {
+    primary: "#0A2647",
+    primaryDark: "#051A30",
+    primaryLight: "#123B62",
+    accent: "#2563EB",
+    accentLight: "#3B82F6",
+    accentSoft: "#DBEAFE",
+    success: "#059669",
+    successSoft: "#D1FAE5",
+    warning: "#D97706",
+    warningSoft: "#FEF3C7",
+    danger: "#DC2626",
+    dangerSoft: "#FEE2E2",
+    info: "#0284C7",
+    infoSoft: "#E0F2FE",
+    purple: "#7C3AED",
+    purpleSoft: "#EDE9FE",
+    bg: "#F8FAFC",
+    bgAlt: "#F1F5F9",
+    surface: "#FFFFFF",
+    border: "#E2E8F0",
+    borderLight: "#F1F5F9",
+    text: "#0F172A",
+    textSecondary: "#475569",
+    textMuted: "#94A3B8",
+    white: "#FFFFFF",
+    glass: "rgba(255,255,255,0.8)",
+    glassDark: "rgba(255,255,255,0.05)",
+    gradient: {
+      primary: "linear-gradient(135deg, #0A2647 0%, #1B3B6F 50%, #2563EB 100%)",
+      accent: "linear-gradient(135deg, #2563EB 0%, #3B82F6 50%, #60A5FA 100%)",
+      success: "linear-gradient(135deg, #059669 0%, #10B981 100%)",
+      warm: "linear-gradient(135deg, #D97706 0%, #F59E0B 100%)",
+      purple: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+      hero: "linear-gradient(160deg, #0A2647 0%, #1B3B6F 30%, #2563EB 60%, #3B82F6 100%)",
+    },
+  },
+  fonts: {
+    display: "'Outfit', 'Inter', system-ui, sans-serif",
+    body: "'Inter', system-ui, -apple-system, sans-serif",
+  },
+  radii: {
+    xs: "6px",
+    sm: "8px",
+    md: "12px",
+    lg: "16px",
+    xl: "20px",
+    "2xl": "24px",
+    "3xl": "32px",
+    full: "9999px",
+  },
+  shadows: {
+    xs: "0 1px 2px rgba(0,0,0,0.04)",
+    sm: "0 2px 4px rgba(0,0,0,0.06)",
+    md: "0 4px 12px rgba(0,0,0,0.08)",
+    lg: "0 8px 24px rgba(0,0,0,0.1)",
+    xl: "0 12px 40px rgba(0,0,0,0.12)",
+    "2xl": "0 20px 60px rgba(0,0,0,0.15)",
+    glow: (color) => `0 0 20px ${color}30, 0 0 40px ${color}10`,
+  },
+  transitions: {
+    fast: "all 0.15s ease",
+    normal: "all 0.25s ease",
+    slow: "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+    spring: "all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DONNÉES — Médecins & Médias
+// ═══════════════════════════════════════════════════════════════
+
+const DOCTORS = {
+  team: [
+    {
+      id: 1,
+      name: "Dr. Sophie Laurent",
+      specialty: "Radiologue",
+      hospital: "Hôpital Universitaire de Tunis",
+      experience: "15 ans d'expérience",
+      patients: 12450,
+      rating: 4.9,
+      photo: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop&crop=face",
+      available: true,
+      nextSlot: "14:30",
+      languages: ["Français", "Anglais", "Arabe"],
+      education: "Faculté de Médecine de Tunis",
+      bio: "Spécialiste en imagerie médicale avec une expertise en radiologie interventionnelle et diagnostic par IRM.",
+    },
+    {
+      id: 2,
+      name: "Dr. Marc Dubois",
+      specialty: "Pneumologue",
+      hospital: "Clinique Internationale",
+      experience: "12 ans d'expérience",
+      patients: 9870,
+      rating: 4.8,
+      photo: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop&crop=face",
+      available: true,
+      nextSlot: "15:00",
+      languages: ["Français", "Anglais"],
+      education: "Université Paris Descartes",
+      bio: "Expert en pathologie respiratoire et dépistage du cancer pulmonaire. Membre de la Société de Pneumologie.",
+    },
+    {
+      id: 3,
+      name: "Dr. Emma Chen",
+      specialty: "Neurologue",
+      hospital: "Centre Hospitalier Universitaire",
+      experience: "18 ans d'expérience",
+      patients: 15600,
+      rating: 4.9,
+      photo: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=400&h=400&fit=crop&crop=face",
+      available: false,
+      nextSlot: "Demain 09:00",
+      languages: ["Français", "Anglais", "Mandarin"],
+      education: "Johns Hopkins University",
+      bio: "Neurologue de renommée internationale, spécialisée dans l'imagerie cérébrale et les maladies neurodégénératives.",
+    },
+    {
+      id: 4,
+      name: "Dr. Thomas Bernard",
+      specialty: "Cardiologue",
+      hospital: "Hôpital Privé de Tunis",
+      experience: "10 ans d'expérience",
+      patients: 8230,
+      rating: 4.7,
+      photo: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop&crop=face",
+      available: true,
+      nextSlot: "16:15",
+      languages: ["Français", "Anglais", "Italien"],
+      education: "Université de Lausanne",
+      bio: "Cardiologue interventionnel, spécialiste en imagerie cardiaque et échocardiographie.",
+    },
+    {
+      id: 5,
+      name: "Dr. Julie Moreau",
+      specialty: "Oncologue",
+      hospital: "Institut de Cancérologie",
+      experience: "20 ans d'expérience",
+      patients: 18900,
+      rating: 4.9,
+      photo: "https://images.unsplash.com/photo-1527613426441-4da17471b66d?w=400&h=400&fit=crop&crop=face",
+      available: false,
+      nextSlot: "Dans 2 jours",
+      languages: ["Français", "Anglais", "Espagnol"],
+      education: "Institut Gustave Roussy",
+      bio: "Oncologue spécialisée en imagerie tumorale et thérapies ciblées. Directrice de recherche.",
+    },
+    {
+      id: 6,
+      name: "Dr. Pierre Martin",
+      specialty: "Radiologue",
+      hospital: "Centre d'Imagerie Médicale",
+      experience: "8 ans d'expérience",
+      patients: 6540,
+      rating: 4.6,
+      photo: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop&crop=face",
+      available: true,
+      nextSlot: "17:00",
+      languages: ["Français", "Arabe"],
+      education: "Faculté de Médecine de Sousse",
+      bio: "Radiologue expert en imagerie thoracique et scanner volumique à faible dose.",
+    },
+  ],
+};
+
+const MEDIA = {
+  hero: "https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=1400&auto=format&fit=crop",
+  lab: "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=800&auto=format",
+  tech: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format",
+  team: "https://images.unsplash.com/photo-1551076805-e1869033e561?w=800&auto=format",
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION MÉDICALE
+// ═══════════════════════════════════════════════════════════════
+
+const EXAM_TYPES = {
+  chest: {
+    key: "chest",
+    label: "Radiographie Thoracique",
+    description: "Analyse détaillée des poumons, cœur et cage thoracique",
+    longDescription: "Examen radiologique permettant de visualiser les structures osseuses, pulmonaires et cardiaques. Détection de pneumonie, épanchement pleural, fractures costales et anomalies médiastinales.",
+    icon: "lungs",
+    preparation: "Aucune préparation particulière. Retirez vos bijoux et objets métalliques.",
+    duration: "5-10 minutes",
+    color: THEME.colors.accent,
+    indications: "Douleur thoracique, toux persistante, essoufflement, fièvre inexpliquée",
+  },
+  brain: {
+    key: "brain",
+    label: "IRM Cérébrale",
+    description: "Détection de tumeurs et anomalies structurelles du cerveau",
+    longDescription: "Imagerie par résonance magnétique à haute résolution pour l'étude morphologique du cerveau. Détection des tumeurs, accidents vasculaires, sclérose en plaques et anomalies congénitales.",
+    icon: "brain",
+    preparation: "Être à jeun depuis 4 heures. Pas d'objets métalliques.",
+    duration: "20-30 minutes",
+    color: "#7C3AED",
+    indications: "Céphalées chroniques, vertiges, troubles visuels, suspicion de tumeur",
+  },
+  lung: {
+    key: "lung",
+    label: "Scanner CT Pulmonaire",
+    description: "Détection de nodules et lésions pulmonaires fines",
+    longDescription: "Tomodensitométrie à faible dose pour l'analyse détaillée du parenchyme pulmonaire. Dépistage du cancer pulmonaire, évaluation des nodules et maladies interstitielles.",
+    icon: "scan",
+    preparation: "Aucune préparation spécifique. Évitez de porter des vêtements avec boutons métalliques.",
+    duration: "10-15 minutes",
+    color: THEME.colors.danger,
+    indications: "Tabagisme, antécédents familiaux, toux chronique, dépistage",
+  },
+  retina: {
+    key: "retina",
+    label: "Fond d'Œil",
+    description: "Examen de la rétine et du nerf optique",
+    longDescription: "Examen ophtalmologique permettant de visualiser la rétine, la macula et le nerf optique. Dépistage de la rétinopathie diabétique, glaucome et dégénérescence maculaire.",
+    icon: "eye",
+    preparation: "Évitez de conduire après l'examen si des gouttes dilatatrices sont utilisées.",
+    duration: "15-20 minutes",
+    color: "#0E7490",
+    indications: "Diabète, hypertension, baisse de vision, antécédents familiaux de glaucome",
+  },
+};
+
+const STATUS_MAP = {
+  pending: { label: "En attente", color: THEME.colors.warning, bg: THEME.colors.warningSoft, icon: "clock" },
+  accepted: { label: "En cours d'analyse", color: THEME.colors.info, bg: THEME.colors.infoSoft, icon: "activity" },
+  analyzed: { label: "Résultats disponibles", color: THEME.colors.success, bg: THEME.colors.successSoft, icon: "check" },
+  closed: { label: "Terminé", color: THEME.colors.textMuted, bg: THEME.colors.bgAlt, icon: "archive" },
+  rejected: { label: "Rejeté", color: THEME.colors.danger, bg: THEME.colors.dangerSoft, icon: "x" },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// ICÔNES SVG — Système d'icônes médicales vectorielles
+// ═══════════════════════════════════════════════════════════════
+
+const Icons = {
+  lungs: '<path d="M6.083 5.583c-1.5 1.5-1.5 5.667-1.5 5.667s4.167 1.5 5.667-1.5c1.5-3-1.5-5.667-1.5-5.667s-2.667-1.5-2.667 1.5z"/><path d="M17.917 5.583c1.5 1.5 1.5 5.667 1.5 5.667s-4.167 1.5-5.667-1.5c-1.5-3 1.5-5.667 1.5-5.667s2.667-1.5 2.667 1.5z"/><path d="M8 11.25v7.083c0 2.25 1.5 4.5 4 4.5s4-2.25 4-4.5V11.25"/>',
+  brain: '<path d="M12 4a8 8 0 0 0-8 8v1a3 3 0 0 0 3 3h1a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2H7.1a6.9 6.9 0 0 1 9.8 0H16a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h1a3 3 0 0 0 3-3v-1a8 8 0 0 0-8-8z"/><circle cx="9" cy="9" r="1.5"/><circle cx="15" cy="9" r="1.5"/>',
+  scan: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><circle cx="12" cy="12" r="3"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  check: '<path d="M5 13l4 4L19 7"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  archive: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M3 9V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4"/><path d="M10 13h4"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  video: '<path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/>',
+  map: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  bot: '<rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="16" y2="16"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  file: '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  filter: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  menu: '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+  clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  alertTriangle: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+};
+
+const Icon = ({ name, size = 20, color = THEME.colors.text }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    dangerouslySetInnerHTML={{ __html: Icons[name] || Icons.check }}
+  />
+);
+
+// ═══════════════════════════════════════════════════════════════
+// COMPOSANTS ATOMIQUES RÉUTILISABLES
+// ═══════════════════════════════════════════════════════════════
+
+const Spinner = ({ size = 22 }) => (
+  <div style={{
+    width: size, height: size, borderRadius: "50%",
+    border: "2.5px solid #E2E8F0",
+    borderTopColor: THEME.colors.accent,
+    animation: "spin 0.8s linear infinite",
+  }} />
+);
+
+const Avatar = ({ src, name, size = 40, available, ring = false }) => (
+  <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+    <img
+      src={src}
+      alt={name}
+      loading="lazy"
+      style={{
+        width: "100%", height: "100%", borderRadius: "50%",
+        objectFit: "cover", border: ring ? "3px solid white" : "none",
+        boxShadow: THEME.shadows.sm, transition: THEME.transitions.normal,
+      }}
+    />
+    {available !== undefined && (
+      <div style={{
+        position: "absolute", bottom: 0, right: 0,
+        width: size * 0.28, height: size * 0.28, borderRadius: "50%",
+        background: available ? THEME.colors.success : THEME.colors.textMuted,
+        border: "2.5px solid white",
+      }} />
+    )}
+  </div>
+);
+
+const Badge = ({ children, variant = "default", size = "md" }) => {
+  const variants = {
+    success: { bg: THEME.colors.successSoft, color: THEME.colors.success },
+    warning: { bg: THEME.colors.warningSoft, color: THEME.colors.warning },
+    danger: { bg: THEME.colors.dangerSoft, color: THEME.colors.danger },
+    info: { bg: THEME.colors.infoSoft, color: THEME.colors.info },
+    purple: { bg: THEME.colors.purpleSoft, color: THEME.colors.purple },
+    default: { bg: THEME.colors.bgAlt, color: THEME.colors.textSecondary },
+  };
+  const v = variants[variant] || variants.default;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: size === "sm" ? "4px 10px" : "6px 14px",
+      borderRadius: THEME.radii.full, background: v.bg, color: v.color,
+      fontSize: size === "sm" ? "0.72rem" : "0.78rem", fontWeight: 600,
+      letterSpacing: "0.01em",
+    }}>
+      {children}
+    </span>
+  );
+};
+
+const StatusBadge = ({ status }) => {
+  const config = STATUS_MAP[status] || STATUS_MAP.pending;
+  return (
+    <Badge variant={
+      status === "analyzed" ? "success" :
+      status === "accepted" ? "info" :
+      status === "pending" ? "warning" :
+      status === "rejected" ? "danger" : "default"
+    }>
+      <Icon name={config.icon} size={14} color={config.color} />
+      {config.label}
+    </Badge>
+  );
+};
+
+const SectionHeader = ({ title, subtitle, action, badge, size = "default" }) => (
+  <div style={{
+    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+    marginBottom: size === "large" ? 32 : 24, flexWrap: "wrap", gap: 16,
+  }}>
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+        <h2 style={{
+          fontSize: size === "large" ? "1.8rem" : "1.5rem",
+          fontWeight: 700, color: THEME.colors.text,
+          fontFamily: THEME.fonts.display, margin: 0, letterSpacing: "-0.03em",
+        }}>
+          {title}
+        </h2>
+        {badge && <Badge variant={badge.variant} size="sm">{badge.text}</Badge>}
+      </div>
+      {subtitle && (
+        <p style={{ fontSize: "0.9rem", color: THEME.colors.textSecondary, margin: 0 }}>
+          {subtitle}
+        </p>
+      )}
+    </div>
+    {action && <div>{action}</div>}
+  </div>
+);
+
+const Card = ({ children, onClick, hoverable = false, padding = "24px", style = {} }) => (
+  <div
+    onClick={onClick}
+    style={{
+      background: THEME.colors.surface, borderRadius: THEME.radii.xl,
+      border: `1px solid ${THEME.colors.border}`, padding,
+      cursor: onClick ? "pointer" : "default",
+      transition: THEME.transitions.normal, ...style,
+    }}
+    onMouseEnter={e => {
+      if (hoverable || onClick) {
+        e.currentTarget.style.borderColor = THEME.colors.accent;
+        e.currentTarget.style.boxShadow = THEME.shadows.md;
+        e.currentTarget.style.transform = "translateY(-2px)";
+      }
+    }}
+    onMouseLeave={e => {
+      if (hoverable || onClick) {
+        e.currentTarget.style.borderColor = THEME.colors.border;
+        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.transform = "none";
+      }
+    }}
+  >
+    {children}
+  </div>
+);
+
+const Tooltip = ({ children, content, position = "top" }) => {
+  const [show, setShow] = useState(false);
+  
+  const positions = {
+    top: { bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" },
+    bottom: { top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" },
+  };
+
+  return (
+    <div
+      style={{ position: "relative", display: "inline-block" }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <div style={{
+          position: "absolute",
+          ...positions[position],
+          background: THEME.colors.text,
+          color: THEME.colors.white,
+          padding: "6px 12px",
+          borderRadius: THEME.radii.md,
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          whiteSpace: "nowrap",
+          zIndex: 1000,
+          boxShadow: THEME.shadows.lg,
+          pointerEvents: "none",
+        }}>
+          {content}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SkeletonLoader = ({ width = "100%", height = "20px", style = {} }) => (
+  <div style={{
+    width, height, borderRadius: THEME.radii.md,
+    background: `linear-gradient(90deg, ${THEME.colors.bgAlt} 25%, ${THEME.colors.border} 50%, ${THEME.colors.bgAlt} 75%)`,
+    backgroundSize: "200px 100%",
+    animation: "shimmer 1.5s infinite",
+    ...style,
+  }} />
+);
+
+const EmptyState = ({ icon, title, description, action }) => (
+  <div style={{
+    textAlign: "center", padding: "60px 24px",
+    animation: "fadeInUp 0.5s ease",
+  }}>
+    <div style={{
+      width: 80, height: 80, borderRadius: "50%",
+      background: THEME.colors.bgAlt,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      margin: "0 auto 24px",
+    }}>
+      <Icon name={icon} size={36} color={THEME.colors.textMuted} />
+    </div>
+    <h3 style={{
+      fontSize: "1.2rem", fontWeight: 600, color: THEME.colors.text,
+      marginBottom: 8, fontFamily: THEME.fonts.display,
+    }}>
+      {title}
+    </h3>
+    <p style={{
+      fontSize: "0.9rem", color: THEME.colors.textSecondary,
+      marginBottom: 28, maxWidth: 400, margin: "0 auto 28px",
+    }}>
+      {description}
+    </p>
+    {action}
+  </div>
+);
+
+const ProgressBar = ({ value, max = 100, color = THEME.colors.accent, height = 6, showLabel = false }) => (
+  <div style={{ width: "100%" }}>
+    {showLabel && (
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: "0.8rem", color: THEME.colors.textSecondary }}>Progression</span>
+        <span style={{ fontSize: "0.8rem", fontWeight: 600, color }}>
+          {Math.round((value / max) * 100)}%
+        </span>
+      </div>
+    )}
+    <div style={{
+      width: "100%", height, borderRadius: THEME.radii.full,
+      background: THEME.colors.bgAlt, overflow: "hidden",
+    }}>
+      <div style={{
+        width: `${(value / max) * 100}%`, height: "100%",
+        background: color, borderRadius: THEME.radii.full,
+        transition: THEME.transitions.slow,
+        boxShadow: `0 0 10px ${color}40`,
+      }} />
+    </div>
+  </div>
+);
+
+// ═══════════════════════════════════════════════════════════════
+// COMPOSANT PRINCIPAL — PatientDashboard
+// ═══════════════════════════════════════════════════════════════
+
+export default function PatientDashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const token = localStorage.getItem("medai-token");
+
+  const [activePage, setActivePage] = useState("home");
+  const [consultations, setConsultations] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    if (!token) return;
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [cRes, nRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/consultations/my`, { headers }),
+        fetch(`${API_BASE}/consultations/notifications/me`, { headers }),
+      ]);
+
+      if (cRes.status === "fulfilled" && cRes.value.ok) {
+        const data = await cRes.value.json();
+        setConsultations(data.consultations || []);
+      }
+      if (nRes.status === "fulfilled" && nRes.value.ok) {
+        const data = await nRes.value.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (error) {
+      console.error("Erreur:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!user || user.role !== "Patient") { navigate("/login"); return; }
+    fetchData();
+  }, [user, fetchData, navigate]);
+
+  useEffect(() => {
+    const interval = setInterval(fetchData, 45000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyboard = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.target.matches("input, textarea, select")) {
+        switch(e.key) {
+          case "1": e.preventDefault(); setActivePage("home"); break;
+          case "2": e.preventDefault(); setActivePage("dossiers"); break;
+          case "3": e.preventDefault(); setActivePage("upload"); break;
+          case "4": e.preventDefault(); setActivePage("appointments"); break;
+          case "5": e.preventDefault(); setActivePage("messages"); break;
+          case "6": e.preventDefault(); setActivePage("doctors"); break;
+          default: break;
+        }
+      }
+      if (e.key === "/" && !e.target.matches("input, textarea, select")) {
+        e.preventDefault();
+        document.querySelector('[data-search-input]')?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, []);
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+  };
+
+  const navItems = [
+    { id: "home", label: "Accueil", icon: "shield", shortcut: "Ctrl+1" },
+    { id: "dossiers", label: "Dossiers", icon: "file", shortcut: "Ctrl+2" },
+    { id: "upload", label: "Nouveau dossier", icon: "plus", shortcut: "Ctrl+3" },
+    { id: "appointments", label: "Rendez-vous", icon: "calendar", shortcut: "Ctrl+4" },
+    { id: "messages", label: "Messages", icon: "message", shortcut: "Ctrl+5" },
+    { id: "doctors", label: "Médecins", icon: "map", shortcut: "Ctrl+6" },
+  ];
+
+  const unreadNotifications = notifications.filter(n => !n.is_read).length;
+
+  const pages = {
+    home: <HomePage consultations={consultations} notifications={notifications} user={user} onNavigate={setActivePage} />,
+    dossiers: <DossiersPage consultations={consultations} onNavigate={setActivePage} searchQuery={searchQuery} />,
+    upload: <UploadPage token={token} onSuccess={() => { fetchData(); setActivePage("dossiers"); }} />,
+    appointments: <AppointmentsPage consultations={consultations} onNavigate={setActivePage} />,
+    messages: <MessagesPage user={user} consultations={consultations} onNavigate={setActivePage} notifications={notifications} />,
+    doctors: <DoctorsPage onNavigate={setActivePage} />,
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: THEME.colors.bg,
+      fontFamily: THEME.fonts.body, color: THEME.colors.text,
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+        @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        ::selection { background: ${THEME.colors.accentSoft}; color: ${THEME.colors.accent}; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        
+        input, textarea, select, button { font-family: ${THEME.fonts.body}; }
+        
+        .page-transition { animation: fadeInUp 0.5s ease both; }
+        .card-enter { animation: scaleIn 0.3s ease both; }
+        
+        @media (max-width: 768px) {
+          .hide-mobile { display: none !important; }
+        }
+      `}</style>
+
+      {/* Navigation */}
+      <nav style={{
+        position: "sticky", top: 0, zIndex: 100,
+        background: scrolled ? "rgba(255,255,255,0.85)" : THEME.colors.white,
+        backdropFilter: scrolled ? "blur(20px) saturate(180%)" : "none",
+        borderBottom: `1px solid ${scrolled ? THEME.colors.border : "transparent"}`,
+        padding: "0 24px", transition: THEME.transitions.slow,
+        boxShadow: scrolled ? THEME.shadows.lg : THEME.shadows.sm,
+      }}>
+        <div style={{
+          maxWidth: 1440, margin: "0 auto",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          height: 72,
+        }}>
+          {/* Logo */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: THEME.radii.lg,
+              background: THEME.colors.gradient.primary,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: THEME.shadows.glow(THEME.colors.accent),
+              animation: "breathe 2s ease-in-out infinite",
+              cursor: "pointer",
+            }} onClick={() => setActivePage("home")}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            </div>
+            <div>
+              <span style={{
+                fontSize: "1.2rem", fontWeight: 800, color: THEME.colors.primary,
+                fontFamily: THEME.fonts.display, letterSpacing: "-0.02em",
+              }}>
+                Med<span style={{ color: THEME.colors.accentLight }}>AI</span>
+              </span>
+              <span style={{
+                display: "block", fontSize: "0.65rem", color: THEME.colors.textMuted,
+                fontWeight: 500, letterSpacing: "0.05em", marginTop: -2,
+              }}>
+                PLATEFORME MÉDICALE
+              </span>
+            </div>
+          </div>
+
+          {/* Recherche rapide */}
+          <div className="hide-mobile" style={{
+            flex: 1, maxWidth: 400, margin: "0 32px",
+            position: "relative",
+          }}>
+            <span style={{
+              position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+              pointerEvents: "none",
+            }}>
+              <Icon name="search" size={18} color={THEME.colors.textMuted} />
+            </span>
+            <input
+              data-search-input
+              type="text"
+              placeholder="Rechercher un dossier, un médecin..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              style={{
+                width: "100%", padding: "10px 16px 10px 42px",
+                borderRadius: THEME.radii.full,
+                border: `2px solid ${THEME.colors.border}`,
+                fontSize: "0.88rem", outline: "none",
+                background: THEME.colors.bgAlt,
+                transition: THEME.transitions.normal,
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = THEME.colors.accent;
+                e.target.style.boxShadow = THEME.shadows.glow(THEME.colors.accent);
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = THEME.colors.border;
+                e.target.style.boxShadow = "none";
+              }}
+            />
+            <kbd style={{
+              position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+              padding: "2px 8px", borderRadius: THEME.radii.xs,
+              background: THEME.colors.border, fontSize: "0.7rem",
+              color: THEME.colors.textMuted, fontWeight: 600,
+              border: `1px solid ${THEME.colors.border}`,
+            }}>
+              /
+            </kbd>
+          </div>
+
+          {/* Navigation desktop */}
+          <div className="hide-mobile" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            {navItems.map(item => (
+              <Tooltip key={item.id} content={item.shortcut}>
+                <button
+                  onClick={() => setActivePage(item.id)}
+                  style={{
+                    padding: "10px 18px", borderRadius: THEME.radii.lg,
+                    border: "none", cursor: "pointer",
+                    background: activePage === item.id ? THEME.colors.accentSoft : "transparent",
+                    color: activePage === item.id ? THEME.colors.accent : THEME.colors.textSecondary,
+                    fontWeight: activePage === item.id ? 600 : 500,
+                    fontSize: "0.88rem", transition: THEME.transitions.fast,
+                    whiteSpace: "nowrap", position: "relative",
+                  }}
+                  onMouseEnter={e => {
+                    if (activePage !== item.id) {
+                      e.currentTarget.style.background = THEME.colors.bgAlt;
+                      e.currentTarget.style.color = THEME.colors.text;
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (activePage !== item.id) {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = THEME.colors.textSecondary;
+                    }
+                  }}
+                >
+                  {activePage === item.id && (
+                    <div style={{
+                      position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
+                      width: 24, height: 3, borderRadius: THEME.radii.full,
+                      background: THEME.colors.accent,
+                    }} />
+                  )}
+                  {item.label}
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+
+          {/* Actions utilisateur */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Tooltip content="Notifications">
+              <button
+                onClick={() => setActivePage("messages")}
+                style={{
+                  width: 44, height: 44, borderRadius: THEME.radii.lg,
+                  background: THEME.colors.bgAlt,
+                  border: `2px solid ${THEME.colors.border}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", position: "relative",
+                  transition: THEME.transitions.normal,
+                }}
+                aria-label={`Notifications (${unreadNotifications} non lues)`}
+              >
+                <Icon name="mail" size={20} color={THEME.colors.textSecondary} />
+                {unreadNotifications > 0 && (
+                  <span style={{
+                    position: "absolute", top: -4, right: -4,
+                    minWidth: 20, height: 20, borderRadius: THEME.radii.full,
+                    background: THEME.colors.danger,
+                    color: "white", fontSize: "0.7rem", fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    border: "2px solid white", padding: "0 4px",
+                    animation: "pulse 2s infinite",
+                  }}>
+                    {unreadNotifications}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "6px 18px 6px 6px", borderRadius: THEME.radii.full,
+              background: THEME.colors.bgAlt,
+              border: `2px solid ${THEME.colors.border}`,
+              cursor: "pointer",
+              transition: THEME.transitions.normal,
+            }}>
+              <Avatar
+                src={DOCTORS.team[3].photo}
+                name={user?.full_name}
+                size={36}
+                available={true}
+              />
+              <div>
+                <span style={{ fontSize: "0.88rem", fontWeight: 600, color: THEME.colors.text }}>
+                  {user?.full_name?.split(" ")[0] || "Patient"}
+                </span>
+                <span style={{
+                  display: "block", fontSize: "0.7rem", color: THEME.colors.success,
+                  fontWeight: 500,
+                }}>
+                  En ligne
+                </span>
+              </div>
+            </div>
+
+            {/* Menu mobile */}
+            <button
+              className="hide-mobile"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              style={{
+                display: "none",
+                width: 44, height: 44, borderRadius: THEME.radii.lg,
+                background: THEME.colors.bgAlt,
+                border: `2px solid ${THEME.colors.border}`,
+                cursor: "pointer",
+                alignItems: "center", justifyContent: "center",
+              }}
+              aria-label="Menu"
+            >
+              <Icon name="menu" size={20} color={THEME.colors.textSecondary} />
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Contenu principal */}
+      <main style={{ maxWidth: 1440, margin: "0 auto", padding: "32px 24px" }}>
+        <div className="page-transition" key={activePage}>
+          {loading ? (
+            <div style={{ display: "grid", gap: 24, padding: "40px 0" }}>
+              <SkeletonLoader height="300px" />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                {[1,2,3,4].map(i => (
+                  <SkeletonLoader key={i} height="150px" />
+                ))}
+              </div>
+            </div>
+          ) : (
+            pages[activePage] || pages.home
+          )}
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer style={{
+        borderTop: `1px solid ${THEME.colors.border}`,
+        padding: "32px 24px",
+        background: THEME.colors.surface,
+        marginTop: 40,
+      }}>
+        <div style={{
+          maxWidth: 1440, margin: "0 auto",
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: 32,
+        }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: THEME.radii.md,
+                background: THEME.colors.gradient.primary,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                  <path d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              </div>
+              <span style={{ fontWeight: 700, fontSize: "1rem", fontFamily: THEME.fonts.display }}>
+                MedAI
+              </span>
+            </div>
+            <p style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, lineHeight: 1.6 }}>
+              Plateforme médicale sécurisée utilisant l'intelligence artificielle
+              pour assister les professionnels de santé dans le diagnostic.
+            </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {[
+                { label: "TLS 1.3", color: THEME.colors.success },
+                { label: "RGPD", color: THEME.colors.accent },
+                { label: "HDS", color: THEME.colors.warning },
+                { label: "ISO 27001", color: THEME.colors.purple },
+              ].map(cert => (
+                <span key={cert.label} style={{
+                  padding: "4px 10px", borderRadius: THEME.radii.full,
+                  background: `${cert.color}15`, color: cert.color,
+                  fontSize: "0.72rem", fontWeight: 600,
+                }}>
+                  {cert.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          <div>
+            <h4 style={{ fontWeight: 600, marginBottom: 14, fontSize: "0.9rem", color: THEME.colors.text }}>
+              Accès rapide
+            </h4>
+            {[
+              { label: "Dossiers médicaux", action: () => setActivePage("dossiers") },
+              { label: "Rendez-vous", action: () => setActivePage("appointments") },
+              { label: "Messages", action: () => setActivePage("messages") },
+              { label: "Trouver un médecin", action: () => setActivePage("doctors") },
+            ].map(link => (
+              <div key={link.label} style={{
+                padding: "6px 0", fontSize: "0.85rem", color: THEME.colors.textSecondary,
+                cursor: "pointer", transition: THEME.transitions.fast,
+              }}
+              onMouseEnter={e => { e.target.style.color = THEME.colors.accent; e.target.style.paddingLeft = "4px"; }}
+              onMouseLeave={e => { e.target.style.color = THEME.colors.textSecondary; e.target.style.paddingLeft = "0"; }}
+              onClick={link.action}
+              >
+                {link.label}
+              </div>
+            ))}
+          </div>
+          
+          <div>
+            <h4 style={{ fontWeight: 600, marginBottom: 14, fontSize: "0.9rem", color: THEME.colors.text }}>
+              Urgences
+            </h4>
+            <div style={{
+              padding: "16px", borderRadius: THEME.radii.lg,
+              background: THEME.colors.dangerSoft,
+              border: `1px solid #FECACA`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <Icon name="alertTriangle" size={18} color={THEME.colors.danger} />
+                <span style={{ fontWeight: 700, color: THEME.colors.danger, fontSize: "0.9rem" }}>
+                  En cas d'urgence vitale
+                </span>
+              </div>
+              <p style={{ fontSize: "0.85rem", color: "#991B1B", lineHeight: 1.6 }}>
+                Composez immédiatement le <strong>15 (SAMU)</strong> ou le <strong>112</strong>
+                (numéro d'urgence européen)
+              </p>
+            </div>
+            <div style={{ marginTop: 12, fontSize: "0.8rem", color: THEME.colors.textMuted, textAlign: "center" }}>
+              © 2024 MedAI Platform • Tous droits réservés
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGE D'ACCUEIL — Version Premium
+// ═══════════════════════════════════════════════════════════════
+
+function HomePage({ consultations, notifications, user, onNavigate }) {
+  const [greeting, setGreeting] = useState("");
+  const [animateStats, setAnimateStats] = useState(false);
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Bonjour");
+    else if (hour < 18) setGreeting("Bon après-midi");
+    else setGreeting("Bonsoir");
+    
+    setTimeout(() => setAnimateStats(true), 300);
+  }, []);
+
+  const stats = useMemo(() => ({
+    total: consultations.length,
+    pending: consultations.filter(c => c.status === "pending").length,
+    analyzed: consultations.filter(c => c.status === "analyzed").length,
+    inProgress: consultations.filter(c => c.status === "accepted").length,
+    critical: consultations.filter(c => c.urgency === "critical").length,
+  }), [consultations]);
+
+  const recentConsultations = useMemo(() =>
+    consultations.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5),
+    [consultations]
+  );
+
+  const formatTimeAgo = (date) => {
+    const diff = Math.floor((Date.now() - new Date(date)) / 1000);
+    if (diff < 60) return "À l'instant";
+    if (diff < 3600) return `Il y a ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)} h`;
+    if (diff < 172800) return "Hier";
+    return new Date(date).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+  };
+
+  const quickActions = [
+    {
+      title: "Soumettre une image",
+      description: "Radiographie, IRM, scanner ou fond d'œil",
+      icon: "upload",
+      color: THEME.colors.accent,
+      action: () => onNavigate("upload"),
+      gradient: THEME.colors.gradient.accent,
+    },
+    {
+      title: "Mes résultats",
+      description: "Analyses détaillées et diagnostics",
+      icon: "check",
+      color: THEME.colors.success,
+      action: () => onNavigate("dossiers"),
+      gradient: THEME.colors.gradient.success,
+    },
+    {
+      title: "Téléconsultation",
+      description: "Parler à un médecin en visio",
+      icon: "video",
+      color: THEME.colors.accentLight,
+      action: () => onNavigate("appointments"),
+      gradient: "linear-gradient(135deg, #3B82F6, #60A5FA)",
+    },
+    {
+      title: "Trouver un spécialiste",
+      description: "Près de chez vous",
+      icon: "map",
+      color: THEME.colors.warning,
+      action: () => onNavigate("doctors"),
+      gradient: THEME.colors.gradient.warm,
+    },
+  ];
+
+  return (
+    <div>
+      {/* Hero Section Premium */}
+      <div style={{
+        background: THEME.colors.gradient.hero,
+        backgroundSize: "200% 200%",
+        animation: "gradientShift 15s ease infinite",
+        borderRadius: THEME.radii["3xl"],
+        padding: "60px 64px",
+        marginBottom: 36,
+        position: "relative",
+        overflow: "hidden",
+        boxShadow: THEME.shadows["2xl"],
+      }}>
+        {/* Éléments décoratifs */}
+        <div style={{
+          position: "absolute", top: 0, right: 0, width: "60%", height: "100%",
+          background: "radial-gradient(circle at 70% 50%, rgba(255,255,255,0.08) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
+        
+        {[300, 200, 150].map((size, i) => (
+          <div key={i} style={{
+            position: "absolute",
+            width: size, height: size,
+            borderRadius: "50%",
+            border: `1px solid rgba(255,255,255,${0.05 + i * 0.02})`,
+            top: `${20 + i * 15}%`,
+            right: `${-50 + i * 100}px`,
+            animation: `float ${3 + i * 2}s ease-in-out infinite`,
+            animationDelay: `${i * 0.5}s`,
+            pointerEvents: "none",
+          }} />
+        ))}
+
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px)",
+          backgroundSize: "30px 30px",
+          pointerEvents: "none",
+        }} />
+
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 10,
+            padding: "10px 22px", borderRadius: THEME.radii.full,
+            background: "rgba(255,255,255,0.12)",
+            color: "rgba(255,255,255,0.95)",
+            fontSize: "0.85rem", fontWeight: 500,
+            marginBottom: 28,
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            animation: "slideDown 0.5s ease",
+          }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: "#4ADE80",
+              boxShadow: "0 0 10px #4ADE80",
+              animation: "pulse 2s infinite",
+            }} />
+            <Icon name="shield" size={16} color="rgba(255,255,255,0.9)" />
+            Espace patient certifié • Connexion sécurisée
+            <span style={{
+              padding: "2px 8px", borderRadius: THEME.radii.full,
+              background: "rgba(255,255,255,0.15)",
+              fontSize: "0.75rem",
+            }}>
+              PRO
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: 64, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 300 }}>
+              <h1 style={{
+                fontSize: "clamp(2.2rem, 4vw, 3.2rem)",
+                fontWeight: 800,
+                color: "white",
+                fontFamily: THEME.fonts.display,
+                lineHeight: 1.1,
+                marginBottom: 16,
+                letterSpacing: "-0.03em",
+                animation: "fadeInUp 0.6s ease",
+              }}>
+                {greeting},{" "}
+                <span style={{
+                  background: "linear-gradient(120deg, #60A5FA, #A78BFA)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}>
+                  {user?.full_name?.split(" ")[0] || "Patient"}
+                </span>
+              </h1>
+
+              <p style={{
+                fontSize: "1.15rem",
+                color: "rgba(255,255,255,0.8)",
+                lineHeight: 1.7,
+                marginBottom: 40,
+                maxWidth: 540,
+                animation: "fadeInUp 0.7s ease",
+              }}>
+                Votre espace santé intelligent. Analysez vos examens médicaux,
+                consultez vos résultats et échangez avec des spécialistes
+                en toute sécurité.
+              </p>
+
+              <div style={{
+                display: "flex", gap: 16, flexWrap: "wrap",
+                animation: "fadeInUp 0.8s ease",
+              }}>
+                <button
+                  onClick={() => onNavigate("upload")}
+                  style={{
+                    padding: "16px 32px",
+                    borderRadius: THEME.radii.xl,
+                    background: "white",
+                    border: "none",
+                    color: THEME.colors.primary,
+                    fontWeight: 700,
+                    fontSize: "0.95rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    boxShadow: THEME.shadows.xl,
+                    transition: THEME.transitions.spring,
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = "translateY(-3px)";
+                    e.currentTarget.style.boxShadow = "0 20px 40px rgba(0,0,0,0.2)";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = "none";
+                    e.currentTarget.style.boxShadow = THEME.shadows.xl;
+                  }}
+                >
+                  <Icon name="plus" size={20} color={THEME.colors.primary} />
+                  Nouvelle analyse
+                </button>
+                
+                <button
+                  onClick={() => onNavigate("doctors")}
+                  style={{
+                    padding: "16px 32px",
+                    borderRadius: THEME.radii.xl,
+                    background: "rgba(255,255,255,0.1)",
+                    border: "2px solid rgba(255,255,255,0.25)",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: "0.95rem",
+                    cursor: "pointer",
+                    backdropFilter: "blur(12px)",
+                    transition: THEME.transitions.spring,
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.4)";
+                    e.currentTarget.style.transform = "translateY(-3px)";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.1)";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)";
+                    e.currentTarget.style.transform = "none";
+                  }}
+                >
+                  <Icon name="video" size={20} color="white" />
+                  Téléconsultation
+                </button>
+              </div>
+            </div>
+
+            {/* Stats rapides */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 16, flexShrink: 0,
+            }}>
+              {[
+                { label: "Dossiers", value: stats.total, color: "rgba(255,255,255,0.9)", icon: "file" },
+                { label: "En cours", value: stats.inProgress, color: "#60A5FA", icon: "activity" },
+                { label: "Résultats", value: stats.analyzed, color: "#4ADE80", icon: "check" },
+                { label: "En attente", value: stats.pending, color: "#FBBF24", icon: "clock" },
+              ].map((stat, i) => (
+                <div key={i} style={{
+                  background: "rgba(255,255,255,0.08)",
+                  backdropFilter: "blur(12px)",
+                  borderRadius: THEME.radii.xl,
+                  padding: "24px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  minWidth: 140,
+                }}>
+                  <Icon name={stat.icon} size={18} color={stat.color} />
+                  <div style={{ fontSize: "2rem", fontWeight: 800, color: stat.color, marginTop: 8 }}>
+                    {animateStats ? stat.value : 0}
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.7)", marginTop: 4 }}>
+                    {stat.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerte critique */}
+      {stats.critical > 0 && (
+        <div style={{
+          marginBottom: 28, padding: "20px 28px",
+          background: THEME.colors.dangerSoft,
+          border: `2px solid #FECACA`,
+          borderRadius: THEME.radii.xl,
+          display: "flex", alignItems: "center", gap: 16,
+          animation: "pulse 2s infinite",
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: THEME.radii.md,
+            background: THEME.colors.danger,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Icon name="alertTriangle" size={24} color="white" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, color: THEME.colors.danger, fontSize: "0.95rem" }}>
+              {stats.critical} résultat{stats.critical > 1 ? "s" : ""} nécessitant une attention immédiate
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "#B91C1C", marginTop: 4 }}>
+              Veuillez consulter ces dossiers et contacter votre médecin
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate("dossiers")}
+            style={{
+              padding: "12px 24px", borderRadius: THEME.radii.md,
+              background: THEME.colors.danger, border: "none",
+              color: "white", fontWeight: 600, cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Voir les résultats
+          </button>
+        </div>
+      )}
+
+      {/* Statistiques */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18,
+        marginBottom: 32,
+      }}>
+        {[
+          { label: "Total dossiers", value: stats.total, icon: "file", color: THEME.colors.accent, bg: THEME.colors.accentSoft },
+          { label: "En attente", value: stats.pending, icon: "clock", color: THEME.colors.warning, bg: THEME.colors.warningSoft },
+          { label: "En cours", value: stats.inProgress, icon: "activity", color: THEME.colors.info, bg: THEME.colors.infoSoft },
+          { label: "Résultats dispo.", value: stats.analyzed, icon: "check", color: THEME.colors.success, bg: THEME.colors.successSoft },
+        ].map((stat, i) => (
+          <Card
+            key={i}
+            hoverable
+            onClick={() => onNavigate("dossiers")}
+            padding="24px"
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: THEME.radii.md,
+                background: stat.bg,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Icon name={stat.icon} size={22} color={stat.color} />
+              </div>
+            </div>
+            <div style={{
+              fontSize: "2.2rem", fontWeight: 800, color: THEME.colors.text,
+              marginBottom: 4, fontFamily: THEME.fonts.display,
+            }}>
+              {stat.value}
+            </div>
+            <div style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, fontWeight: 500 }}>
+              {stat.label}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Actions rapides */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18,
+        marginBottom: 36,
+      }}>
+        {quickActions.map((action, i) => (
+          <Card
+            key={i}
+            hoverable
+            onClick={action.action}
+            padding="28px"
+            style={{ position: "relative", overflow: "hidden" }}
+          >
+            <div style={{
+              position: "absolute", top: -30, right: -30,
+              width: 100, height: 100, borderRadius: "50%",
+              background: `${action.color}08`, pointerEvents: "none",
+            }} />
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: THEME.radii.lg,
+                background: action.gradient,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 20, boxShadow: `0 4px 16px ${action.color}40`,
+              }}>
+                <Icon name={action.icon} size={24} color="white" />
+              </div>
+              <h3 style={{
+                fontSize: "1rem", fontWeight: 600, color: THEME.colors.text,
+                marginBottom: 8, fontFamily: THEME.fonts.display,
+              }}>
+                {action.title}
+              </h3>
+              <p style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, lineHeight: 1.5, marginBottom: 16 }}>
+                {action.description}
+              </p>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6,
+                color: action.color, fontWeight: 600, fontSize: "0.85rem",
+              }}>
+                Accéder
+                <Icon name="chevronRight" size={16} color={action.color} />
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Dossiers récents + Équipe */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 24,
+        marginBottom: 36,
+      }}>
+        {/* Dossiers récents */}
+        <div style={{
+          background: THEME.colors.surface, borderRadius: THEME.radii.xl,
+          border: `1px solid ${THEME.colors.border}`, padding: "28px",
+          boxShadow: THEME.shadows.sm,
+        }}>
+          <SectionHeader
+            title="Dossiers récents"
+            subtitle="Suivez l'avancement de vos analyses"
+            badge={{ text: `${recentConsultations.length} actifs`, variant: "info" }}
+            action={
+              <button
+                onClick={() => onNavigate("dossiers")}
+                style={{
+                  padding: "8px 18px", borderRadius: THEME.radii.lg,
+                  background: THEME.colors.surface,
+                  border: `1.5px solid ${THEME.colors.border}`,
+                  color: THEME.colors.text, fontWeight: 600, fontSize: "0.82rem",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                  transition: THEME.transitions.fast,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = THEME.colors.accent;
+                  e.currentTarget.style.color = THEME.colors.accent;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = THEME.colors.border;
+                  e.currentTarget.style.color = THEME.colors.text;
+                }}
+              >
+                Voir tout
+                <Icon name="chevronRight" size={14} />
+              </button>
+            }
+          />
+          {recentConsultations.length === 0 ? (
+            <EmptyState
+              icon="file"
+              title="Aucun dossier"
+              description="Soumettez votre première image médicale pour commencer."
+              action={
+                <button
+                  onClick={() => onNavigate("upload")}
+                  style={{
+                    padding: "12px 24px", borderRadius: THEME.radii.lg,
+                    background: THEME.colors.primary, border: "none",
+                    color: "white", fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Soumettre un dossier
+                </button>
+              }
+            />
+          ) : (
+            <div>
+              {recentConsultations.map((c, i) => {
+                const examType = EXAM_TYPES[c.model_key] || EXAM_TYPES.chest;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => onNavigate("dossiers")}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 16,
+                      padding: "16px", borderRadius: THEME.radii.md,
+                      cursor: "pointer", transition: THEME.transitions.fast,
+                      borderBottom: i < recentConsultations.length - 1 ? `1px solid ${THEME.colors.borderLight}` : "none",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = THEME.colors.bgAlt}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div style={{
+                      width: 48, height: 48, borderRadius: THEME.radii.md,
+                      background: `${examType.color}10`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
+                    }}>
+                      <Icon name={examType.icon} size={22} color={examType.color} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.9rem", color: THEME.colors.text, marginBottom: 2 }}>
+                        {examType.label}
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: THEME.colors.textSecondary }}>
+                        Dossier #{c.id} • {formatTimeAgo(c.created_at)}
+                      </div>
+                    </div>
+                    <StatusBadge status={c.status} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Équipe médicale */}
+        <div style={{
+          background: THEME.colors.surface, borderRadius: THEME.radii.xl,
+          border: `1px solid ${THEME.colors.border}`, padding: "28px",
+          boxShadow: THEME.shadows.sm,
+        }}>
+          <SectionHeader
+            title="Votre équipe"
+            subtitle="Spécialistes disponibles"
+            action={
+              <button
+                onClick={() => onNavigate("doctors")}
+                style={{
+                  padding: "8px 18px", borderRadius: THEME.radii.lg,
+                  background: THEME.colors.surface,
+                  border: `1.5px solid ${THEME.colors.border}`,
+                  color: THEME.colors.text, fontWeight: 600, fontSize: "0.82rem",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                  transition: THEME.transitions.fast,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = THEME.colors.accent;
+                  e.currentTarget.style.color = THEME.colors.accent;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = THEME.colors.border;
+                  e.currentTarget.style.color = THEME.colors.text;
+                }}
+              >
+                Voir tous
+                <Icon name="chevronRight" size={14} />
+              </button>
+            }
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {DOCTORS.team.slice(0, 4).map((doc, i) => (
+              <div
+                key={i}
+                onClick={() => onNavigate("doctors")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "12px", borderRadius: THEME.radii.md,
+                  cursor: "pointer", transition: THEME.transitions.fast,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = THEME.colors.bgAlt}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <Avatar src={doc.photo} name={doc.name} size={48} available={doc.available} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: THEME.colors.text }}>
+                    {doc.name}
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: THEME.colors.textSecondary }}>
+                    {doc.specialty} • {doc.hospital.split(" ").slice(0, 2).join(" ")}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                    <Icon name="star" size={12} color={THEME.colors.warning} />
+                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: THEME.colors.text }}>
+                      {doc.rating}
+                    </span>
+                  </div>
+                </div>
+                <Badge variant={doc.available ? "success" : "default"} size="sm">
+                  {doc.available ? "Dispo." : "Occupé"}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bannière sécurité */}
+      <div style={{
+        background: `linear-gradient(135deg, ${THEME.colors.bgAlt}, ${THEME.colors.surface})`,
+        borderRadius: THEME.radii.xl, padding: "28px 32px",
+        border: `1px solid ${THEME.colors.border}`,
+        display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap",
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: THEME.radii.lg,
+          background: THEME.colors.successSoft,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon name="shield" size={28} color={THEME.colors.success} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: "0.95rem", color: THEME.colors.text, marginBottom: 4 }}>
+            Vos données sont protégées
+          </div>
+          <div style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, lineHeight: 1.6 }}>
+            Toutes vos informations médicales sont chiffrées de bout en bout et stockées
+            conformément aux normes de sécurité les plus strictes.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+          {[
+            { label: "TLS 1.3", sub: "Chiffrement", color: THEME.colors.success },
+            { label: "RGPD", sub: "Conformité", color: THEME.colors.accent },
+            { label: "HDS", sub: "Certification", color: THEME.colors.warning },
+          ].map((cert, i) => (
+            <div key={i} style={{
+              textAlign: "center", padding: "0 16px",
+              borderLeft: i > 0 ? `1px solid ${THEME.colors.border}` : "none",
+            }}>
+              <div style={{ fontWeight: 700, fontSize: "0.85rem", color: cert.color }}>{cert.label}</div>
+              <div style={{ fontSize: "0.7rem", color: THEME.colors.textMuted }}>{cert.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGE DOSSIERS — Version enrichie
+// ═══════════════════════════════════════════════════════════════
+
+function DossiersPage({ consultations, onNavigate, searchQuery }) {
+  const [filter, setFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState(searchQuery || "");
+  const [expandedId, setExpandedId] = useState(null);
+  const [viewMode, setViewMode] = useState("list");
+  const [sortBy, setSortBy] = useState("date");
+
+  useEffect(() => {
+    if (searchQuery) setSearchTerm(searchQuery);
+  }, [searchQuery]);
+
+  const filteredConsultations = useMemo(() => {
+    let result = consultations;
+    if (filter !== "all") result = result.filter(c => c.status === filter);
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(c =>
+        String(c.id).includes(term) ||
+        (EXAM_TYPES[c.model_key]?.label || "").toLowerCase().includes(term) ||
+        (c.doctor_name || "").toLowerCase().includes(term)
+      );
+    }
+    return result.sort((a, b) => {
+      if (sortBy === "date") return new Date(b.created_at) - new Date(a.created_at);
+      if (sortBy === "status") return a.status.localeCompare(b.status);
+      return 0;
+    });
+  }, [consultations, filter, searchTerm, sortBy]);
+
+  const formatDate = (date) => {
+    if (!date) return "";
+    return new Date(date).toLocaleDateString("fr-FR", {
+      day: "numeric", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  const filters = [
+    { value: "all", label: "Tous", count: consultations.length },
+    { value: "pending", label: "En attente", count: consultations.filter(c => c.status === "pending").length },
+    { value: "accepted", label: "En cours", count: consultations.filter(c => c.status === "accepted").length },
+    { value: "analyzed", label: "Résultats", count: consultations.filter(c => c.status === "analyzed").length },
+    { value: "closed", label: "Terminés", count: consultations.filter(c => c.status === "closed").length },
+  ];
+
+  return (
+    <div>
+      <SectionHeader
+        title="Dossiers médicaux"
+        subtitle={`${consultations.length} dossier${consultations.length > 1 ? "s" : ""} au total`}
+        badge={{ text: `${filteredConsultations.length} affichés`, variant: "info" }}
+        action={
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ display: "flex", background: THEME.colors.bgAlt, borderRadius: THEME.radii.md, padding: 3 }}>
+              <button
+                onClick={() => setViewMode("list")}
+                style={{
+                  padding: "6px 14px", borderRadius: THEME.radii.sm, border: "none",
+                  background: viewMode === "list" ? THEME.colors.surface : "transparent",
+                  color: viewMode === "list" ? THEME.colors.accent : THEME.colors.textMuted,
+                  fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                  boxShadow: viewMode === "list" ? THEME.shadows.sm : "none",
+                }}
+              >
+                Liste
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                style={{
+                  padding: "6px 14px", borderRadius: THEME.radii.sm, border: "none",
+                  background: viewMode === "grid" ? THEME.colors.surface : "transparent",
+                  color: viewMode === "grid" ? THEME.colors.accent : THEME.colors.textMuted,
+                  fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                  boxShadow: viewMode === "grid" ? THEME.shadows.sm : "none",
+                }}
+              >
+                Grille
+              </button>
+            </div>
+            <button
+              onClick={() => onNavigate("upload")}
+              style={{
+                padding: "12px 22px", borderRadius: THEME.radii.lg,
+                background: THEME.colors.primary, border: "none",
+                color: "white", fontWeight: 600, fontSize: "0.88rem",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+                boxShadow: THEME.shadows.sm,
+              }}
+            >
+              <Icon name="plus" size={16} color="white" />
+              Nouveau dossier
+            </button>
+          </div>
+        }
+      />
+
+      {/* Recherche et filtres */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ position: "relative", flex: 1, maxWidth: 350 }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
+            <Icon name="search" size={16} color={THEME.colors.textMuted} />
+          </span>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Rechercher par ID, type d'examen, médecin..."
+            style={{
+              width: "100%", padding: "10px 14px 10px 36px",
+              borderRadius: THEME.radii.full,
+              border: `1.5px solid ${THEME.colors.border}`,
+              fontSize: "0.88rem", outline: "none",
+              background: THEME.colors.surface, color: THEME.colors.text,
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {filters.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              style={{
+                padding: "8px 16px", borderRadius: THEME.radii.full,
+                border: `1.5px solid ${filter === f.value ? THEME.colors.primary : THEME.colors.border}`,
+                background: filter === f.value ? THEME.colors.primary : THEME.colors.surface,
+                color: filter === f.value ? "white" : THEME.colors.textSecondary,
+                fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                transition: THEME.transitions.fast,
+              }}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+          style={{
+            padding: "8px 14px", borderRadius: THEME.radii.full,
+            border: `1.5px solid ${THEME.colors.border}`,
+            fontSize: "0.8rem", outline: "none",
+            background: THEME.colors.surface, color: THEME.colors.text,
+            cursor: "pointer", fontWeight: 500,
+          }}
+        >
+          <option value="date">Trier par date</option>
+          <option value="status">Trier par statut</option>
+        </select>
+      </div>
+
+      {/* Contenu */}
+      {filteredConsultations.length === 0 ? (
+        <EmptyState
+          icon="file"
+          title="Aucun dossier trouvé"
+          description={searchTerm ? "Essayez de modifier votre recherche." : "Soumettez votre première image médicale."}
+          action={
+            !searchTerm ? (
+              <button
+                onClick={() => onNavigate("upload")}
+                style={{
+                  padding: "12px 24px", borderRadius: THEME.radii.lg,
+                  background: THEME.colors.primary, border: "none",
+                  color: "white", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Soumettre un dossier
+              </button>
+            ) : null
+          }
+        />
+      ) : viewMode === "grid" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 18 }}>
+          {filteredConsultations.map(consultation => {
+            const examType = EXAM_TYPES[consultation.model_key] || EXAM_TYPES.chest;
+            return (
+              <Card key={consultation.id} hoverable onClick={() => setExpandedId(expandedId === consultation.id ? null : consultation.id)}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: THEME.radii.md,
+                    background: `${examType.color}10`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Icon name={examType.icon} size={22} color={examType.color} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem", color: THEME.colors.text }}>
+                      {examType.label}
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: THEME.colors.textSecondary }}>
+                      Dossier #{consultation.id}
+                    </div>
+                  </div>
+                  <StatusBadge status={consultation.status} />
+                </div>
+                <div style={{ fontSize: "0.82rem", color: THEME.colors.textSecondary }}>
+                  {formatDate(consultation.created_at)}
+                </div>
+                {consultation.prediction && (
+                  <div style={{
+                    marginTop: 12, padding: "10px 14px", borderRadius: THEME.radii.md,
+                    background: THEME.colors.successSoft,
+                    fontSize: "0.82rem", fontWeight: 600,
+                    color: THEME.colors.success,
+                  }}>
+                    {consultation.prediction}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {filteredConsultations.map(consultation => {
+            const examType = EXAM_TYPES[consultation.model_key] || EXAM_TYPES.chest;
+            const isExpanded = expandedId === consultation.id;
+            return (
+              <Card key={consultation.id}>
+                <div
+                  onClick={() => setExpandedId(isExpanded ? null : consultation.id)}
+                  style={{
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 16,
+                    userSelect: "none",
+                  }}
+                >
+                  <div style={{
+                    width: 48, height: 48, borderRadius: THEME.radii.md,
+                    background: `${examType.color}10`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                  }}>
+                    <Icon name={examType.icon} size={22} color={examType.color} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem", color: THEME.colors.text, marginBottom: 4 }}>
+                      {examType.label}
+                    </div>
+                    <div style={{ fontSize: "0.82rem", color: THEME.colors.textSecondary }}>
+                      Dossier #{consultation.id} • {formatDate(consultation.created_at)}
+                      {consultation.doctor_name && ` • Dr. ${consultation.doctor_name}`}
+                    </div>
+                  </div>
+                  <StatusBadge status={consultation.status} />
+                  <Icon name="chevronDown" size={20} color={THEME.colors.textMuted}
+                    style={{
+                      transform: isExpanded ? "rotate(180deg)" : "none",
+                      transition: THEME.transitions.normal,
+                    }}
+                  />
+                </div>
+                {isExpanded && (
+                  <div style={{
+                    paddingTop: 20, marginTop: 16,
+                    borderTop: `1px solid ${THEME.colors.borderLight}`,
+                    animation: "slideDown 0.3s ease",
+                  }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                      <div>
+                        <h4 style={{ fontSize: "0.85rem", fontWeight: 600, color: THEME.colors.text, marginBottom: 14 }}>
+                          Détails du dossier
+                        </h4>
+                        {[
+                          ["Type d'examen", examType.label],
+                          ["Médecin assigné", consultation.doctor_name ? `Dr. ${consultation.doctor_name}` : "En attente d'assignation"],
+                          ["Date de création", formatDate(consultation.created_at)],
+                          ["Statut", STATUS_MAP[consultation.status]?.label],
+                          ["Dernière mise à jour", formatDate(consultation.updated_at || consultation.created_at)],
+                        ].map(([label, value], i) => (
+                          <div key={i} style={{
+                            display: "flex", justifyContent: "space-between",
+                            padding: "10px 0", borderBottom: `1px solid ${THEME.colors.borderLight}`,
+                            fontSize: "0.85rem",
+                          }}>
+                            <span style={{ color: THEME.colors.textSecondary }}>{label}</span>
+                            <span style={{ fontWeight: 500, color: THEME.colors.text }}>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: "0.85rem", fontWeight: 600, color: THEME.colors.text, marginBottom: 14 }}>
+                          Résultat de l'analyse
+                        </h4>
+                        {consultation.prediction ? (
+                          <div style={{
+                            padding: "20px", borderRadius: THEME.radii.md,
+                            background: THEME.colors.successSoft,
+                            border: `1px solid ${THEME.colors.success}30`,
+                          }}>
+                            <div style={{ fontWeight: 700, fontSize: "1rem", color: THEME.colors.text, marginBottom: 8 }}>
+                              {consultation.prediction}
+                            </div>
+                            {consultation.confidence && (
+                              <div>
+                                <div style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, marginBottom: 8 }}>
+                                  Confiance : {(consultation.confidence * 100).toFixed(1)}%
+                                </div>
+                                <ProgressBar
+                                  value={consultation.confidence * 100}
+                                  color={THEME.colors.success}
+                                  showLabel={false}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{
+                            padding: "20px", borderRadius: THEME.radii.md,
+                            background: THEME.colors.bgAlt, textAlign: "center",
+                          }}>
+                            <Icon name="clock" size={24} color={THEME.colors.textMuted} />
+                            <p style={{ color: THEME.colors.textSecondary, fontSize: "0.9rem", marginTop: 8 }}>
+                              En attente d'analyse par un médecin
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGE UPLOAD — Version enrichie
+// ═══════════════════════════════════════════════════════════════
+
+function UploadPage({ token, onSuccess }) {
+  const [step, setStep] = useState(1);
+  const [selectedExam, setSelectedExam] = useState(null);
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [symptoms, setSymptoms] = useState("");
+  const [additionalInfo, setAdditionalInfo] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef(null);
+
+  const examTypes = Object.values(EXAM_TYPES);
+
+  const handleFile = (f) => {
+    if (!f) return;
+    const validTypes = ["image/jpeg", "image/png", "image/dicom"];
+    if (!validTypes.includes(f.type) && !f.name.endsWith(".dcm")) {
+      setError("Format non supporté. Formats acceptés : JPEG, PNG, DICOM.");
+      return;
+    }
+    if (f.size > 20 * 1024 * 1024) {
+      setError("Fichier trop volumineux (maximum 20 Mo).");
+      return;
+    }
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+    setError("");
+  };
+
+  const simulateProgress = () => {
+    setUploadProgress(0);
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(interval);
+          return 90;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 200);
+    return interval;
+  };
+
+  const handleSubmit = async () => {
+    if (!file || !selectedExam || !symptoms.trim()) return;
+    setLoading(true);
+    setError("");
+    
+    const progressInterval = simulateProgress();
+    
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("model_key", selectedExam.key);
+      form.append("patient_notes", `Symptômes: ${symptoms}\n\nInformations complémentaires: ${additionalInfo}`);
+      
+      const response = await fetch(`${API_BASE}/consultations`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      
+      clearInterval(progressInterval);
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "Erreur lors de la soumission");
+      }
+      
+      setUploadProgress(100);
+      setTimeout(() => setSuccess(true), 500);
+    } catch (e) {
+      clearInterval(progressInterval);
+      setError(e.message);
+      setUploadProgress(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div style={{ maxWidth: 550, margin: "80px auto", textAlign: "center" }}>
+        <Card padding="52px" style={{ animation: "scaleIn 0.5s ease" }}>
+          <div style={{
+            width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
+            background: THEME.colors.successSoft,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Icon name="check" size={40} color={THEME.colors.success} />
+          </div>
+          <h2 style={{ fontSize: "1.6rem", fontWeight: 700, color: THEME.colors.text, marginBottom: 12 }}>
+            Dossier soumis avec succès !
+          </h2>
+          <p style={{ fontSize: "0.95rem", color: THEME.colors.textSecondary, lineHeight: 1.7, marginBottom: 32 }}>
+            Votre dossier a été transmis à notre équipe médicale.
+            Un médecin spécialiste le prendra en charge sous 24 à 48 heures.
+            Vous recevrez une notification dès qu'il sera analysé.
+          </p>
+          <button
+            onClick={onSuccess}
+            style={{
+              padding: "14px 36px", borderRadius: THEME.radii.lg,
+              background: THEME.colors.primary, border: "none",
+              color: "white", fontWeight: 600, fontSize: "0.95rem",
+              cursor: "pointer", boxShadow: THEME.shadows.md,
+            }}
+          >
+            Consulter mes dossiers
+          </button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      <SectionHeader
+        title="Soumettre un dossier médical"
+        subtitle={step === 1 ? "Étape 1 : Sélectionnez le type d'examen" : "Étape 2 : Téléchargez votre image et décrivez vos symptômes"}
+        badge={{ text: `Étape ${step}/2`, variant: "info" }}
+      />
+
+      {/* Barre de progression */}
+      <div style={{ display: "flex", gap: 24, marginBottom: 36, alignItems: "center" }}>
+        {[1, 2].map(s => (
+          <div key={s} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 700, fontSize: "0.9rem",
+              background: step >= s ? THEME.colors.accent : THEME.colors.border,
+              color: step >= s ? "white" : THEME.colors.textMuted,
+              transition: THEME.transitions.normal,
+              boxShadow: step >= s ? `0 4px 12px ${THEME.colors.accent}40` : "none",
+            }}>
+              {step > s ? <Icon name="check" size={18} color="white" /> : s}
+            </div>
+            <div>
+              <div style={{
+                fontWeight: 600, fontSize: "0.9rem",
+                color: step >= s ? THEME.colors.text : THEME.colors.textMuted,
+              }}>
+                {s === 1 ? "Type d'examen" : "Image & symptômes"}
+              </div>
+              {s === 1 && step > 1 && selectedExam && (
+                <div style={{ fontSize: "0.8rem", color: THEME.colors.accent, fontWeight: 500 }}>
+                  {selectedExam.label}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        <div style={{ flex: 1, height: 2, background: THEME.colors.border, borderRadius: 1 }}>
+          <div style={{
+            height: "100%", borderRadius: 1,
+            background: THEME.colors.accent,
+            width: step === 1 ? "0%" : "100%",
+            transition: THEME.transitions.slow,
+          }} />
+        </div>
+      </div>
+
+      {error && (
+        <div style={{
+          padding: "16px 20px", borderRadius: THEME.radii.md,
+          background: THEME.colors.dangerSoft,
+          border: `1px solid #FECACA`,
+          color: THEME.colors.danger, fontSize: "0.9rem", marginBottom: 24,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <Icon name="x" size={20} color={THEME.colors.danger} />
+          {error}
+        </div>
+      )}
+
+      {step === 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {examTypes.map((exam) => (
+            <Card
+              key={exam.key}
+              hoverable
+              onClick={() => { setSelectedExam(exam); setStep(2); }}
+              padding="28px"
+            >
+              <div style={{ display: "flex", gap: 18 }}>
+                <div style={{
+                  width: 64, height: 64, borderRadius: THEME.radii.lg,
+                  background: `${exam.color}12`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  <Icon name={exam.icon} size={30} color={exam.color} />
+                </div>
+                <div>
+                  <h3 style={{
+                    fontSize: "1.05rem", fontWeight: 600, color: THEME.colors.text,
+                    marginBottom: 6, fontFamily: THEME.fonts.display,
+                  }}>
+                    {exam.label}
+                  </h3>
+                  <p style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, lineHeight: 1.5, marginBottom: 12 }}>
+                    {exam.longDescription}
+                  </p>
+                  <div style={{ display: "flex", gap: 16, fontSize: "0.78rem", color: THEME.colors.textMuted, marginBottom: 8 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <Icon name="clock" size={14} />
+                      {exam.duration}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: THEME.colors.textMuted }}>
+                    <strong>Indications :</strong> {exam.indications}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {step === 2 && selectedExam && (
+        <div>
+          <button
+            onClick={() => { setStep(1); setFile(null); setPreview(null); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "none", border: "none", cursor: "pointer",
+              color: THEME.colors.textSecondary, fontWeight: 500,
+              fontSize: "0.9rem", marginBottom: 24, padding: "8px 12px",
+              borderRadius: THEME.radii.md, transition: THEME.transitions.fast,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = THEME.colors.bgAlt; e.currentTarget.style.color = THEME.colors.text; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = THEME.colors.textSecondary; }}
+          >
+            <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
+            Retour au choix de l'examen
+          </button>
+
+          {/* Info examen sélectionné */}
+          <Card padding="24px" style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: THEME.radii.md,
+                background: `${selectedExam.color}12`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Icon name={selectedExam.icon} size={24} color={selectedExam.color} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: THEME.colors.text, fontSize: "0.95rem" }}>
+                  {selectedExam.label}
+                </div>
+                <div style={{ fontSize: "0.82rem", color: THEME.colors.textSecondary }}>
+                  {selectedExam.description}
+                </div>
+              </div>
+            </div>
+            <div style={{
+              marginTop: 14, padding: "14px 18px",
+              borderRadius: THEME.radii.md, background: THEME.colors.bgAlt,
+              fontSize: "0.85rem", color: THEME.colors.textSecondary, lineHeight: 1.6,
+            }}>
+              <strong style={{ color: THEME.colors.text }}>Préparation :</strong> {selectedExam.preparation}
+              <br />
+              <strong style={{ color: THEME.colors.text }}>Durée estimée :</strong> {selectedExam.duration}
+            </div>
+          </Card>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            {/* Upload */}
+            <div>
+              <label style={{
+                display: "block", fontWeight: 600, color: THEME.colors.text,
+                marginBottom: 12, fontSize: "0.9rem",
+              }}>
+                Image médicale *
+              </label>
+              {!preview ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
+                  style={{
+                    border: `2.5px dashed ${THEME.colors.border}`,
+                    borderRadius: THEME.radii.xl,
+                    padding: "56px 24px", textAlign: "center", cursor: "pointer",
+                    background: THEME.colors.surface,
+                    transition: THEME.transitions.normal,
+                    minHeight: 250, display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = selectedExam.color;
+                    e.currentTarget.style.background = `${selectedExam.color}03`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = THEME.colors.border;
+                    e.currentTarget.style.background = THEME.colors.surface;
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,.dcm"
+                    onChange={e => handleFile(e.target.files[0])}
+                    style={{ display: "none" }}
+                  />
+                  <Icon name="upload" size={48} color={THEME.colors.textMuted} />
+                  <p style={{ fontWeight: 600, color: THEME.colors.text, marginTop: 14, marginBottom: 6 }}>
+                    Déposez votre image ici
+                  </p>
+                  <p style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary }}>
+                    JPEG • PNG • DICOM • 20 Mo max
+                  </p>
+                </div>
+              ) : (
+                <Card padding="0" style={{ overflow: "hidden", position: "relative" }}>
+                  <img
+                    src={preview}
+                    alt="Aperçu"
+                    style={{ width: "100%", height: 300, objectFit: "contain", background: "#0F172A" }}
+                  />
+                  <div style={{
+                    position: "absolute", top: 12, right: 12,
+                    display: "flex", gap: 8,
+                  }}>
+                    <button
+                      onClick={() => { setFile(null); setPreview(null); }}
+                      style={{
+                        padding: "8px 16px", borderRadius: THEME.radii.md,
+                        background: "rgba(255,255,255,0.95)", border: "none",
+                        color: THEME.colors.text, fontWeight: 600, fontSize: "0.8rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Remplacer
+                    </button>
+                  </div>
+                  <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Badge variant="success" size="sm">Image chargée</Badge>
+                    <span style={{ fontSize: "0.8rem", color: THEME.colors.textSecondary }}>
+                      {file?.name} ({(file?.size / 1024 / 1024).toFixed(1)} Mo)
+                    </span>
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            {/* Formulaire */}
+            <div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{
+                  display: "block", fontWeight: 600, color: THEME.colors.text,
+                  marginBottom: 8, fontSize: "0.9rem",
+                }}>
+                  Symptômes observés *
+                </label>
+                <textarea
+                  value={symptoms}
+                  onChange={e => setSymptoms(e.target.value)}
+                  rows={5}
+                  placeholder="Décrivez précisément vos symptômes : localisation, intensité, durée, facteurs déclenchants..."
+                  style={{
+                    width: "100%", padding: "14px 16px", borderRadius: THEME.radii.lg,
+                    border: `1.5px solid ${THEME.colors.border}`,
+                    fontSize: "0.9rem", fontFamily: "inherit",
+                    resize: "vertical", outline: "none",
+                    background: THEME.colors.surface,
+                    transition: THEME.transitions.fast,
+                  }}
+                  onFocus={e => e.currentTarget.style.borderColor = THEME.colors.accent}
+                  onBlur={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                />
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <label style={{
+                  display: "block", fontWeight: 600, color: THEME.colors.text,
+                  marginBottom: 8, fontSize: "0.9rem",
+                }}>
+                  Informations complémentaires
+                </label>
+                <textarea
+                  value={additionalInfo}
+                  onChange={e => setAdditionalInfo(e.target.value)}
+                  rows={4}
+                  placeholder="Antécédents médicaux, traitements en cours, allergies, antécédents familiaux..."
+                  style={{
+                    width: "100%", padding: "14px 16px", borderRadius: THEME.radii.lg,
+                    border: `1.5px solid ${THEME.colors.border}`,
+                    fontSize: "0.9rem", fontFamily: "inherit",
+                    resize: "vertical", outline: "none",
+                    background: THEME.colors.surface,
+                    transition: THEME.transitions.fast,
+                  }}
+                  onFocus={e => e.currentTarget.style.borderColor = THEME.colors.accent}
+                  onBlur={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                />
+              </div>
+
+              {loading && (
+                <div style={{ marginBottom: 16 }}>
+                  <ProgressBar value={uploadProgress} color={THEME.colors.accent} showLabel />
+                </div>
+              )}
+
+              <button
+                onClick={handleSubmit}
+                disabled={!file || !symptoms.trim() || loading}
+                style={{
+                  width: "100%", padding: "16px",
+                  borderRadius: THEME.radii.lg,
+                  background: file && symptoms.trim() && !loading ? THEME.colors.primary : THEME.colors.border,
+                  border: "none", color: "white", fontWeight: 700, fontSize: "0.95rem",
+                  cursor: file && symptoms.trim() && !loading ? "pointer" : "not-allowed",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  gap: 10, transition: THEME.transitions.normal,
+                  boxShadow: file && symptoms.trim() && !loading ? THEME.shadows.md : "none",
+                }}
+              >
+                {loading ? (
+                  <>
+                    <Spinner size={20} />
+                    Envoi en cours... {Math.round(uploadProgress)}%
+                  </>
+                ) : (
+                  <>
+                    <Icon name="upload" size={18} color="white" />
+                    Soumettre le dossier
+                  </>
+                )}
+              </button>
+
+              <p style={{
+                textAlign: "center", marginTop: 12, fontSize: "0.78rem",
+                color: THEME.colors.textMuted,
+              }}>
+                En soumettant, vous acceptez que vos données soient analysées par notre IA et nos médecins.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGES SECONDAIRES — Version enrichie
+// ═══════════════════════════════════════════════════════════════
+
+function AppointmentsPage({ consultations, onNavigate }) {
+  const active = consultations.filter(c => c.status === "accepted" || c.status === "analyzed");
+  
+  return (
+    <div>
+      <SectionHeader
+        title="Rendez-vous"
+        subtitle="Vos consultations planifiées et à venir"
+        badge={{ text: `${active.length} actifs`, variant: "info" }}
+      />
+      {active.length === 0 ? (
+        <EmptyState
+          icon="calendar"
+          title="Aucun rendez-vous"
+          description="Les rendez-vous seront disponibles après acceptation de votre dossier par un médecin."
+          action={
+            <button
+              onClick={() => onNavigate("upload")}
+              style={{
+                padding: "12px 24px", borderRadius: THEME.radii.lg,
+                background: THEME.colors.primary, border: "none",
+                color: "white", fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Soumettre un dossier
+            </button>
+          }
+        />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {active.map(c => (
+            <Card key={c.id} padding="24px" hoverable>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: THEME.radii.lg,
+                  background: THEME.colors.infoSoft,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Icon name="calendar" size={24} color={THEME.colors.info} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: "0.95rem", color: THEME.colors.text }}>
+                    Consultation #{c.id}
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: THEME.colors.textSecondary, marginTop: 2 }}>
+                    {c.doctor_name ? `Dr. ${c.doctor_name}` : "Médecin à confirmer"}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                    <StatusBadge status={c.status} />
+                    <span style={{ fontSize: "0.8rem", color: THEME.colors.textMuted }}>
+                      {EXAM_TYPES[c.model_key]?.label || "Consultation"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onNavigate("messages")}
+                  style={{
+                    padding: "12px 24px", borderRadius: THEME.radii.lg,
+                    background: THEME.colors.primary, border: "none",
+                    color: "white", fontWeight: 600, cursor: "pointer",
+                    fontSize: "0.88rem",
+                  }}
+                >
+                  Rejoindre
+                </button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessagesPage({ user, consultations, onNavigate, notifications }) {
+  const [activeChat, setActiveChat] = useState(null);
+  const [messageInput, setMessageInput] = useState("");
+  const [messages, setMessages] = useState([
+    { id: 1, sender: "Dr. Sophie Laurent", text: "Bonjour, j'ai bien reçu votre dossier. Pouvez-vous me préciser depuis quand ressentez-vous ces symptômes ?", time: "2024-01-15T10:30:00", read: true },
+    { id: 2, sender: "Vous", text: "Bonjour Docteur, cela fait environ 2 semaines. La douleur est plus intense le matin.", time: "2024-01-15T10:32:00", read: true },
+    { id: 3, sender: "Dr. Sophie Laurent", text: "Merci pour ces précisions. Je vais analyser votre dossier plus en détail et je reviens vers vous.", time: "2024-01-15T10:35:00", read: false },
+  ]);
+
+  const sendMessage = () => {
+    if (!messageInput.trim()) return;
+    const newMsg = {
+      id: Date.now(),
+      sender: "Vous",
+      text: messageInput,
+      time: new Date().toISOString(),
+      read: false,
+    };
+    setMessages([...messages, newMsg]);
+    setMessageInput("");
+  };
+
+  const formatMessageTime = (date) => {
+    const msgDate = new Date(date);
+    const today = new Date();
+    if (msgDate.toDateString() === today.toDateString()) {
+      return msgDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    }
+    return msgDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  };
+
+  return (
+    <div>
+      <SectionHeader
+        title="Messagerie sécurisée"
+        subtitle="Communiquez avec votre équipe médicale en toute confidentialité"
+        badge={{ text: "Chiffré E2E", variant: "success" }}
+      />
+      
+      <div style={{
+        display: "grid", gridTemplateColumns: "350px 1fr", gap: 0,
+        borderRadius: THEME.radii.xl, overflow: "hidden",
+        border: `1px solid ${THEME.colors.border}`,
+        height: "calc(100vh - 280px)", minHeight: 500,
+      }}>
+        {/* Liste des conversations */}
+        <div style={{
+          borderRight: `1px solid ${THEME.colors.border}`,
+          background: THEME.colors.surface,
+          overflow: "auto",
+        }}>
+          <div style={{ padding: "20px", borderBottom: `1px solid ${THEME.colors.border}` }}>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
+                <Icon name="search" size={16} color={THEME.colors.textMuted} />
+              </span>
+              <input
+                type="text"
+                placeholder="Rechercher une conversation..."
+                style={{
+                  width: "100%", padding: "10px 14px 10px 36px",
+                  borderRadius: THEME.radii.lg,
+                  border: `1.5px solid ${THEME.colors.border}`,
+                  fontSize: "0.85rem", outline: "none",
+                  background: THEME.colors.bgAlt,
+                }}
+              />
+            </div>
+          </div>
+          
+          {DOCTORS.team.slice(0, 4).map((doctor, i) => (
+            <div
+              key={i}
+              onClick={() => setActiveChat(doctor)}
+              style={{
+                padding: "16px 20px", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 14,
+                transition: THEME.transitions.fast,
+                background: activeChat?.id === doctor.id ? THEME.colors.accentSoft : "transparent",
+                borderBottom: `1px solid ${THEME.colors.borderLight}`,
+              }}
+              onMouseEnter={e => {
+                if (activeChat?.id !== doctor.id) e.currentTarget.style.background = THEME.colors.bgAlt;
+              }}
+              onMouseLeave={e => {
+                if (activeChat?.id !== doctor.id) e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <Avatar src={doctor.photo} name={doctor.name} size={48} available={doctor.available} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: "0.9rem", color: THEME.colors.text }}>
+                  {doctor.name}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: THEME.colors.textSecondary, marginTop: 2 }}>
+                  {doctor.specialty}
+                </div>
+                <div style={{
+                  fontSize: "0.75rem", color: THEME.colors.textMuted, marginTop: 2,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {i === 0 ? "Merci pour ces précisions..." : "Dernier message il y a 2 jours"}
+                </div>
+              </div>
+              {i === 0 && (
+                <Badge variant="info" size="sm">3</Badge>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Zone de messages */}
+        <div style={{
+          display: "flex", flexDirection: "column",
+          background: THEME.colors.bgAlt,
+        }}>
+          {activeChat ? (
+            <>
+              {/* Header conversation */}
+              <div style={{
+                padding: "16px 20px", background: THEME.colors.surface,
+                borderBottom: `1px solid ${THEME.colors.border}`,
+                display: "flex", alignItems: "center", gap: 14,
+              }}>
+                <Avatar src={activeChat.photo} name={activeChat.name} size={44} available={activeChat.available} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: THEME.colors.text }}>
+                    {activeChat.name}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: THEME.colors.success }}>
+                    {activeChat.available ? "En ligne" : "Hors ligne"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div style={{ flex: 1, overflow: "auto", padding: "24px" }}>
+                {messages.map(msg => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: msg.sender === "Vous" ? "flex-end" : "flex-start",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <div style={{ maxWidth: "70%" }}>
+                      <div style={{
+                        padding: "12px 18px",
+                        borderRadius: THEME.radii.lg,
+                        background: msg.sender === "Vous" ? THEME.colors.accent : THEME.colors.surface,
+                        color: msg.sender === "Vous" ? "white" : THEME.colors.text,
+                        fontSize: "0.9rem", lineHeight: 1.6,
+                        boxShadow: THEME.shadows.sm,
+                        borderBottomRightRadius: msg.sender === "Vous" ? "4px" : THEME.radii.lg,
+                        borderBottomLeftRadius: msg.sender === "Vous" ? THEME.radii.lg : "4px",
+                      }}>
+                        {msg.text}
+                      </div>
+                      <div style={{
+                        fontSize: "0.72rem", color: THEME.colors.textMuted,
+                        marginTop: 4, padding: "0 4px",
+                        textAlign: msg.sender === "Vous" ? "right" : "left",
+                      }}>
+                        {msg.sender} • {formatMessageTime(msg.time)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Input message */}
+              <div style={{
+                padding: "16px 20px", background: THEME.colors.surface,
+                borderTop: `1px solid ${THEME.colors.border}`,
+                display: "flex", gap: 12,
+              }}>
+                <input
+                  type="text"
+                  value={messageInput}
+                  onChange={e => setMessageInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && sendMessage()}
+                  placeholder="Écrivez votre message..."
+                  style={{
+                    flex: 1, padding: "12px 18px",
+                    borderRadius: THEME.radii.full,
+                    border: `1.5px solid ${THEME.colors.border}`,
+                    fontSize: "0.9rem", fontFamily: "inherit",
+                    outline: "none", background: THEME.colors.bgAlt,
+                  }}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!messageInput.trim()}
+                  style={{
+                    width: 48, height: 48, borderRadius: "50%",
+                    background: messageInput.trim() ? THEME.colors.accent : THEME.colors.border,
+                    border: "none", cursor: messageInput.trim() ? "pointer" : "default",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: THEME.transitions.normal,
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              padding: "48px",
+            }}>
+              <div style={{
+                width: 80, height: 80, borderRadius: "50%",
+                background: THEME.colors.bgAlt,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 24,
+              }}>
+                <Icon name="message" size={36} color={THEME.colors.textMuted} />
+              </div>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 600, color: THEME.colors.text, marginBottom: 8 }}>
+                Messagerie sécurisée
+              </h3>
+              <p style={{ fontSize: "0.9rem", color: THEME.colors.textSecondary, textAlign: "center", maxWidth: 400 }}>
+                Sélectionnez une conversation pour commencer à échanger avec votre équipe médicale.
+                Tous les messages sont chiffrés de bout en bout.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DoctorsPage({ onNavigate }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [specialtyFilter, setSpecialtyFilter] = useState("all");
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+
+  const specialties = ["all", ...new Set(DOCTORS.team.map(d => d.specialty))];
+
+  const filteredDoctors = DOCTORS.team.filter(d => {
+    const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.specialty.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.hospital.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSpecialty = specialtyFilter === "all" || d.specialty === specialtyFilter;
+    return matchesSearch && matchesSpecialty;
+  });
+
+  return (
+    <div>
+      <SectionHeader
+        title="Notre équipe médicale"
+        subtitle={`${DOCTORS.team.length} spécialistes à votre service`}
+        badge={{ text: `${DOCTORS.team.filter(d => d.available).length} disponibles`, variant: "success" }}
+      />
+
+      {/* Filtres */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, maxWidth: 300 }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
+            <Icon name="search" size={16} color={THEME.colors.textMuted} />
+          </span>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Rechercher un médecin..."
+            style={{
+              width: "100%", padding: "10px 14px 10px 36px",
+              borderRadius: THEME.radii.full,
+              border: `1.5px solid ${THEME.colors.border}`,
+              fontSize: "0.88rem", outline: "none",
+              background: THEME.colors.surface, color: THEME.colors.text,
+            }}
+          />
+        </div>
+        <select
+          value={specialtyFilter}
+          onChange={e => setSpecialtyFilter(e.target.value)}
+          style={{
+            padding: "10px 16px", borderRadius: THEME.radii.full,
+            border: `1.5px solid ${THEME.colors.border}`,
+            fontSize: "0.88rem", outline: "none",
+            background: THEME.colors.surface, color: THEME.colors.text,
+            cursor: "pointer",
+          }}
+        >
+          <option value="all">Toutes les spécialités</option>
+          {specialties.filter(s => s !== "all").map(s => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Grille de médecins */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
+        gap: 20,
+      }}>
+        {filteredDoctors.map((doctor) => (
+          <Card
+            key={doctor.id}
+            hoverable
+            padding="0"
+            style={{ overflow: "hidden" }}
+            onClick={() => setSelectedDoctor(selectedDoctor?.id === doctor.id ? null : doctor)}
+          >
+            {/* En-tête de carte */}
+            <div style={{
+              padding: "24px 28px",
+              background: `linear-gradient(135deg, ${THEME.colors.primary}10, ${THEME.colors.accentSoft})`,
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
+                <Avatar
+                  src={doctor.photo}
+                  name={doctor.name}
+                  size={80}
+                  available={doctor.available}
+                  ring
+                />
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <h3 style={{
+                      fontSize: "1.1rem", fontWeight: 700, color: THEME.colors.text,
+                      fontFamily: THEME.fonts.display, margin: 0,
+                    }}>
+                      {doctor.name}
+                    </h3>
+                    <Badge variant={doctor.available ? "success" : "default"} size="sm">
+                      {doctor.available ? "Disponible" : "Indisponible"}
+                    </Badge>
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: THEME.colors.accent, fontWeight: 500, marginBottom: 4 }}>
+                    {doctor.specialty}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                    <Icon name="star" size={14} color={THEME.colors.warning} />
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{doctor.rating}</span>
+                    <span style={{ fontSize: "0.78rem", color: THEME.colors.textMuted }}>
+                      ({doctor.patients.toLocaleString()} avis)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: THEME.colors.textSecondary }}>
+                    {doctor.hospital}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Informations détaillées */}
+            <div style={{ padding: "20px 28px 28px" }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: "0.8rem", color: THEME.colors.textMuted, marginBottom: 4 }}>
+                  Expérience
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "0.9rem", color: THEME.colors.text }}>
+                  {doctor.experience}
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: "0.8rem", color: THEME.colors.textMuted, marginBottom: 4 }}>
+                  Formation
+                </div>
+                <div style={{ fontWeight: 500, fontSize: "0.85rem", color: THEME.colors.text }}>
+                  {doctor.education}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: "0.8rem", color: THEME.colors.textMuted, marginBottom: 4 }}>
+                  Langues
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {doctor.languages.map(lang => (
+                    <span key={lang} style={{
+                      padding: "4px 10px", borderRadius: THEME.radii.full,
+                      background: THEME.colors.bgAlt, fontSize: "0.75rem",
+                      color: THEME.colors.textSecondary, fontWeight: 500,
+                    }}>
+                      {lang}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {doctor.available && (
+                <div style={{
+                  padding: "12px 16px", borderRadius: THEME.radii.md,
+                  background: THEME.colors.successSoft,
+                  display: "flex", alignItems: "center", gap: 8,
+                }}>
+                  <Icon name="clock" size={16} color={THEME.colors.success} />
+                  <span style={{ fontSize: "0.85rem", color: THEME.colors.success, fontWeight: 600 }}>
+                    Prochain créneau : {doctor.nextSlot}
+                  </span>
+                </div>
+              )}
+
+              <div style={{
+                marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onNavigate("messages"); }}
+                  style={{
+                    padding: "12px", borderRadius: THEME.radii.md,
+                    background: THEME.colors.primary, border: "none",
+                    color: "white", fontWeight: 600, fontSize: "0.85rem",
+                    cursor: "pointer", display: "flex", alignItems: "center",
+                    justifyContent: "center", gap: 8,
+                  }}
+                >
+                  <Icon name="message" size={16} color="white" />
+                  Contacter
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onNavigate("appointments"); }}
+                  style={{
+                    padding: "12px", borderRadius: THEME.radii.md,
+                    background: THEME.colors.surface,
+                    border: `1.5px solid ${THEME.colors.border}`,
+                    color: THEME.colors.text, fontWeight: 600, fontSize: "0.85rem",
+                    cursor: "pointer", display: "flex", alignItems: "center",
+                    justifyContent: "center", gap: 8,
+                  }}
+                >
+                  <Icon name="calendar" size={16} color={THEME.colors.text} />
+                  RDV
+                </button>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export { DOCTORS, EXAM_TYPES, THEME, Icons, Icon };
