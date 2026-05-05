@@ -88,12 +88,13 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation — lien Admin conditionnel ajouté dans le tableau, plus de NavLink imbriqué */}
           <nav style={{ display: "flex", gap: 8 }}>
             {[
-              { to: "/",              label: "Accueil" },
-              { to: "/classification",label: "Analyse" },
-              { to: "/pathologies",   label: "Pathologies" },
+              { to: "/",               label: "Accueil" },
+              { to: "/classification", label: "Analyse" },
+              { to: "/pathologies",    label: "Pathologies" },
+              ...(isAdmin ? [{ to: "/admin", label: "Administration" }] : []),
             ].map(link => (
               <NavLink
                 key={link.to}
@@ -111,7 +112,6 @@ export default function Header() {
                 })}
               >
                 {link.label}
-                {isAdmin && <NavLink to="/admin">Administration</NavLink>}
               </NavLink>
             ))}
           </nav>
