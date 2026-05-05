@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+// ✅ FIX 4 : Suppression de l'import CIM11Chatbot inexistant
+// import CIM11Chatbot from "../components/CIM11Chatbot"; ← CE FICHIER N'EXISTE PAS
 
 const API = "http://localhost:8000/api/v1";
 
@@ -384,11 +386,13 @@ export default function MedecinDashboard() {
         </div>
 
         {/* ── Quick actions ─────────────────────────────────────── */}
-        <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
           {[
-            { icon: "🔬", label: "Classification directe", desc: "Analyser une image sans consultation", action: () => navigate("/classification"), color: "#7C3AED", bg: "#EDE9FE" },
-            { icon: "📖", label: "Pathologies", desc: "Explorer les pathologies par modèle", action: () => navigate("/pathologies"), color: "#0369A1", bg: "#E0F2FE" },
-            { icon: "📋", label: "File complète", desc: "Gérer toutes les demandes", action: () => navigate("/doctor/queue"), color: "#059669", bg: "#ECFDF5" },
+            { icon: "🔬", label: "Classification directe", desc: "Analyser une image sans consultation",   action: () => navigate("/classification"), color: "#7C3AED", bg: "#EDE9FE" },
+            { icon: "📖", label: "Pathologies",             desc: "Explorer les pathologies par modèle",   action: () => navigate("/pathologies"),    color: "#0369A1", bg: "#E0F2FE" },
+            { icon: "📋", label: "File complète",           desc: "Gérer toutes les demandes",             action: () => navigate("/doctor/queue"),   color: "#059669", bg: "#ECFDF5" },
+            // ✅ FIX 5 : Ajout d'un raccourci vers CIM-11 directement depuis le dashboard
+            { icon: "📚", label: "Assistant CIM-11",        desc: "Classification internationale OMS",     action: () => navigate("/cim11"),          color: "#0099cc", bg: "#E0F9FF" },
           ].map(a => (
             <button key={a.label} onClick={a.action} style={{
               padding: "18px 20px", background: "white", borderRadius: 16,
@@ -457,9 +461,8 @@ export default function MedecinDashboard() {
             </div>
           </div>
         )}
-      </div>
 
-      {showNotifs && <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setShowNotifs(false)} />}
+      </div>
     </div>
   );
 }
