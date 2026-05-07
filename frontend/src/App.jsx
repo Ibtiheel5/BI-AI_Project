@@ -119,6 +119,10 @@ function AppRoutes() {
       
       {/* 404 - Rediriger vers la page d'accueil */}
       <Route path="*" element={<Navigate to="/" replace />} />
+
+
+      <Route path="/video-consultation/:id" element={<VideoConsultation />} />
+
     </Routes>
   );
 }

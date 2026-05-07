@@ -2956,3 +2956,31 @@
 .pd3-body > :last-child {
   margin-bottom: 0;
 }
+/* Animation pour le marqueur du médecin le plus proche */
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.nearest-marker {
+  animation: pulse-green 1.5s infinite;
+  z-index: 1000 !important;
+}
+
+/* Badge plus proche dans la sidebar */
+.pd3-map-sidebar-item.nearest {
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid #10B981;
+}
+
+.pd3-map-sidebar-item-distance.nearest {
+  color: #10B981;
+  font-weight: 800;
+}

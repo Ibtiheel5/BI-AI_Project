@@ -89,7 +89,7 @@ const haversine = (lat1, lon1, lat2, lon2) => {
 // LEAFLET MAP COMPONENT
 // ═══════════════════════════════════════
 // LEAFLET MAP COMPONENT - VERSION COMPLÈTEMENT CORRIGÉE
-const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect }) => {
+const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nearestDoctorId }) => {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
@@ -193,33 +193,66 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect }) =>
       }
 
       // Icône médecin
-      const createDoctorIcon = (color) => leaflet.divIcon({
-        html: `<div style="
-          width: 28px;
-          height: 28px;
-          background: ${color};
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          border: 2px solid white;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-          cursor: pointer;
-        ">
-          <div style="
-            width: 8px;
-            height: 8px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(45deg);
-          "></div>
-        </div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 28],
-        popupAnchor: [0, -25],
-        className: 'doctor-marker'
-      });
+      // Remplacer la création du marqueur médecin par :
+const createDoctorIcon = (color, isNearest = false) => {
+  if (isNearest) {
+    return leaflet.divIcon({
+      html: `<div style="
+        width: 36px;
+        height: 36px;
+        background: #10B981;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 3px solid white;
+        box-shadow: 0 0 0 3px rgba(16,185,129,0.4), 0 2px 6px rgba(0,0,0,0.3);
+        cursor: pointer;
+        animation: pulse-green 1.5s infinite;
+      ">
+        <div style="
+          width: 10px;
+          height: 10px;
+          background: white;
+          border-radius: 50%;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(45deg);
+        "></div>
+      </div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+      popupAnchor: [0, -30],
+      className: 'doctor-marker nearest-marker'
+    });
+  }
+  return leaflet.divIcon({
+    html: `<div style="
+      width: 28px;
+      height: 28px;
+      background: ${color};
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 2px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      cursor: pointer;
+    ">
+      <div style="
+        width: 8px;
+        height: 8px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(45deg);
+      "></div>
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -25],
+    className: 'doctor-marker'
+  });
+};
 
       // Ajouter les médecins
       doctors.forEach((doc, idx) => {
@@ -230,8 +263,9 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect }) =>
         const lat = coords[0] + (idx % 5 - 2) * 0.003;
         const lng = coords[1] + (idx % 5 - 2) * 0.003;
         const color = DOCTOR_COLORS[doc.specialite] || "#D4A500";
-        
-        const marker = leaflet.marker([lat, lng], { icon: createDoctorIcon(color) });
+        const isNearest = doc.id === nearestDoctorId;
+
+        const marker = leaflet.marker([lat, lng], { icon: createDoctorIcon(color, isNearest) });
         
         marker.bindPopup(`
           <div style="font-family: 'Inter', sans-serif; min-width: 180px; padding: 4px;">
@@ -434,15 +468,76 @@ const ConsultationCard = ({ consultation, onClick }) => {
   );
 };
 
-const DoctorCardAPI = ({ doctor, distance, onClick }) => {
+const DoctorCardAPI = ({ doctor, distance, onClick, isNearest }) => {
   const color = DOCTOR_COLORS[doctor.specialite] || "#64748B";
   const initials = (doctor.name||"").split(" ").map(n=>n[0]).join("").substring(0,2).toUpperCase();
   return (
-    <motion.div className="pd3-doctor-card-api" style={{"--accent-color":color}} onClick={onClick} whileHover={{y:-4}}>
+    <motion.div 
+      className="pd3-doctor-card-api" 
+      style={{
+        "--accent-color": color,
+        border: isNearest ? "2px solid #10B981" : "1px solid var(--border)",
+        background: isNearest ? "linear-gradient(145deg, #FFFFFF, #F0FDF4)" : "var(--card)",
+        position: "relative",
+      }} 
+      onClick={onClick} 
+      whileHover={{y:-4}}
+    >
+      {isNearest && (
+        <div style={{
+          position: "absolute",
+          top: -10,
+          left: 20,
+          background: "#10B981",
+          color: "white",
+          fontSize: "0.6rem",
+          fontWeight: 700,
+          padding: "3px 10px",
+          borderRadius: 20,
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          boxShadow: "0 2px 8px rgba(16,185,129,0.3)",
+          zIndex: 5,
+        }}>
+          <I.Navigation size={10} color="white" /> Plus proche
+        </div>
+      )}
+      
       {distance !== null && <span className="pd3-doctor-badge-distance"><I.Navigation size={11}/> {distance} km</span>}
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
-        <div className="pd3-doctor-avatar-large" style={{background:`${color}18`,color,border:`1px solid ${color}30`}}>{initials}</div>
-        <div><div style={{fontWeight:700,fontSize:"0.92rem",color:"var(--navy)",marginBottom:3}}>{doctor.name}</div><div style={{fontSize:"0.78rem",color,fontWeight:600}}>{doctor.specialite}</div></div>
+        <div className="pd3-doctor-avatar-large" style={{
+          background: isNearest ? "#10B98118" : `${color}18`,
+          color: isNearest ? "#10B981" : color,
+          border: isNearest ? "2px solid #10B981" : `1px solid ${color}30`,
+        }}>{initials}</div>
+        <div>
+          <div style={{
+            fontWeight: 700,
+            fontSize: "0.92rem",
+            color: "var(--navy)",
+            marginBottom: 3,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap"
+          }}>
+            {doctor.name}
+            {isNearest && (
+              <span style={{
+                background: "#10B981",
+                color: "white",
+                fontSize: "0.6rem",
+                padding: "2px 8px",
+                borderRadius: 12,
+                fontWeight: 600,
+              }}>
+                Plus proche
+              </span>
+            )}
+          </div>
+          <div style={{fontSize:"0.78rem",color,fontWeight:600}}>{doctor.specialite}</div>
+        </div>
       </div>
       <div style={{fontSize:"0.75rem",color:"var(--txt2)",lineHeight:1.6}}>
         {doctor.address && <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><I.Hospital size={13} color="var(--txt3)"/> {doctor.address}</div>}
@@ -600,6 +695,16 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     }
     return result.sort((a,b) => (a.distance ?? 9999) - (b.distance ?? 9999));
   }, [doctorsWithDistance, searchQuery, specialtyFilter]);
+
+  // Après le calcul de filteredDoctors, ajouter :
+const nearestDoctor = useMemo(() => {
+  if (!userLocation || filteredDoctors.length === 0) return null;
+  return filteredDoctors.reduce((nearest, current) => {
+    if (!nearest) return current;
+    if ((current.distance ?? Infinity) < (nearest.distance ?? Infinity)) return current;
+    return nearest;
+  }, null);
+}, [filteredDoctors, userLocation]);
 
   const specialties = useMemo(() => [...new Set(doctors.map(d => d.specialite).filter(Boolean))].sort(), [doctors]);
 
@@ -950,87 +1055,135 @@ export default function PatientDashboard({ initialTab = "overview" }) {
               </Reveal>
 
               {/* Affichage Carte ou Liste */}
-              {doctorsLoading ? (
-                <div className="pd3-api-loading"><div className="pd3-api-spinner"/><span style={{color:"var(--txt3)"}}>Chargement des médecins...</span></div>
-              ) : mapView === "map" ? (
-                <div className="pd3-map-full-container" style={{overflow:"hidden",marginBottom:32,borderRadius:"var(--radius-xl)",border:"1px solid var(--border)"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 350px",height:600}}>
-                    <MapView 
-                      doctors={filteredDoctors} 
-                      userLocation={userLocation} 
-                      selectedDoctorId={selectedDoctorId} 
-                      onDoctorSelect={d => setSelectedDoctorId(d.id)}
-                    />
-                    <div className="pd3-map-sidebar">
-                      <div className="pd3-map-sidebar-header">
-                        <span>Médecins à proximité</span>
-                        <span style={{fontSize:"0.7rem",color:"var(--txt3)"}}>
-                          {filteredDoctors.length} résultat{filteredDoctors.length>1?"s":""}
-                        </span>
-                      </div>
-                      <div className="pd3-map-sidebar-list" style={{maxHeight:540,overflowY:"auto"}}>
-                        {filteredDoctors.length === 0 ? (
-                          <div style={{padding:"40px 20px",textAlign:"center",color:"var(--txt3)"}}>
-                            <I.Map size={32} color="var(--txt3)"/>
-                            <p style={{marginTop:12}}>Aucun médecin trouvé</p>
-                            <p style={{fontSize:"0.7rem"}}>Essayez de modifier vos filtres</p>
-                          </div>
-                        ) : (
-                          filteredDoctors.map((d, idx) => (
-                            <motion.div
-                              key={d.id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: idx * 0.03 }}
-                              className={`pd3-map-sidebar-item ${selectedDoctorId === d.id ? "active" : ""}`}
-                              onClick={() => setSelectedDoctorId(d.id)}
-                              style={{cursor:"pointer",padding:"14px 18px",borderBottom:"1px solid var(--border)",transition:"all 0.2s"}}
-                            >
-                              <div className="pd3-map-sidebar-item-name" style={{fontWeight:700,color:"var(--navy)",marginBottom:4}}>
-                                {d.name}
-                              </div>
-                              <div className="pd3-map-sidebar-item-specialty" style={{fontSize:"0.72rem",color:"var(--gold-dk)",fontWeight:600,marginBottom:6}}>
-                                {d.specialite}
-                              </div>
-                              {d.ville && (
-                                <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginBottom:4}}>
-                                  <I.Map size={11} color="var(--txt3)"/> {d.ville}
-                                </div>
-                              )}
-                              {d.distance !== null && (
-                                <div className="pd3-map-sidebar-item-distance" style={{fontSize:"0.7rem",color:"var(--success)",fontWeight:700,marginTop:6,display:"flex",alignItems:"center",gap:4}}>
-                                  <I.Navigation size={11} color="var(--success)"/> {d.distance} km
-                                </div>
-                              )}
-                              {d.phones?.[0] && (
-                                <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginTop:6}}>
-                                  <I.Phone size={11} color="var(--txt3)"/> {d.phones[0]}
-                                </div>
-                              )}
-                              {d.address && (
-                                <div className="pd3-map-sidebar-item-address" style={{fontSize:"0.65rem",color:"var(--txt3)",marginTop:4}}>
-                                  {d.address.length > 60 ? d.address.substring(0,60)+"..." : d.address}
-                                </div>
-                              )}
-                            </motion.div>
-                          ))
-                        )}
-                      </div>
-                    </div>
+              {/* Affichage Carte ou Liste */}
+{doctorsLoading ? (
+  <div className="pd3-api-loading">...</div>
+) : mapView === "map" ? (
+  <div className="pd3-map-full-container" style={{overflow:"hidden",marginBottom:32,borderRadius:"var(--radius-xl)",border:"1px solid var(--border)"}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 350px",height:600}}>
+      <MapView 
+        doctors={filteredDoctors} 
+        userLocation={userLocation} 
+        selectedDoctorId={selectedDoctorId} 
+        onDoctorSelect={d => setSelectedDoctorId(d.id)}
+        nearestDoctorId={nearestDoctor?.id}  // ← AJOUTER CETTE LIGNE
+      />
+      <div className="pd3-map-sidebar">
+        <div className="pd3-map-sidebar-header">
+          <span>Médecins à proximité</span>
+          <span style={{fontSize:"0.7rem",color:"var(--txt3)"}}>
+            {filteredDoctors.length} résultat{filteredDoctors.length>1?"s":""}
+          </span>
+        </div>
+        <div className="pd3-map-sidebar-list" style={{maxHeight:540,overflowY:"auto"}}>
+          {filteredDoctors.length === 0 ? (
+            <div style={{padding:"40px 20px",textAlign:"center",color:"var(--txt3)"}}>
+              <I.Map size={32} color="var(--txt3)"/>
+              <p style={{marginTop:12}}>Aucun médecin trouvé</p>
+              <p style={{fontSize:"0.7rem"}}>Essayez de modifier vos filtres</p>
+            </div>
+          ) : (
+            filteredDoctors.map((d, idx) => {
+              // ↓↓↓ AJOUTER CETTE LIGNE ↓↓↓
+              const isNearestDoctor = nearestDoctor && d.id === nearestDoctor.id;
+              // ↑↑↑ AJOUTER CETTE LIGNE ↑↑↑
+              
+              return (
+                <motion.div
+                  key={d.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                  // ↓↓↓ MODIFIER LE className ↓↓↓
+                  className={`pd3-map-sidebar-item ${selectedDoctorId === d.id ? "active" : ""} ${isNearestDoctor ? "nearest" : ""}`}
+                  // ↑↑↑ MODIFIER LE className ↑↑↑
+                  onClick={() => setSelectedDoctorId(d.id)}
+                  // ↓↓↓ MODIFIER LE style ↓↓↓
+                  style={{
+                    cursor: "pointer",
+                    padding: "14px 18px",
+                    borderBottom: "1px solid var(--border)",
+                    transition: "all 0.2s",
+                    background: isNearestDoctor ? "rgba(16,185,129,0.08)" : "transparent",
+                    borderLeft: isNearestDoctor ? "3px solid #10B981" : "3px solid transparent",
+                  }}
+                  // ↑↑↑ MODIFIER LE style ↑↑↑
+                >
+                  <div className="pd3-map-sidebar-item-name" style={{fontWeight:700,color:"var(--navy)",marginBottom:4}}>
+                    {d.name}
                   </div>
-                </div>
-              ) : (
-                <div className="pd3-doctors-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))",gap:16}}>
-                  {filteredDoctors.map(d => (
-                    <DoctorCardAPI 
-                      key={d.id} 
-                      doctor={d} 
-                      distance={d.distance} 
-                      onClick={() => {setSelectedDoctorId(d.id);setMapView("map");}}
-                    />
-                  ))}
-                </div>
-              )}
+                  <div className="pd3-map-sidebar-item-specialty" style={{fontSize:"0.72rem",color:"var(--gold-dk)",fontWeight:600,marginBottom:6}}>
+                    {d.specialite}
+                  </div>
+                  {d.ville && (
+                    <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginBottom:4}}>
+                      <I.Map size={11} color="var(--txt3)"/> {d.ville}
+                    </div>
+                  )}
+                  {d.distance !== null && (
+                    <div className={`pd3-map-sidebar-item-distance ${isNearestDoctor ? "nearest" : ""}`} style={{fontSize:"0.7rem",color:"var(--success)",fontWeight:700,marginTop:6,display:"flex",alignItems:"center",gap:4}}>
+                      <I.Navigation size={11} color="var(--success)"/> {d.distance} km
+                    </div>
+                  )}
+                  {d.phones?.[0] && (
+                    <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginTop:6}}>
+                      <I.Phone size={11} color="var(--txt3)"/> {d.phones[0]}
+                    </div>
+                  )}
+                  {d.address && (
+                    <div className="pd3-map-sidebar-item-address" style={{fontSize:"0.65rem",color:"var(--txt3)",marginTop:4}}>
+                      {d.address.length > 60 ? d.address.substring(0,60)+"..." : d.address}
+                    </div>
+                  )}
+                  
+                  {/* ↓↓↓ AJOUTER CETTE SECTION POUR LE BADGE "PLUS PROCHE" ↓↓↓ */}
+                  {isNearestDoctor && (
+                    <div style={{
+                      marginTop: 8,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "#10B98115",
+                      color: "#10B981",
+                      fontSize: "0.6rem",
+                      fontWeight: 700,
+                      padding: "3px 10px",
+                      borderRadius: 20,
+                      width: "fit-content",
+                    }}>
+                      <I.Navigation size={10} color="#10B981"/> Le plus proche de vous
+                    </div>
+                  )}
+                  {/* ↑↑↑ AJOUTER CETTE SECTION ↑↑↑ */}
+                  
+                </motion.div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+) : (
+  // Vue liste
+  <div className="pd3-doctors-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))",gap:16}}>
+    {filteredDoctors.map(d => {
+      // ↓↓↓ AJOUTER CETTE LIGNE ↓↓↓
+      const isNearest = nearestDoctor && d.id === nearestDoctor.id;
+      // ↑↑↑ AJOUTER CETTE LIGNE ↑↑↑
+      
+      return (
+        <DoctorCardAPI 
+          key={d.id} 
+          doctor={d} 
+          distance={d.distance} 
+          isNearest={isNearest}  // ← AJOUTER CETTE PROP
+          onClick={() => {setSelectedDoctorId(d.id);setMapView("map");}}
+        />
+      );
+    })}
+  </div>
+)}
             </motion.div>
           )}
 
