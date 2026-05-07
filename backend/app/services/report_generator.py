@@ -1,81 +1,119 @@
-"""
-report_generator.py — Génération de rapports PDF médicaux
-Utilise ReportLab pour produire un rapport clinique complet :
-  - En-tête institution + métadonnées patient
-  - Résumé de prédiction avec badge de sévérité
-  - Image originale + heatmap Grad-CAM côte à côte
-  - Distribution des probabilités (barres)
-  - Rapport d'explication clinique (texte Gemini)
-  - Pied de page légal
-"""
-
-import io
 import base64
+import io
+import re
+import uuid
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Dict, Optional
+from xml.sax.saxutils import escape
 
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, Image as RLImage, KeepTogether, PageBreak
+    HRFlowable,
+    Image as RLImage,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
 )
-from reportlab.graphics.shapes import Drawing, Rect, String
-from reportlab.graphics import renderPDF
 
 
-# ── Palette médicale ─────────────────────────────────────────────────────────
-NAVY       = colors.HexColor("#0A2647")
-BLUE       = colors.HexColor("#2D5F9E")
+NAVY = colors.HexColor("#0A2647")
+BLUE = colors.HexColor("#2563EB")
 LIGHT_BLUE = colors.HexColor("#EFF6FF")
-SLATE      = colors.HexColor("#475569")
-MUTED      = colors.HexColor("#94A3B8")
-WHITE      = colors.white
-RED        = colors.HexColor("#DC2626")
-ORANGE     = colors.HexColor("#EA580C")
-GREEN      = colors.HexColor("#16A34A")
-AMBER      = colors.HexColor("#D97706")
-BG_LIGHT   = colors.HexColor("#F8FAFC")
-BORDER     = colors.HexColor("#E2E8F0")
-
-# Sévérité par classe
-SEVERITY = {
-    "COVID":          ("URGENCE VITALE",         RED),
-    "Pneumonia":      ("URGENCE VITALE",         RED),
-    "Pneumothorax":   ("URGENCE VITALE",         RED),
-    "Edema":          ("URGENCE VITALE",         RED),
-    "Mass":           ("URGENCE ONCOLOGIQUE",    RED),
-    "Malignant":      ("URGENCE ONCOLOGIQUE",    RED),
-    "Glioma":         ("URGENCE NEUROLOGIQUE",   RED),
-    "Cardiomegaly":   ("SURVEILLANCE CARDIO",    ORANGE),
-    "Emphysema":      ("SURVEILLANCE PNEUMO",    ORANGE),
-    "Meningioma":     ("SURVEILLANCE NEURO",     ORANGE),
-    "Viral Pneumonia":("URGENCE VITALE",         RED),
-    "Lung_Opacity":   ("SURVEILLANCE PNEUMO",    ORANGE),
-    "Nodule":         ("BILAN COMPLÉMENTAIRE",   AMBER),
-    "No Finding":     ("NORMAL",                 GREEN),
-    "Normal":         ("NORMAL",                 GREEN),
-    "Benign":         ("BÉNIN",                  BLUE),
-    "No Tumor":       ("NORMAL",                 GREEN),
-    "Pituitary":      ("SURVEILLANCE NEURO",     ORANGE),
-}
+SLATE = colors.HexColor("#475569")
+MUTED = colors.HexColor("#64748B")
+BORDER = colors.HexColor("#E2E8F0")
+BG_LIGHT = colors.HexColor("#F8FAFC")
+WHITE = colors.white
+RED = colors.HexColor("#DC2626")
+ORANGE = colors.HexColor("#EA580C")
+GREEN = colors.HexColor("#16A34A")
+AMBER = colors.HexColor("#D97706")
 
 MODEL_LABELS = {
-    "chest": "Radiographie Thoracique",
-    "lung":  "Scanner CT Pulmonaire",
-    "brain": "IRM Cérébrale",
+    "chest": "Radiographie thoracique",
+    "lung": "Scanner CT pulmonaire",
+    "brain": "IRM cerebrale",
+    "retina": "Retinographie / fond d'oeil",
+}
+
+SEVERITY = {
+    "COVID": ("Urgence infectieuse", RED),
+    "Pneumonia": ("Urgence respiratoire", RED),
+    "Viral Pneumonia": ("Urgence respiratoire", RED),
+    "Pneumothorax": ("Urgence vitale", RED),
+    "Edema": ("Urgence cardio-respiratoire", RED),
+    "Mass": ("Suspicion oncologique", RED),
+    "Malignant": ("Suspicion oncologique", RED),
+    "Glioma": ("Urgence neurologique", RED),
+    "Cardiomegaly": ("Surveillance cardiologique", ORANGE),
+    "Emphysema": ("Surveillance pneumologique", ORANGE),
+    "Meningioma": ("Surveillance neurologique", ORANGE),
+    "Nodule": ("Bilan complementaire", AMBER),
+    "No Finding": ("Aucune anomalie detectee", GREEN),
+    "Normal": ("Aucune anomalie detectee", GREEN),
+    "No_DR": ("Retine sans DR detectee", GREEN),
+    "Mild": ("DR legere", AMBER),
+    "Moderate": ("DR moderee", ORANGE),
+    "Severe": ("DR severe", RED),
+    "Proliferate_DR": ("DR proliferante", RED),
+    "No Tumor": ("Aucune tumeur detectee", GREEN),
+    "notumor": ("Aucune tumeur detectee", GREEN),
+    "Benign": ("Aspect benin", BLUE),
+    "Pituitary": ("Surveillance neuro-endocrine", ORANGE),
+}
+
+RECOMMENDATIONS = {
+    "COVID": "Isolement, confirmation virologique si necessaire, evaluation de la tolerance respiratoire et surveillance rapprochee.",
+    "Pneumonia": "Correlation clinico-biologique, antibiotherapie selon le contexte, controle evolutif et TDM si discordance.",
+    "Viral Pneumonia": "Correlation clinique, bilan infectieux, surveillance respiratoire et controle radiologique selon evolution.",
+    "Pneumothorax": "Evaluer la tolerance clinique. Drainage ou exsufflation en urgence si pneumothorax important ou mal tolere.",
+    "Edema": "Bilan cardiologique, BNP/pro-BNP, echocardiographie et prise en charge d'une eventuelle decompensation.",
+    "Mass": "TDM injectee, comparaison aux examens anterieurs, discussion RCP et confirmation histologique si indiquee.",
+    "Malignant": "Bilan d'extension, avis oncologique et confirmation anatomopathologique selon le contexte.",
+    "Cardiomegaly": "ECG, echocardiographie transthoracique, BNP/pro-BNP et evaluation cardiologique.",
+    "Emphysema": "Spirometrie, evaluation tabagique, avis pneumologique et optimisation du traitement bronchodilatateur.",
+    "Glioma": "IRM cerebrale avec gadolinium, avis neurochirurgical et discussion multidisciplinaire.",
+    "Meningioma": "IRM avec injection, evaluation neurochirurgicale et surveillance si lesion asymptomatique stable.",
+    "No Finding": "Pas d'anomalie radiologique evidente detectee par l'IA. Interpreter selon le contexte clinique.",
+    "Normal": "Pas d'anomalie evidente detectee par l'IA. Suivi clinique selon indication initiale.",
+    "No_DR": "Surveillance ophtalmologique reguliere selon le contexte diabetique et controle glycemique.",
+    "Mild": "Controle ophtalmologique, optimisation glycemique et tensionnelle.",
+    "Moderate": "Avis ophtalmologique, surveillance rapprochee et recherche d'oedeme maculaire.",
+    "Severe": "Avis ophtalmologique rapide, surveillance rapprochee et discussion therapeutique specialisee.",
+    "Proliferate_DR": "Avis ophtalmologique urgent, evaluation pour laser, anti-VEGF ou chirurgie selon le cas.",
 }
 
 
-def _decode_b64_image(b64_str: str) -> Optional[io.BytesIO]:
-    """Décode une image base64 en BytesIO."""
+def _clean_text(value: object) -> str:
+    text = "" if value is None else str(value)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return escape(text)
+
+
+def _strip_markdown(text: str) -> str:
+    text = re.sub(r"^\s*[-*]\s+", "- ", text)
+    text = text.replace("**", "").replace("__", "").replace("`", "")
+    text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)
+    return text
+
+
+def _decode_b64_image(b64_str: Optional[str]) -> Optional[io.BytesIO]:
+    if not b64_str:
+        return None
     try:
-        if "," in b64_str:
-            b64_str = b64_str.split(",", 1)[1]
-        data = base64.b64decode(b64_str)
+        raw = b64_str.strip()
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        data = base64.b64decode(raw, validate=False)
+        if not data:
+            return None
         buf = io.BytesIO(data)
         buf.seek(0)
         return buf
@@ -83,427 +121,389 @@ def _decode_b64_image(b64_str: str) -> Optional[io.BytesIO]:
         return None
 
 
-def _make_styles():
-    """Crée tous les styles de paragraphes."""
+def _normalize_probabilities(probabilities: object) -> Dict[str, float]:
+    if not isinstance(probabilities, dict):
+        return {}
+    clean = {}
+    for key, value in probabilities.items():
+        try:
+            prob = float(value)
+        except (TypeError, ValueError):
+            continue
+        clean[str(key)] = max(0.0, min(prob, 1.0))
+    return clean
+
+
+def _normalize_confidence(confidence: object) -> float:
+    try:
+        value = float(confidence)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(value, 1.0))
+
+
+def _styles() -> dict:
     base = getSampleStyleSheet()
 
-    def S(name, **kw):
-        return ParagraphStyle(name, parent=base["Normal"], **kw)
+    def style(name, **kwargs):
+        return ParagraphStyle(name, parent=base["Normal"], **kwargs)
 
     return {
-        "title":       S("title",       fontSize=20, textColor=NAVY,
-                          fontName="Helvetica-Bold", spaceAfter=2,
-                          alignment=TA_LEFT),
-        "subtitle":    S("subtitle",    fontSize=9,  textColor=MUTED,
-                          fontName="Helvetica", spaceAfter=0),
-        "section":     S("section",     fontSize=10, textColor=NAVY,
-                          fontName="Helvetica-Bold", spaceBefore=10, spaceAfter=4),
-        "body":        S("body",        fontSize=8.5, textColor=SLATE,
-                          fontName="Helvetica", leading=14, alignment=TA_JUSTIFY),
-        "label":       S("label",       fontSize=7,  textColor=MUTED,
-                          fontName="Helvetica", spaceAfter=1),
-        "value":       S("value",       fontSize=9,  textColor=NAVY,
-                          fontName="Helvetica-Bold"),
-        "prediction":  S("prediction",  fontSize=18, textColor=NAVY,
-                          fontName="Helvetica-Bold", alignment=TA_CENTER),
-        "conf":        S("conf",        fontSize=11, textColor=BLUE,
-                          fontName="Helvetica-Bold", alignment=TA_CENTER),
-        "badge":       S("badge",       fontSize=8,  textColor=WHITE,
-                          fontName="Helvetica-Bold", alignment=TA_CENTER),
-        "footer":      S("footer",      fontSize=7,  textColor=MUTED,
-                          fontName="Helvetica", alignment=TA_CENTER, leading=11),
-        "mono":        S("mono",        fontSize=7.5, textColor=SLATE,
-                          fontName="Courier", leading=12),
-        "prob_label":  S("prob_label",  fontSize=8,  textColor=SLATE,
-                          fontName="Helvetica"),
-        "prob_value":  S("prob_value",  fontSize=8,  textColor=NAVY,
-                          fontName="Helvetica-Bold"),
-        "warn":        S("warn",        fontSize=7.5, textColor=AMBER,
-                          fontName="Helvetica-Bold"),
+        "title": style("title", fontName="Helvetica-Bold", fontSize=18, textColor=NAVY, alignment=TA_LEFT, leading=22),
+        "subtitle": style("subtitle", fontSize=8, textColor=MUTED, alignment=TA_LEFT, leading=11),
+        "meta": style("meta", fontSize=8, textColor=SLATE, alignment=TA_RIGHT, leading=12),
+        "section": style("section", fontName="Helvetica-Bold", fontSize=10, textColor=NAVY, spaceBefore=8, spaceAfter=5),
+        "body": style("body", fontSize=8.5, textColor=SLATE, leading=13, alignment=TA_JUSTIFY),
+        "small": style("small", fontSize=7.5, textColor=MUTED, leading=10),
+        "label": style("label", fontName="Helvetica-Bold", fontSize=7, textColor=MUTED, alignment=TA_CENTER),
+        "value": style("value", fontName="Helvetica-Bold", fontSize=14, textColor=NAVY, alignment=TA_CENTER, leading=16),
+        "value_red": style("value_red", fontName="Helvetica-Bold", fontSize=14, textColor=RED, alignment=TA_CENTER, leading=16),
+        "badge": style("badge", fontName="Helvetica-Bold", fontSize=8, textColor=WHITE, alignment=TA_CENTER),
+        "prob": style("prob", fontSize=8, textColor=SLATE, leading=11),
+        "prob_bold": style("prob_bold", fontName="Helvetica-Bold", fontSize=8, textColor=NAVY, leading=11),
+        "explain_title": style("explain_title", fontName="Helvetica-Bold", fontSize=9, textColor=BLUE, leading=12, spaceBefore=5, spaceAfter=2),
+        "footer": style("footer", fontSize=6.5, textColor=MUTED, alignment=TA_CENTER, leading=8),
     }
 
 
-def _prob_bar_table(probabilities: Dict[str, float], styles: dict) -> Table:
-    """Crée un tableau avec des barres de probabilités visuelles."""
-    sorted_probs = sorted(probabilities.items(), key=lambda x: -x[1])[:8]
-    max_prob = sorted_probs[0][1] if sorted_probs else 1.0
-
-    rows = []
-    for cls, prob in sorted_probs:
-        pct = prob * 100
-        bar_width = int((prob / max_prob) * 80)  # max 80 units
-
-        # Bar visuelle via Drawing
-        d = Drawing(90 * mm, 6 * mm)
-        # Background bar
-        d.add(Rect(0, 1, 90 * mm, 4.5 * mm,
-                   fillColor=BORDER, strokeColor=None))
-        # Filled bar
-        if bar_width > 0:
-            fill_color = BLUE if prob == max_prob else colors.HexColor("#93C5FD")
-            d.add(Rect(0, 1, (prob / max_prob) * 90 * mm, 4.5 * mm,
-                       fillColor=fill_color, strokeColor=None))
-
-        rows.append([
-            Paragraph(cls, styles["prob_label"]),
-            d,
-            Paragraph(f"{pct:.1f}%", styles["prob_value"]),
-        ])
-
-    t = Table(rows, colWidths=[45*mm, 92*mm, 16*mm])
-    t.setStyle(TableStyle([
-        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",  (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING",(0,0), (-1, -1), 2),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",(0, 0), (-1, -1), 0),
-    ]))
-    return t
-
-
-def _header_table(patient_id: str, model_key: str,
-                  report_id: str, styles: dict) -> Table:
-    """En-tête avec logo-texte institution + métadonnées."""
+def _header(patient_id: str, model_key: str, report_id: str, styles: dict) -> Table:
     now = datetime.now()
-    date_str = now.strftime("%d/%m/%Y")
-    time_str = now.strftime("%H:%M")
-
-    logo_cell = [
-        Paragraph("ChestAI", ParagraphStyle("logo", fontSize=16,
-                   fontName="Helvetica-Bold", textColor=NAVY)),
-        Paragraph("Plateforme d'Imagerie Médicale IA", ParagraphStyle("logoSub",
-                   fontSize=7.5, fontName="Helvetica", textColor=MUTED)),
-        Paragraph("Certifié CE IIa · Usage diagnostique professionnel",
-                   ParagraphStyle("logoCert", fontSize=6.5,
-                   fontName="Helvetica", textColor=BLUE)),
+    left = [
+        Paragraph("MedAI", styles["title"]),
+        Paragraph("Rapport d'analyse medicale assistee par intelligence artificielle", styles["subtitle"]),
+        Paragraph("Usage professionnel - interpretation finale par le clinicien", styles["subtitle"]),
     ]
-
-    meta_cell = [
-        Paragraph(f"<b>Patient ID</b> : {patient_id}",
-                   ParagraphStyle("m", fontSize=8.5, fontName="Helvetica",
-                   textColor=NAVY, alignment=TA_RIGHT)),
-        Paragraph(f"<b>Type d'examen</b> : {MODEL_LABELS.get(model_key, model_key)}",
-                   ParagraphStyle("m2", fontSize=8.5, fontName="Helvetica",
-                   textColor=SLATE, alignment=TA_RIGHT)),
-        Paragraph(f"<b>Date / Heure</b> : {date_str} à {time_str}",
-                   ParagraphStyle("m3", fontSize=8.5, fontName="Helvetica",
-                   textColor=SLATE, alignment=TA_RIGHT)),
-        Paragraph(f"<b>Rapport N°</b> : {report_id}",
-                   ParagraphStyle("m4", fontSize=7.5, fontName="Courier",
-                   textColor=MUTED, alignment=TA_RIGHT)),
+    right = [
+        Paragraph(f"<b>Patient</b> : {_clean_text(patient_id)}", styles["meta"]),
+        Paragraph(f"<b>Examen</b> : {_clean_text(MODEL_LABELS.get(model_key, model_key))}", styles["meta"]),
+        Paragraph(f"<b>Date</b> : {now.strftime('%d/%m/%Y a %H:%M')}", styles["meta"]),
+        Paragraph(f"<b>Rapport</b> : {_clean_text(report_id)}", styles["meta"]),
     ]
-
-    t = Table([[logo_cell, meta_cell]], colWidths=[95*mm, 95*mm])
-    t.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+    table = Table([[left, right]], colWidths=[96 * mm, 78 * mm])
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
-    return t
+    return table
+
+
+def _diagnosis_block(prediction: str, confidence: float, severity_label: str, severity_color, styles: dict) -> Table:
+    confidence_style = ParagraphStyle(
+        "confidence_dynamic",
+        parent=styles["value"],
+        textColor=severity_color,
+    )
+    severity_badge = Table(
+        [[Paragraph(_clean_text(severity_label.upper()), styles["badge"])]],
+        colWidths=[55 * mm],
+    )
+    severity_badge.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), severity_color),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
+    table = Table([
+        [
+            Paragraph("DIAGNOSTIC IA", styles["label"]),
+            Paragraph("CONFIANCE", styles["label"]),
+            Paragraph("NIVEAU CLINIQUE", styles["label"]),
+        ],
+        [
+            Paragraph(_clean_text(prediction), styles["value"]),
+            Paragraph(f"{confidence * 100:.1f}%", confidence_style),
+            severity_badge,
+        ],
+    ], colWidths=[62 * mm, 52 * mm, 60 * mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT_BLUE),
+        ("BOX", (0, 0), (-1, -1), 0.8, BORDER),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.6, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    return table
+
+
+def _confidence_bar(confidence: float, color) -> Table:
+    filled = max(1, int(confidence * 100))
+    empty = max(0, 100 - filled)
+    row = []
+    widths = []
+    if filled:
+        row.append("")
+        widths.append(174 * mm * filled / 100)
+    if empty:
+        row.append("")
+        widths.append(174 * mm * empty / 100)
+    table = Table([row], colWidths=widths, rowHeights=[5 * mm])
+    commands = [("BOX", (0, 0), (-1, -1), 0.2, BORDER)]
+    if filled:
+        commands.append(("BACKGROUND", (0, 0), (0, 0), color))
+    if empty:
+        commands.append(("BACKGROUND", (-1, 0), (-1, 0), BORDER))
+    table.setStyle(TableStyle(commands))
+    return table
+
+
+def _image_cell(image_b64: Optional[str], label: str, filename: str = ""):
+    styles = _styles()
+    buf = _decode_b64_image(image_b64)
+    if not buf:
+        return [
+            Paragraph(_clean_text(label), styles["prob_bold"]),
+            Spacer(1, 3 * mm),
+            Paragraph("Image non disponible.", styles["small"]),
+        ]
+    try:
+        image = RLImage(buf, width=78 * mm, height=70 * mm, kind="proportional")
+        return [
+            Paragraph(_clean_text(label), styles["prob_bold"]),
+            Paragraph(_clean_text(filename), styles["small"]) if filename else Spacer(1, 1 * mm),
+            Spacer(1, 2 * mm),
+            image,
+        ]
+    except Exception:
+        return [
+            Paragraph(_clean_text(label), styles["prob_bold"]),
+            Spacer(1, 3 * mm),
+            Paragraph("Image illisible dans ce rapport.", styles["small"]),
+        ]
+
+
+def _images_table(image_b64: Optional[str], gradcam_b64: Optional[str], filename: str) -> Table:
+    original = _image_cell(image_b64, "Image originale", filename)
+    gradcam = _image_cell(gradcam_b64, "Carte de chaleur Grad-CAM", "Zones qui influencent la prediction")
+    table = Table([[original, gradcam]], colWidths=[86 * mm, 86 * mm])
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, BORDER),
+        ("BACKGROUND", (0, 0), (-1, -1), BG_LIGHT),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return table
+
+
+def _probability_table(probabilities: Dict[str, float], prediction: str, styles: dict) -> Table:
+    if not probabilities:
+        table = Table([[Paragraph("Distribution non disponible.", styles["small"])]], colWidths=[174 * mm])
+        table.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
+            ("BACKGROUND", (0, 0), (-1, -1), BG_LIGHT),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        return table
+
+    rows = [[
+        Paragraph("Classe", styles["prob_bold"]),
+        Paragraph("Probabilite", styles["prob_bold"]),
+        Paragraph("Barre", styles["prob_bold"]),
+    ]]
+    sorted_probs = sorted(probabilities.items(), key=lambda item: -item[1])[:10]
+    max_prob = max([prob for _, prob in sorted_probs] + [1e-6])
+    for label, prob in sorted_probs:
+        marker = "  <- prediction" if label == prediction else ""
+        bar_pct = int((prob / max_prob) * 32)
+        bar = "|" * max(1, bar_pct)
+        rows.append([
+            Paragraph(_clean_text(f"{label}{marker}"), styles["prob"]),
+            Paragraph(f"{prob * 100:.1f}%", styles["prob_bold"]),
+            Paragraph(_clean_text(bar), ParagraphStyle("bar", parent=styles["prob"], fontName="Courier", textColor=BLUE)),
+        ])
+
+    table = Table(rows, colWidths=[67 * mm, 28 * mm, 79 * mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("BACKGROUND", (0, 1), (-1, -1), BG_LIGHT),
+        ("GRID", (0, 0), (-1, -1), 0.35, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    return table
+
+
+def _explain_blocks(explain_text: str, styles: dict):
+    blocks = []
+    text = (explain_text or "").strip()
+    if not text:
+        blocks.append(Paragraph(
+            "Explication IA non disponible. Le rapport contient uniquement la prediction, les probabilites et les images disponibles.",
+            styles["body"],
+        ))
+        return blocks
+
+    current_title = None
+    current_lines = []
+
+    def flush():
+        nonlocal current_title, current_lines
+        if current_title:
+            blocks.append(Paragraph(_clean_text(current_title), styles["explain_title"]))
+        content = "\n".join(current_lines).strip()
+        if content:
+            paragraphs = re.split(r"\n\s*\n", content)
+            for para in paragraphs:
+                clean = _strip_markdown(para).replace("\n", "<br/>")
+                blocks.append(Paragraph(_clean_text(clean).replace("&lt;br/&gt;", "<br/>"), styles["body"]))
+                blocks.append(Spacer(1, 1.5 * mm))
+        current_title = None
+        current_lines = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            current_lines.append("")
+            continue
+        if line.startswith("##"):
+            flush()
+            current_title = _strip_markdown(line.lstrip("#").strip())
+        else:
+            current_lines.append(line)
+    flush()
+    return blocks
+
+
+def _recommendation(prediction: str) -> str:
+    return RECOMMENDATIONS.get(
+        prediction,
+        "Correlation clinique indispensable. Completer par l'examen clinique, les antecedents, les examens biologiques et l'imagerie complementaire si necessaire.",
+    )
+
+
+def _fallback_explain_text(model_key: str, prediction: str, confidence: float, probabilities: Dict[str, float]) -> str:
+    model_label = MODEL_LABELS.get(model_key, "image medicale")
+    sorted_probs = sorted(probabilities.items(), key=lambda item: -item[1])
+    differentials = ", ".join(f"{label} ({value * 100:.1f}%)" for label, value in sorted_probs[1:4]) or "non disponible"
+    confidence_note = "elevee" if confidence >= 0.8 else "intermediaire" if confidence >= 0.55 else "faible"
+    return (
+        "## Signes observes sur cette image\n"
+        f"L'analyse IA de cette {model_label} retient principalement la classe {prediction}. "
+        "La carte Grad-CAM doit etre comparee a l'image originale pour verifier que les regions activees "
+        "correspondent a une zone anatomique pertinente.\n\n"
+        "## Correlation signes visuels / decision du modele\n"
+        f"Le score de confiance est de {confidence * 100:.1f}%, soit une confiance {confidence_note}. "
+        f"Les hypotheses differentielles principales sont : {differentials}. "
+        "Plus les probabilites concurrentes sont proches, plus la prudence diagnostique est necessaire.\n\n"
+        "## Conduite clinique basee sur cette image\n"
+        "Cette sortie IA doit etre integree aux donnees cliniques, biologiques et aux examens anterieurs. "
+        "La decision finale, les examens complementaires et la conduite therapeutique relevent du medecin responsable.\n\n"
+        "## Limites de cette analyse\n"
+        "Cette analyse peut etre limitee par la qualite de l'image, le cadrage, les artefacts, "
+        "les variants anatomiques ou les situations hors distribution d'apprentissage du modele."
+    )
 
 
 def generate_report_pdf(
-    patient_id:    str,
-    model_key:     str,
-    filename:      str,
-    prediction:    str,
-    confidence:    float,
+    patient_id: str,
+    model_key: str,
+    filename: str,
+    prediction: str,
+    confidence: float,
     probabilities: Dict[str, float],
-    explain_text:  str = "",
-    image_b64:     Optional[str] = None,
-    gradcam_b64:   Optional[str] = None,
-    report_id:     Optional[str] = None,
+    explain_text: str = "",
+    image_b64: Optional[str] = None,
+    gradcam_b64: Optional[str] = None,
+    report_id: Optional[str] = None,
 ) -> bytes:
-    """
-    Génère un rapport PDF complet.
-    Retourne les bytes du PDF.
-    """
-    if report_id is None:
-        import uuid
-        report_id = f"CHX-{uuid.uuid4().hex[:8].upper()}"
+    probabilities = _normalize_probabilities(probabilities)
+    confidence = _normalize_confidence(confidence)
+    prediction = str(prediction or "Non determine")
+    if len((explain_text or "").split()) < 45:
+        extra_explain = _fallback_explain_text(model_key, prediction, confidence, probabilities)
+        explain_text = ((explain_text or "").strip() + "\n\n" + extra_explain).strip()
+    report_id = report_id or f"MEDAI-{uuid.uuid4().hex[:8].upper()}"
 
-    buf = io.BytesIO()
+    severity_label, severity_color = SEVERITY.get(prediction, ("Analyse a correler", BLUE))
+    styles = _styles()
+    buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf,
+        buffer,
         pagesize=A4,
-        leftMargin=18*mm,  rightMargin=18*mm,
-        topMargin=16*mm,   bottomMargin=20*mm,
-        title=f"Rapport IA — {patient_id}",
-        author="ChestAI Medical Platform",
-        subject=f"Analyse {MODEL_LABELS.get(model_key, model_key)}",
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=20 * mm,
+        title=f"Rapport MedAI - {patient_id}",
+        author="MedAI",
+        subject=f"Analyse IA - {MODEL_LABELS.get(model_key, model_key)}",
     )
 
-    styles = _make_styles()
-    story  = []
-    W = 174*mm   # usable width
+    story = []
+    story.append(_header(patient_id, model_key, report_id, styles))
+    story.append(Spacer(1, 4 * mm))
+    story.append(HRFlowable(width=174 * mm, thickness=1.4, color=NAVY))
+    story.append(Spacer(1, 4 * mm))
 
-    # ── 1. HEADER ────────────────────────────────────────────────────────────
-    story.append(_header_table(patient_id, model_key, report_id, styles))
-    story.append(Spacer(1, 3*mm))
-    story.append(HRFlowable(width=W, thickness=2, color=NAVY, spaceAfter=4*mm))
+    story.append(Paragraph("Synthese de l'analyse IA", styles["section"]))
+    story.append(_diagnosis_block(prediction, confidence, severity_label, severity_color, styles))
+    story.append(Spacer(1, 2 * mm))
+    story.append(_confidence_bar(confidence, severity_color))
+    story.append(Spacer(1, 6 * mm))
 
-    # ── 2. TITRE RAPPORT ─────────────────────────────────────────────────────
-    story.append(Paragraph(
-        "RAPPORT D'ANALYSE PAR INTELLIGENCE ARTIFICIELLE",
-        ParagraphStyle("rptTitle", fontSize=11, fontName="Helvetica-Bold",
-                       textColor=NAVY, alignment=TA_CENTER, spaceAfter=1*mm)
-    ))
-    story.append(Paragraph(
-        "Ce rapport est généré automatiquement et destiné à l'usage exclusif du professionnel de santé.",
-        ParagraphStyle("rptSub", fontSize=7.5, fontName="Helvetica",
-                       textColor=MUTED, alignment=TA_CENTER, spaceAfter=5*mm)
-    ))
+    story.append(Paragraph("Images analysees", styles["section"]))
+    story.append(_images_table(image_b64, gradcam_b64, filename or "image.jpg"))
+    story.append(Spacer(1, 5 * mm))
 
-    # ── 3. BLOC DIAGNOSTIC ───────────────────────────────────────────────────
-    conf_pct = confidence * 100
-    sev_label, sev_color = SEVERITY.get(prediction, ("ANALYSE", BLUE))
+    story.append(Paragraph("Distribution des probabilites", styles["section"]))
+    story.append(_probability_table(probabilities, prediction, styles))
+    story.append(Spacer(1, 5 * mm))
 
-    # Badge sévérité
-    badge_bg = Table(
-        [[Paragraph(f"● {sev_label}", ParagraphStyle(
-            "b", fontSize=8, fontName="Helvetica-Bold",
-            textColor=WHITE, alignment=TA_CENTER))]],
-        colWidths=[60*mm]
-    )
-    badge_bg.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0), (-1,-1), sev_color),
-        ("ROUNDEDCORNERS", (0,0), (-1,-1), [4,4,4,4]),
-        ("TOPPADDING",   (0,0), (-1,-1), 5),
-        ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+    story.append(Paragraph("Explication clinique IA (Gemini / Explainable AI)", styles["section"]))
+    story.extend(_explain_blocks(explain_text, styles))
+    story.append(Spacer(1, 4 * mm))
+
+    story.append(Paragraph("Recommandation immediate", styles["section"]))
+    reco = Table([[
+        Paragraph("A retenir", ParagraphStyle("reco_label", parent=styles["prob_bold"], textColor=severity_color)),
+        Paragraph(_clean_text(_recommendation(prediction)), styles["body"]),
+    ]], colWidths=[28 * mm, 146 * mm])
+    reco.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF7ED") if severity_color in (RED, ORANGE, AMBER) else LIGHT_BLUE),
+        ("BOX", (0, 0), (-1, -1), 0.7, severity_color),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
+    story.append(reco)
+    story.append(Spacer(1, 7 * mm))
 
-    # Conf bar
-    conf_bar_d = Drawing(W, 8*mm)
-    conf_bar_d.add(Rect(0, 2, W, 5*mm, fillColor=BORDER, strokeColor=None))
-    conf_bar_d.add(Rect(0, 2, W * confidence, 5*mm,
-                        fillColor=sev_color, strokeColor=None))
-
-    diag_block = Table([
-        [Paragraph("DIAGNOSTIC PRINCIPAL", ParagraphStyle("dl", fontSize=7,
-           fontName="Helvetica-Bold", textColor=MUTED, alignment=TA_CENTER)),
-         Paragraph("SCORE DE CONFIANCE", ParagraphStyle("dl2", fontSize=7,
-           fontName="Helvetica-Bold", textColor=MUTED, alignment=TA_CENTER)),
-         Paragraph("SÉVÉRITÉ", ParagraphStyle("dl3", fontSize=7,
-           fontName="Helvetica-Bold", textColor=MUTED, alignment=TA_CENTER))],
-        [Paragraph(prediction, ParagraphStyle("dp", fontSize=17,
-           fontName="Helvetica-Bold", textColor=NAVY, alignment=TA_CENTER)),
-         Paragraph(f"{conf_pct:.1f}%", ParagraphStyle("dc", fontSize=17,
-           fontName="Helvetica-Bold", textColor=sev_color, alignment=TA_CENTER)),
-         badge_bg],
-    ], colWidths=[60*mm, 54*mm, 60*mm])
-    diag_block.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0), (-1,-1), LIGHT_BLUE),
-        ("BOX",           (0,0), (-1,-1), 1, BORDER),
-        ("ROUNDEDCORNERS",(0,0), (-1,-1), [8,8,8,8]),
-        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING",    (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-        ("LINEBELOW",     (0,0), (-1,0),  0.5, BORDER),
+    signature = Table([[
+        Paragraph("Genere automatiquement par MedAI", styles["small"]),
+        Paragraph("Validation medicale : Dr. __________________________", ParagraphStyle("sig", parent=styles["small"], alignment=TA_RIGHT, textColor=NAVY)),
+    ]], colWidths=[72 * mm, 102 * mm])
+    signature.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.5, BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
     ]))
+    story.append(signature)
 
-    story.append(KeepTogether([diag_block, Spacer(1, 2*mm), conf_bar_d, Spacer(1, 5*mm)]))
-
-    # ── 4. IMAGES (originale + Grad-CAM) ─────────────────────────────────────
-    story.append(Paragraph("■ IMAGERIE MÉDICALE", ParagraphStyle("sh", fontSize=9,
-        fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=3*mm,
-        borderPad=2, borderColor=NAVY, borderWidth=0,
-        leftIndent=0)))
-    story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceAfter=3*mm))
-
-    img_cells  = []
-    img_labels = []
-
-    for b64, label in [(image_b64, f"Image originale\n{filename}"),
-                        (gradcam_b64, "Carte de chaleur\nGrad-CAM")]:
-        if b64:
-            buf_img = _decode_b64_image(b64)
-            if buf_img:
-                try:
-                    img = RLImage(buf_img, width=80*mm, height=72*mm, kind="proportional")
-                    cell = Table([[img]], colWidths=[84*mm])
-                    cell.setStyle(TableStyle([
-                        ("BOX",           (0,0), (-1,-1), 1, BORDER),
-                        ("BACKGROUND",    (0,0), (-1,-1), BG_LIGHT),
-                        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-                        ("TOPPADDING",    (0,0), (-1,-1), 4),
-                        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-                    ]))
-                    img_cells.append(cell)
-                    img_labels.append(Paragraph(label, ParagraphStyle("il",
-                        fontSize=7.5, fontName="Helvetica", textColor=MUTED,
-                        alignment=TA_CENTER)))
-                except Exception:
-                    pass
-
-    if img_cells:
-        if len(img_cells) == 2:
-            img_row   = Table([img_cells],  colWidths=[87*mm, 87*mm])
-            label_row = Table([img_labels], colWidths=[87*mm, 87*mm])
-        else:
-            img_row   = Table([img_cells],  colWidths=[87*mm])
-            label_row = Table([img_labels], colWidths=[87*mm])
-
-        img_row.setStyle(TableStyle([
-            ("ALIGN", (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",(0,0), (-1,-1), "MIDDLE"),
-            ("LEFTPADDING",(0,0),(-1,-1), 0),
-            ("RIGHTPADDING",(0,0),(-1,-1), 0),
-        ]))
-        label_row.setStyle(TableStyle([
-            ("ALIGN", (0,0), (-1,-1), "CENTER"),
-            ("TOPPADDING",(0,0),(-1,-1), 3),
-        ]))
-        story.append(img_row)
-        story.append(Spacer(1, 1*mm))
-        story.append(label_row)
-        story.append(Spacer(1, 5*mm))
-    else:
-        story.append(Paragraph(
-            "Aucune image disponible dans ce rapport.",
-            ParagraphStyle("ni", fontSize=8, fontName="Helvetica",
-                           textColor=MUTED, spaceAfter=5*mm)
-        ))
-
-    # ── 5. DISTRIBUTION DES PROBABILITÉS ─────────────────────────────────────
-    story.append(Paragraph("■ DISTRIBUTION DES PROBABILITÉS (SOFTMAX)", ParagraphStyle("sh2",
-        fontSize=9, fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=3*mm)))
-    story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceAfter=3*mm))
-    story.append(_prob_bar_table(probabilities, styles))
-    story.append(Spacer(1, 5*mm))
-
-    # ── 6. RAPPORT D'EXPLICATION GEMINI ──────────────────────────────────────
-    if explain_text.strip():
-        story.append(Paragraph("■ RAPPORT D'EXPLICATION CLINIQUE (IA GÉNÉRATIVE)", ParagraphStyle("sh3",
-            fontSize=9, fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=3*mm)))
-        story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceAfter=3*mm))
-
-        # Parser les sections ## du markdown
-        current_section = None
-        current_lines   = []
-
-        def flush_section():
-            nonlocal current_section, current_lines
-            if current_section:
-                # Titre de section
-                story.append(Paragraph(current_section, ParagraphStyle("secTitle",
-                    fontSize=9, fontName="Helvetica-Bold", textColor=BLUE,
-                    spaceBefore=6, spaceAfter=3,
-                    leftIndent=3*mm,
-                    borderPadding=(3,0,3,6),
-                )))
-                content = " ".join(current_lines).strip()
-                if content:
-                    # Nettoyage markdown basique
-                    content = content.replace("**", "").replace("*", "")
-                    story.append(Paragraph(content, ParagraphStyle("secBody",
-                        fontSize=8.5, fontName="Helvetica", textColor=SLATE,
-                        leading=13.5, alignment=TA_JUSTIFY,
-                        leftIndent=3*mm, spaceAfter=2)))
-            current_section = None
-            current_lines   = []
-
-        for line in explain_text.split("\n"):
-            line = line.strip()
-            if line.startswith("## "):
-                flush_section()
-                # Nettoie les emojis basiques pour ReportLab
-                sec_title = line[3:].strip()
-                for emoji in ["🔍","🤖","📊","⚕️","⚠️","🧬","🔬","💊","🏥"]:
-                    sec_title = sec_title.replace(emoji, "").strip()
-                current_section = sec_title
-            elif line and current_section is not None:
-                current_lines.append(line)
-            elif line and current_section is None:
-                # Texte avant la première section
-                story.append(Paragraph(line.replace("**","").replace("*",""),
-                    styles["body"]))
-
-        flush_section()
-        story.append(Spacer(1, 5*mm))
-
-    # ── 7. RECOMMANDATIONS RÉSUMÉES ───────────────────────────────────────────
-    story.append(Paragraph("■ RECOMMANDATIONS IMMÉDIATES", ParagraphStyle("sh4",
-        fontSize=9, fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=3*mm)))
-    story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceAfter=3*mm))
-
-    reco_map = {
-        "COVID":         "Isolement immédiat, PCR COVID si non réalisée, TDM thoracique, bilan biologique complet (NFS, CRP, D-dimères).",
-        "Pneumonia":     "Antibiothérapie probabiliste selon guidelines, TDM si doute diagnostique, bilan biologique (NFS, CRP, hémocultures).",
-        "Pneumothorax":  "Évaluation urgente de la tolérance clinique. Si mal toléré : exsufflation ou drainage en urgence. TDM si doute.",
-        "Edema":         "Bilan cardiologique urgent, BNP/pro-BNP, échocardiographie transthoracique, restriction hydrosodée.",
-        "Mass":          "TDM thoracique avec injection en urgence, PET-scan, bronchoscopie selon localisation, avis oncologique.",
-        "Malignant":     "TDM thoracique avec injection, PET-scan, biopsie, avis oncologique urgent.",
-        "Cardiomegaly":  "Échocardiographie transthoracique en 1re intention, ECG, BNP/pro-BNP, troponines. Guidelines ESC insuffisance cardiaque.",
-        "Emphysema":     "EFR (spirométrie), TDM thoracique HR, avis pneumologique. Arrêt tabac, réhabilitation respiratoire.",
-        "Glioma":        "IRM cérébrale avec gadolinium séquences complètes, avis neurochirurgical urgent, bilan pré-opératoire.",
-        "Meningioma":    "IRM cérébrale avec gadolinium, avis neurochirurgical, suivi à 3 mois si asymptomatique.",
-        "No Finding":    "Aucune anomalie détectée. Suivi clinique standard selon l'indication initiale de l'examen.",
-        "Normal":        "Aucune anomalie détectée. Suivi clinique standard.",
-        "Benign":        "Lésion d'aspect bénin. Contrôle radiologique à 3-6 mois recommandé pour vérifier la stabilité.",
-        "No Tumor":      "Aucune lésion tumorale détectée. Suivi clinique standard.",
-    }
-    reco_text = reco_map.get(prediction,
-        f"Corrélation clinique indispensable. Examens complémentaires selon le contexte clinique et la sévérité du tableau.")
-
-    reco_table = Table([[
-        Paragraph("→", ParagraphStyle("arrow", fontSize=14, fontName="Helvetica-Bold",
-                   textColor=sev_color, alignment=TA_CENTER)),
-        Paragraph(reco_text, ParagraphStyle("reco", fontSize=8.5, fontName="Helvetica",
-                   textColor=NAVY, leading=13, alignment=TA_JUSTIFY))
-    ]], colWidths=[12*mm, 162*mm])
-    reco_table.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0), (-1,-1), colors.HexColor(f"#{'fee2e2' if sev_color==RED else 'fff7ed' if sev_color==ORANGE else 'f0fdf4' if sev_color==GREEN else 'eff6ff'}")),
-        ("BOX",          (0,0), (-1,-1), 1, sev_color),
-        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING",   (0,0), (-1,-1), 8),
-        ("BOTTOMPADDING",(0,0), (-1,-1), 8),
-        ("LEFTPADDING",  (0,0), (-1,-1), 8),
-    ]))
-    story.append(reco_table)
-    story.append(Spacer(1, 6*mm))
-
-    # ── 8. SIGNATURE / VALIDATION ────────────────────────────────────────────
-    sig_table = Table([[
-        Paragraph("Généré par IA — Non signé", ParagraphStyle("sig1", fontSize=8,
-            fontName="Helvetica", textColor=MUTED)),
-        Paragraph("À valider par :", ParagraphStyle("sig2", fontSize=8,
-            fontName="Helvetica", textColor=MUTED, alignment=TA_RIGHT)),
-    ],[
-        Paragraph(f"ChestAI v2.0 · {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-            ParagraphStyle("sig3", fontSize=7.5, fontName="Courier", textColor=MUTED)),
-        Paragraph("Dr. _______________________________",
-            ParagraphStyle("sig4", fontSize=9, fontName="Helvetica-Bold",
-            textColor=NAVY, alignment=TA_RIGHT)),
-    ]], colWidths=[87*mm, 87*mm])
-    sig_table.setStyle(TableStyle([
-        ("TOPPADDING",   (0,0),(-1,-1), 4),
-        ("LINEABOVE",    (0,0),(-1,0),  0.5, BORDER),
-    ]))
-    story.append(sig_table)
-
-    # ── 9. FOOTER LÉGAL ──────────────────────────────────────────────────────
-    def add_footer(canvas, doc):
+    def footer(canvas, document):
         canvas.saveState()
-        W_pt = A4[0]
-        H_pt = A4[1]
-        # Line
         canvas.setStrokeColor(BORDER)
-        canvas.setLineWidth(0.5)
-        canvas.line(18*mm, 16*mm, W_pt - 18*mm, 16*mm)
-        # Text
+        canvas.setLineWidth(0.4)
+        canvas.line(18 * mm, 15 * mm, A4[0] - 18 * mm, 15 * mm)
         canvas.setFont("Helvetica", 6.5)
         canvas.setFillColor(MUTED)
-        legal = (
-            "⚠  Ce rapport est un outil d'AIDE AU DIAGNOSTIC exclusivement réservé aux professionnels de santé. "
-            "Il ne constitue pas un diagnostic médical ni une prescription. "
-            "La responsabilité diagnostique et thérapeutique reste celle du clinicien. "
-            f"  |  Rapport N° {report_id}  |  Page {{page}}"
+        text = (
+            "Ce rapport est une aide a la decision. Il ne remplace pas l'avis du clinicien. "
+            f"Rapport {report_id} - Page {document.page}"
         )
-        canvas.drawCentredString(W_pt/2, 10*mm, legal.replace("{page}", str(doc.page)))
+        canvas.drawCentredString(A4[0] / 2, 9 * mm, text)
         canvas.restoreState()
 
-    doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
-
-    buf.seek(0)
-    return buf.read()
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    buffer.seek(0)
+    return buffer.getvalue()

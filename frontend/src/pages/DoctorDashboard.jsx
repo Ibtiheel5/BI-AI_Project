@@ -1,9 +1,11 @@
 // DoctorDashboard.jsx — Version Finale Complète (Premium Gold/Navy)
+// Intégration du chatbot CIM-11 pour les médecins
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import "./patient/PatientDashboard.css";
 import { useAuth } from "../context/AuthContext";
+import CIM11Chatbot from "../components/CIM11Chatbot"; // Import du chatbot CIM-11
 
 const API = "http://localhost:8000/api/v1";
 
@@ -48,6 +50,9 @@ const I = {
   FileText: p => <Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Svg>,
   Image: p => <Svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></Svg>,
   BarChart: p => <Svg {...p}><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></Svg>,
+  Book: p => <Svg {...p}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></Svg>,
+  Video: p => <Svg {...p}><rect x="2" y="5" width="14" height="14" rx="2"/><polyline points="16 9 22 5 22 19 16 15"/></Svg>, // NOUVEAU
+  Camera: p => <Svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Svg>, // NOUVEAU
 };
 
 // ═══════════════════════════════════════
@@ -56,14 +61,12 @@ const I = {
 const getDisplayName = (fullName) => {
   if (!fullName) return "Médecin";
   const cleanName = fullName.trim();
-  // Check if already starts with "Dr." or "Dr "
   if (/^dr[.\s]/i.test(cleanName)) return cleanName;
   return `Dr. ${cleanName}`;
 };
 
 const getFirstName = (fullName) => {
   if (!fullName) return "Médecin";
-  // Remove "Dr." prefix if present
   const cleanName = fullName.replace(/^dr[.\s]+/i, "").trim();
   return cleanName.split(" ")[0];
 };
@@ -142,8 +145,8 @@ const ConsultationCard = ({ consultation, onClick, onAccept, onReject, actionLoa
       </div>
       {isPending && onAccept && onReject && (
         <div style={{display:"flex",gap:8,flexShrink:0}}>
-          <button onClick={e=>{e.stopPropagation();onAccept();}} disabled={actionLoading} className="pd3-btn pd3-btn-gold pd3-btn-sm">{actionLoading?"...":"Accepter"}</button>
-          <button onClick={e=>{e.stopPropagation();onReject();}} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{color:"#EF4444",borderColor:"#FCA5A5"}}>Refuser</button>
+          <button type="button" onClick={e=>{e.stopPropagation();onAccept();}} disabled={actionLoading} className="pd3-btn pd3-btn-gold pd3-btn-sm">{actionLoading?"...":"Accepter"}</button>
+          <button type="button" onClick={e=>{e.stopPropagation();onReject();}} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{color:"#EF4444",borderColor:"#FCA5A5"}}>Refuser</button>
         </div>
       )}
       {consultation.status === "analyzed" && (
@@ -184,34 +187,22 @@ const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, o
     return Object.entries(p).sort(([,a],[,b]) => b - a);
   }, [analysis]);
 
-  // Parse explain sections
-  const sections = useMemo(() => {
-    if (!explainText) return [];
-    const result = [];
-    let current = null;
-    let lines = [];
-    for (const line of explainText.split("\n")) {
-      if (line.startsWith("## ")) {
-        if (current) result.push({title:current,content:lines.join("\n").trim()});
-        current = line.replace(/^## /,"").trim();
-        lines = [];
-      } else if (current) {
-        lines.push(line);
-      }
-    }
-    if (current) result.push({title:current,content:lines.join("\n").trim()});
-    return result;
-  }, [explainText]);
-
   if (!consultationData) {
     return (
-      <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
+      <div className="pd3-health-card" style={{ 
+        display: "flex", 
+        flexDirection: "column", 
+        height: "auto",  // CHANGÉ: plus de hauteur fixe
+        minHeight: "500px"  // Réduit
+      }}>
         <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
-        <div className="pd3-health-content" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
-          <div style={{color:"rgba(255,255,255,0.4)"}}>
-            <I.Brain size={48} color="rgba(255,255,255,0.15)" style={{marginBottom:16}}/>
-            <div style={{fontWeight:600,fontSize:"0.95rem",color:"rgba(255,255,255,0.5)",marginBottom:4}}>Analyse IA</div>
-            <div style={{fontSize:"0.8rem"}}>Sélectionnez une consultation pour voir l'analyse</div>
+        <div style={{ textAlign: "center", color: "rgba(255,255,255,0.4)", padding: 40 }}>
+          <I.Brain size={52} color="rgba(255,215,0,0.3)" />
+          <div style={{ marginTop: 16, fontSize: "1rem", fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>
+            Sélectionnez une consultation
+          </div>
+          <div style={{ marginTop: 8, fontSize: "0.82rem" }}>
+            Acceptez ou ouvrez une consultation pour lancer l&apos;analyse IA
           </div>
         </div>
       </div>
@@ -219,110 +210,179 @@ const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, o
   }
 
   return (
-    <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
+     <div className="pd3-health-card" style={{ 
+      display: "flex", 
+      flexDirection: "column", 
+      height: "auto",  // CHANGÉ: plus de hauteur fixe
+      minHeight: "500px"  // Réduit
+    }}>
       <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
-      <div className="pd3-health-content" style={{flex:1,display:"flex",flexDirection:"column"}}>
+      <div className="pd3-health-content" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        
         {/* Header */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexShrink:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <I.Brain size={18} color="#FFD700"/>
-            <span style={{fontWeight:700,color:"#FFD700",fontSize:"0.9rem"}}>Analyse IA</span>
-            {analysis && !analysisLoading && <span style={{fontSize:"0.65rem",padding:"2px 8px",borderRadius:10,background:"rgba(16,185,129,0.15)",color:"#10B981",fontWeight:600}}>Complète</span>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <I.Brain size={20} color="#FFD700"/>
+            <span style={{ fontWeight: 700, color: "#FFD700", fontSize: "1rem" }}>Analyse IA</span>
+            {analysis && !analysisLoading && <span className="pd3-badge" style={{ background: "rgba(16,185,129,0.15)", color: "#10B981", fontSize: "0.65rem" }}>Complète</span>}
           </div>
-          {analysis && <span style={{fontSize:"0.65rem",color:"rgba(255,255,255,0.4)"}}>{model?.label}</span>}
+          {analysis && <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>{model?.label}</span>}
         </div>
 
-        {/* Content */}
-        <div style={{flex:1,overflowY:"auto"}}>
+        {/* Contenu scrollable */}
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: "8px" }}>
           {analysisLoading ? (
-            <div style={{textAlign:"center",padding:"30px 0"}}>
-              <motion.div animate={{rotate:360}} transition={{repeat:Infinity,duration:1.5,ease:"linear"}}>
-                <I.Sparkles size={32} color="#FFD700"/>
+            <div style={{ textAlign: "center", padding: "60px 0" }}>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}>
+                <I.Sparkles size={48} color="#FFD700"/>
               </motion.div>
-              <div style={{marginTop:12,color:"rgba(255,255,255,0.6)",fontSize:"0.85rem"}}>Analyse en cours...</div>
-              <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.3)",marginTop:4}}>Traitement par le modèle {model?.label}</div>
+              <div style={{ marginTop: 20, color: "rgba(255,255,255,0.6)", fontSize: "0.9rem" }}>Analyse en cours...</div>
             </div>
           ) : analysis ? (
             <>
               {/* Prediction Card */}
-              <div style={{padding:14,background:"rgba(16,185,129,0.08)",borderRadius:14,border:"1px solid rgba(16,185,129,0.2)",marginBottom:14}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                  <I.Check size={16} color="#10B981"/>
-                  <span style={{fontWeight:700,color:"#10B981",fontSize:"0.9rem"}}>Diagnostic : {analysis.prediction}</span>
+              <div style={{ padding: 18, background: "rgba(16,185,129,0.08)", borderRadius: 16, border: "1px solid rgba(16,185,129,0.2)", marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <I.Check size={18} color="#10B981"/>
+                  <span style={{ fontWeight: 700, color: "#10B981", fontSize: "1rem" }}>Diagnostic : {analysis.prediction}</span>
                 </div>
-                <div style={{marginBottom:6}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={{fontSize:"0.68rem",color:"rgba(255,255,255,0.4)"}}>Confiance</span>
-                    <span style={{fontSize:"0.72rem",fontWeight:700,color:"#fff"}}>{(analysis.confidence*100).toFixed(1)}%</span>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>Confiance</span>
+                    <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fff" }}>{(analysis.confidence * 100).toFixed(1)}%</span>
                   </div>
-                  <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3}}>
-                    <motion.div style={{height:"100%",background:"linear-gradient(90deg,#10B981,#34D399)",borderRadius:3}} initial={{width:0}} animate={{width:`${analysis.confidence*100}%`}} transition={{duration:1,delay:.3}}/>
+                  <div style={{ height: 8, background: "rgba(255,255,255,0.08)", borderRadius: 4 }}>
+                    <motion.div 
+                      style={{ height: "100%", background: "linear-gradient(90deg,#10B981,#34D399)", borderRadius: 4 }} 
+                      initial={{ width: 0 }} 
+                      animate={{ width: `${analysis.confidence * 100}%` }} 
+                      transition={{ duration: 1, delay: .3 }}
+                    />
                   </div>
                 </div>
               </div>
 
               {/* Probabilities */}
               {probabilities.length > 0 && (
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Distribution des probabilités</div>
-                  {probabilities.slice(0,6).map(([cls,prob])=>(
-                    <div key={cls} style={{marginBottom:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                        <span style={{fontSize:"0.72rem",color:cls===analysis.prediction?"#10B981":"rgba(255,255,255,0.5)",fontWeight:cls===analysis.prediction?700:400}}>{cls===analysis.prediction&&"► "}{cls}</span>
-                        <span style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,0.6)"}}>{(prob*100).toFixed(1)}%</span>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
+                    Distribution des probabilités
+                  </div>
+                  {probabilities.slice(0, 5).map(([cls, prob], idx) => (
+                    <div key={cls} style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ 
+                          fontSize: "0.8rem", 
+                          color: cls === analysis.prediction ? "#10B981" : "rgba(255,255,255,0.6)", 
+                          fontWeight: cls === analysis.prediction ? 700 : 400 
+                        }}>
+                          {cls === analysis.prediction && "▶ "}{cls}
+                        </span>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(255,255,255,0.7)" }}>
+                          {(prob * 100).toFixed(1)}%
+                        </span>
                       </div>
-                      <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
-                        <motion.div style={{height:"100%",background:cls===analysis.prediction?"#10B981":"rgba(255,255,255,0.15)",borderRadius:2}} initial={{width:0}} animate={{width:`${(prob/Math.max(...probabilities.map(([,p])=>p)))*100}%`}} transition={{duration:.8,delay:.4}}/>
+                      <div style={{ height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 3 }}>
+                        <motion.div 
+                          style={{ 
+                            height: "100%", 
+                            background: cls === analysis.prediction ? "#10B981" : "rgba(255,255,255,0.2)", 
+                            borderRadius: 3 
+                          }} 
+                          initial={{ width: 0 }} 
+                          animate={{ width: `${(prob / Math.max(...probabilities.map(([, p]) => p))) * 100}%` }} 
+                          transition={{ duration: 0.8, delay: idx * 0.1 }}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Explain Text */}
-              {sections.length > 0 ? (
-                <div>
-                  <div style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Explication clinique</div>
-                  {sections.map((sec,idx)=>(
-                    <div key={idx} style={{marginBottom:12}}>
-                      <div style={{padding:"6px 12px",background:"rgba(255,215,0,0.08)",borderLeft:"3px solid #FFD700",borderRadius:"0 8px 8px 0",marginBottom:6,fontSize:"0.72rem",fontWeight:700,color:"#FFD700"}}>{sec.title}</div>
-                      <div style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.55)",lineHeight:1.7,padding:"0 8px",whiteSpace:"pre-wrap"}}>{sec.content}</div>
-                    </div>
-                  ))}
+              {/* EXPLICATION IA - AJOUTÉE ICI */}
+              {explainText && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <I.Brain size={14} color="#FFD700"/> Explication clinique IA
+                  </div>
+                  <div style={{ 
+                    background: "rgba(255,255,255,0.05)", 
+                    borderRadius: 14, 
+                    padding: "18px",
+                    border: "1px solid rgba(255,215,0,0.15)",
+                    fontSize: "0.85rem",
+                    lineHeight: "1.7",
+                    color: "rgba(255,255,255,0.8)",
+                    whiteSpace: "pre-wrap"
+                  }}>
+                    {explainText.split('\n').map((line, i) => (
+                      line.startsWith('##') ? (
+                        <div key={i} style={{ fontWeight: 700, color: "#FFD700", marginTop: 12, marginBottom: 6 }}>
+                          {line.replace('## ', '')}
+                        </div>
+                      ) : (
+                        <div key={i} style={{ marginBottom: 4 }}>{line}</div>
+                      )
+                    ))}
+                  </div>
                 </div>
-              ) : explainText ? (
-                <div style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.55)",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{explainText}</div>
-              ) : null}
+              )}
 
               {explaining && (
-                <div style={{display:"flex",gap:4,padding:"8px 0"}}>
-                  {[0,0.15,0.3].map((d,i)=>(<div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#FFD700",animation:`typing 1s ease-in-out ${d}s infinite`}}/>))}
+                <div style={{ display: "flex", gap: 6, padding: "12px 0", justifyContent: "center" }}>
+                  {[0, 0.15, 0.3].map((d, i) => (
+                    <div key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: "#FFD700", animation: `typing 1s ease-in-out ${d}s infinite` }}/>
+                  ))}
+                  <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.75rem", marginLeft: 8 }}>Génération de l'explication...</span>
                 </div>
               )}
             </>
-          ) : consultationData?.status === "accepted" ? (
-            <div style={{textAlign:"center",padding:"30px 0"}}>
-              <I.Brain size={40} color="rgba(255,255,255,0.2)" style={{marginBottom:14}}/>
-              <div style={{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.6)",marginBottom:6}}>Prêt pour l'analyse</div>
-              <div style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.35)",marginBottom:16,lineHeight:1.5}}>Lancez l'analyse IA pour obtenir<br/>le diagnostic et l'explication.</div>
-              <button onClick={onRunAnalysis} className="pd3-btn pd3-btn-gold" style={{display:"inline-flex",alignItems:"center",gap:8}}>
-                <I.Sparkles size={16}/> Lancer l'analyse IA
+          ) : ["accepted", "analyzed"].includes(consultationData?.status) ? (
+            <div style={{ textAlign: "center", padding: "60px 20px" }}>
+              <I.Brain size={56} color="rgba(255,215,0,0.4)" style={{ marginBottom: 20 }}/>
+              <div style={{ fontSize: "1rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: 12 }}>
+                {consultationData?.status === "analyzed" ? "Analyse déjà effectuée" : "Prêt pour l'analyse"}
+              </div>
+              <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>
+                {consultationData?.status === "analyzed"
+                  ? "Une analyse existe déjà. Vous pouvez relancer pour mettre à jour."
+                  : "Lancez l'analyse IA pour obtenir le diagnostic automatique."}
+              </div>
+              <button type="button" onClick={onRunAnalysis} className="pd3-btn pd3-btn-gold" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "12px 28px" }}>
+                <I.Sparkles size={18}/> {consultationData?.status === "analyzed" ? "Relancer l'analyse" : "Lancer l'analyse IA"}
               </button>
             </div>
           ) : (
-            <div style={{textAlign:"center",padding:"30px 0",color:"rgba(255,255,255,0.3)"}}>
-              <I.Clock size={36} style={{marginBottom:12}}/>
-              <div style={{fontSize:"0.85rem",fontWeight:600}}>Analyse non disponible</div>
-              <div style={{fontSize:"0.72rem",marginTop:4}}>Acceptez d'abord la consultation</div>
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "rgba(255,255,255,0.3)" }}>
+              <I.Clock size={48} style={{ marginBottom: 16 }}/>
+              <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>Consultation en attente</div>
+              <div style={{ fontSize: "0.8rem", marginTop: 8 }}>Acceptez d'abord la consultation pour lancer l'analyse</div>
             </div>
           )}
         </div>
 
-        {/* Actions */}
+        {/* Bouton PDF - Plus visible */}
         {analysis && (
-          <div style={{paddingTop:12,borderTop:"1px solid rgba(232,184,48,0.1)",flexShrink:0}}>
-            <button onClick={onDownloadPDF} className="pd3-btn pd3-btn-gold" style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-              <I.Download size={14}/> Télécharger le rapport PDF
+          <div style={{ paddingTop: 16, borderTop: "1px solid rgba(232,184,48,0.1)", flexShrink: 0, marginTop: "auto" }}>
+            <button 
+              type="button"
+              onClick={onDownloadPDF} 
+              disabled={explaining}
+              className="pd3-btn pd3-btn-gold" 
+              style={{ 
+                width: "100%", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                gap: 10, 
+                padding: "14px",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                opacity: explaining ? 0.65 : 1,
+                cursor: explaining ? "not-allowed" : "pointer"
+              }}
+            >
+              <I.Download size={18}/> {explaining ? "Attente explication IA..." : "Télécharger le rapport PDF"}
             </button>
           </div>
         )}
@@ -330,57 +390,75 @@ const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, o
     </div>
   );
 };
-
 // ═══════════════════════════════════════
 // Chat Section (developed)
 // ═══════════════════════════════════════
+// ChatSection - Version avec cadre agrandi
 const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend, canMessage, onClose, model, loading }) => {
   const messagesEndRef = useRef(null);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   if (!consultationData) {
     return (
-      <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
-        <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
-        <div className="pd3-health-content" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
-          <div style={{color:"rgba(255,255,255,0.4)"}}>
-            <I.Message size={48} color="rgba(255,255,255,0.15)" style={{marginBottom:16}}/>
-            <div style={{fontWeight:600,fontSize:"0.95rem",color:"rgba(255,255,255,0.5)",marginBottom:4}}>Messagerie</div>
-            <div style={{fontSize:"0.8rem"}}>Sélectionnez une consultation pour voir les messages</div>
-          </div>
+      <div className="pd3-health-card" style={{ 
+        display: "flex", 
+        flexDirection: "column", 
+        height: "auto",
+        minHeight: "600px",  // Agrandi
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        <I.Message size={52} color="rgba(255,255,255,0.25)" />
+        <div style={{fontSize:"1rem",fontWeight:700,marginTop:16,color:"rgba(255,255,255,0.65)"}}>
+          Aucune consultation selectionnee
+        </div>
+        <div style={{fontSize:"0.85rem",marginTop:8,maxWidth:360,lineHeight:1.5}}>
+          Selectionnez une consultation ou acceptez une demande pour ouvrir les messages et lancer l'analyse IA.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="pd3-health-card" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 280px)"}}>
+    <div className="pd3-health-card" style={{ 
+      display: "flex", 
+      flexDirection: "column", 
+      height: "auto",
+      minHeight: "650px",  // Agrandi de 550px à 650px
+    }}>
       {/* Header */}
-      <div style={{padding:"14px 20px",borderBottom:"1px solid rgba(232,184,48,0.1)",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          {model?.icon||<I.Scan size={18} color="#FFD700"/>}
+      <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(232,184,48,0.1)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {model?.icon || <I.Scan size={20} color="#FFD700"/>}
         </div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:700,color:"#fff",fontSize:"0.9rem"}}>{consultationData.patient_name}</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:2}}>
-            <span style={{fontSize:"0.65rem",color:"rgba(255,255,255,0.4)"}}>#{consultationData.id}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, color: "#fff", fontSize: "1rem" }}>{consultationData.patient_name}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>#{consultationData.id}</span>
             <StatusBadge status={consultationData.status}/>
           </div>
         </div>
         {canMessage && (
-          <button onClick={onClose} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{color:"#fff",borderColor:"rgba(255,255,255,0.2)"}}>
-            <I.Shield size={14}/> Clôturer
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <VideoCallButton 
+              consultationId={consultationData?.id} 
+              consultationStatus={consultationData?.status}
+              consultation={consultationData}
+            />
+            <button type="button" onClick={onClose} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>
+              <I.Shield size={14}/> Clôturer
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Messages */}
-      <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+      {/* Messages - ZONE AGRANDIE */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", minHeight: "480px", maxHeight: "480px" }}>
         {messages.length === 0 ? (
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",textAlign:"center",color:"rgba(255,255,255,0.3)"}}>
-            <I.Message size={40} style={{marginBottom:12}}/>
-            <div style={{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.4)"}}>Aucun message</div>
-            <div style={{fontSize:"0.75rem",marginTop:4}}>Commencez la discussion avec le patient</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", color: "rgba(255,255,255,0.3)" }}>
+            <I.Message size={56} style={{ marginBottom: 20 }}/>
+            <div style={{ fontSize: "1rem", fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>Aucun message</div>
+            <div style={{ fontSize: "0.85rem", marginTop: 8 }}>Commencez la discussion avec le patient</div>
           </div>
         ) : (
           messages.map(m => <MessageBubble key={m.id} message={m} isDoctor={true}/>)
@@ -388,22 +466,54 @@ const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend
         <div ref={messagesEndRef}/>
       </div>
 
-      {/* Input */}
+      {/* Input - Plus grand */}
       {canMessage ? (
-        <div style={{padding:"12px 16px",borderTop:"1px solid rgba(232,184,48,0.1)",display:"flex",gap:8,flexShrink:0,background:"rgba(0,0,0,0.1)"}}>
-          <input 
+        <div style={{ padding: "20px 24px", borderTop: "1px solid rgba(232,184,48,0.1)", display: "flex", gap: 14, flexShrink: 0, background: "rgba(0,0,0,0.1)" }}>
+          <textarea 
             value={msgInput} 
-            onChange={e=>setMsgInput(e.target.value)} 
-            onKeyDown={e=>e.key==="Enter"&&onSend()} 
-            placeholder="Écrire un message au patient..." 
-            style={{flex:1,padding:"10px 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#fff",outline:"none",fontFamily:"inherit",fontSize:"0.85rem"}} 
+            onChange={e => setMsgInput(e.target.value)} 
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onSend();
+              }
+            }}
+            placeholder="Écrire un message au patient... (Shift+Enter pour retour à la ligne)"
+            rows={3}
+            style={{ 
+              flex: 1, 
+              padding: "14px 18px", 
+              borderRadius: 18, 
+              border: "1px solid rgba(255,255,255,0.15)", 
+              background: "rgba(255,255,255,0.08)", 
+              color: "#fff", 
+              outline: "none", 
+              fontFamily: "inherit", 
+              fontSize: "0.9rem",
+              resize: "vertical",
+              minHeight: "70px",
+              maxHeight: "120px",
+            }} 
           />
-          <button onClick={onSend} disabled={!msgInput.trim()} className="pd3-btn pd3-btn-gold pd3-btn-sm" style={{width:42,height:42,minWidth:42,padding:0}}>
-            <I.Send size={14}/>
+          <button 
+            type="button" 
+            onClick={onSend} 
+            disabled={!msgInput.trim()} 
+            className="pd3-btn pd3-btn-gold pd3-btn-sm" 
+            style={{ 
+              width: 60, 
+              height: 60, 
+              minWidth: 60, 
+              padding: 0, 
+              borderRadius: 18,
+              alignSelf: "flex-end"
+            }}
+          >
+            <I.Send size={20}/>
           </button>
         </div>
       ) : (
-        <div style={{padding:"12px 20px",background:"rgba(0,0,0,0.1)",borderTop:"1px solid rgba(232,184,48,0.1)",fontSize:"0.75rem",color:"rgba(255,255,255,0.3)",textAlign:"center",flexShrink:0}}>
+        <div style={{ padding: "18px 24px", background: "rgba(0,0,0,0.1)", borderTop: "1px solid rgba(232,184,48,0.1)", fontSize: "0.85rem", color: "rgba(255,255,255,0.3)", textAlign: "center", flexShrink: 0 }}>
           Messages disponibles après acceptation de la consultation
         </div>
       )}
@@ -411,6 +521,94 @@ const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend
   );
 };
 
+// ═══════════════════════════════════════
+// COMPOSANT BOUTON APPEL VIDÉO
+// ═══════════════════════════════════════
+const VideoCallButton = ({ consultationId, consultationStatus, consultation }) => {
+  const [isJoining, setIsJoining] = useState(false);
+  
+  const startVideoCall = () => {
+    if (!consultationId) {
+      alert("Aucune consultation sélectionnée");
+      return;
+    }
+    if (consultationStatus !== "accepted" && consultationStatus !== "analyzed") {
+      alert("La consultation doit être acceptée avant de démarrer un appel vidéo");
+      return;
+    }
+    setIsJoining(true);
+    // Ouvrir la salle vidéo dans un nouvel onglet
+    window.open(`/video-consultation/${consultationId}?room=medai-${consultationId}`, "_blank");
+    setTimeout(() => setIsJoining(false), 1000);
+  };
+  
+  const canCall = consultationId && (consultationStatus === "accepted" || consultationStatus === "analyzed");
+  
+  return (
+    <motion.button
+      type="button"
+      onClick={startVideoCall}
+      disabled={!canCall || isJoining}
+      className="pd3-btn"
+      style={{
+        background: !canCall ? "rgba(100,116,139,0.15)" : "linear-gradient(135deg, #059669, #10B981)",
+        color: !canCall ? "rgba(255,255,255,0.4)" : "#fff",
+        padding: "10px 20px",
+        borderRadius: "14px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        fontSize: "0.85rem",
+        fontWeight: 600,
+        cursor: !canCall ? "not-allowed" : "pointer",
+        border: !canCall ? "1px solid rgba(100,116,139,0.2)" : "none",
+      }}
+      whileHover={canCall ? { scale: 1.02 } : {}}
+      whileTap={canCall ? { scale: 0.98 } : {}}
+      title={!canCall ? "Acceptez d'abord la consultation" : "Démarrer un appel vidéo sécurisé"}
+    >
+      {isJoining ? (
+        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ width: 18, height: 18, border: "2px solid white", borderTopColor: "transparent", borderRadius: "50%" }} />
+      ) : (
+        <I.Video size={18} />
+      )}
+      {isJoining ? "Connexion..." : "Appel vidéo"}
+    </motion.button>
+  );
+};
+
+// ═══════════════════════════════════════
+// CIM-11 Chatbot Section (NOUVEAU)
+// ═══════════════════════════════════════
+
+const CIM11Section = ({ user }) => {
+  const [showChatbot, setShowChatbot] = useState(true);
+  
+  return (
+     <div style={{ height: "auto", minHeight: "500px" }}>  {/* CHANGÉ: plus de hauteur fixe */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,215,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <I.Book size={22} color="#FFD700" />  {/* Utiliser I.Book au lieu de Icons.Book */}
+        </div>
+        <div>
+          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0A1628" }}>Assistant CIM-11</h2>
+          <p style={{ fontSize: "0.75rem", color: "#64748B" }}>Classification internationale des maladies (OMS) — Base de données officielle</p>
+        </div>
+        <button 
+          type="button"
+          onClick={() => setShowChatbot(!showChatbot)} 
+          className="pd3-btn pd3-btn-outline pd3-btn-sm" 
+          style={{ marginLeft: "auto" }}
+        >
+          {showChatbot ? "Masquer" : "Afficher"}
+        </button>
+      </div>
+      {showChatbot && (
+        <CIM11Chatbot doctor={user} height="500px" minHeight="400px" />
+      )}
+    </div>
+  );
+};
 // ═══════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════
@@ -453,35 +651,166 @@ export default function DoctorDashboard() {
   const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -50]);
   const sY = useSpring(heroY, { stiffness: 80, damping: 25 });
 
+  // Domaines de l'utilisateur (pour l'affichage)
+  const userDomains = (user?.domains || []);
+
+  // Check backend connectivity on mount
+  useEffect(() => {
+    console.log("🔍 Checking backend connectivity...");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    fetch("http://localhost:8000/health", { 
+      method: "GET",
+      signal: controller.signal
+    })
+      .then(r => {
+        clearTimeout(timeoutId);
+        if (r.ok) {
+          console.log("✅ Backend is online");
+        } else {
+          console.warn("⚠️ Backend responded with:", r.status);
+        }
+      })
+      .catch(e => {
+        clearTimeout(timeoutId);
+        console.error("❌ Backend connection failed:", e.message);
+        alert("⚠️ Cannot connect to backend. Please ensure the server is running on localhost:8000");
+      });
+  }, []);
+
   useEffect(() => { const h = new Date().getHours(); setGreeting(h<12?"Bonjour":h<18?"Bon après-midi":"Bonsoir"); }, []);
   useEffect(() => { const i = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(i); }, []);
   useEffect(() => { const h = () => setIsScrolled(window.scrollY > 40); window.addEventListener("scroll",h,{passive:true}); return () => window.removeEventListener("scroll",h); }, []);
   useEffect(() => { const h = e => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotif(false); if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false); }; document.addEventListener("mousedown",h); return () => document.removeEventListener("mousedown",h); }, []);
 
   const fetchAll = useCallback(async () => {
+    // Guard: Don't fetch if no token available
+    if (!token) {
+      console.warn("⚠️ No token available, skipping fetch");
+      setLoading(false);
+      return;
+    }
+
     try {
+      console.log("📡 Fetching consultation data...");
       const [qRes, aRes, nRes] = await Promise.all([
         fetch(`${API}/consultations/queue`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API}/consultations/assigned`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API}/consultations/notifications/me?unread_only=false`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
+      
+      if (!qRes.ok) console.warn("Queue fetch failed:", qRes.status);
+      if (!aRes.ok) console.warn("Assigned fetch failed:", aRes.status);
+      if (!nRes.ok) console.warn("Notifications fetch failed:", nRes.status);
+      
       if (qRes.ok) setQueue((await qRes.json()).consultations || []);
       if (aRes.ok) setAssigned((await aRes.json()).consultations || []);
       if (nRes.ok) setNotifications((await nRes.json()).notifications || []);
-    } catch (e) {} finally { setLoading(false); }
+      
+      console.log("✅ Data fetched successfully");
+    } catch (e) {
+      console.error("❌ Error fetching consultation data:", e);
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
 
-  useEffect(() => { fetchAll(); const i = setInterval(fetchAll, 30000); return () => clearInterval(i); }, [fetchAll]);
+  useEffect(() => {
+    if (!token) {
+      console.warn("⚠️ Skipping data fetch - no token available");
+      setLoading(false);
+      return;
+    }
+    
+    fetchAll();
+    const i = setInterval(fetchAll, 30000);
+    return () => clearInterval(i);
+  }, [fetchAll, token]);
 
   useEffect(() => {
-    if (!selectedConsultation) { setConsultationData(null); setMessages([]); setAnalysis(null); setExplainText(""); return; }
+    if (!selectedConsultation || !token) {
+      setConsultationData(null);
+      setMessages([]);
+      setAnalysis(null);
+      setExplainText("");
+      return;
+    }
+
+    console.log("📡 Fetching consultation details for:", selectedConsultation);
     fetch(`${API}/consultations/${selectedConsultation}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) { setConsultationData(d.consultation); setMessages(d.messages || []); setAnalysis(d.analysis); if (d.analysis?.explain_text) setExplainText(d.analysis.explain_text); } });
+      .then(r => {
+        if (!r.ok) {
+          console.warn("❌ Failed to fetch consultation details:", r.status);
+          return null;
+        }
+        return r.json();
+      })
+      .then(d => {
+        if (d) {
+          console.log("✅ Consultation details loaded:", {
+            id: d.consultation?.id,
+            status: d.consultation?.status,
+            doctor_id: d.consultation?.doctor_id,
+            has_analysis: !!d.analysis,
+          });
+          setConsultationData(d.consultation);
+          setMessages(d.messages || []);
+          setAnalysis(d.analysis || null);
+          setExplainText(d.analysis?.explain_text || "");
+        }
+      })
+      .catch(e => console.error("❌ Error fetching consultation:", e));
   }, [selectedConsultation, token]);
 
-  const handleAccept = async (id) => { setActionLoading(id); await fetch(`${API}/consultations/${id}/accept`, {method:"POST",headers:{Authorization:`Bearer ${token}`}}); setActionLoading(null); fetchAll(); setSelectedConsultation(id); setActiveTab("messages"); };
-  const handleReject = async (id) => { setActionLoading(id); await fetch(`${API}/consultations/${id}/reject`, {method:"POST",headers:{Authorization:`Bearer ${token}`},body:new URLSearchParams({reason:""})}); setActionLoading(null); fetchAll(); };
+  const handleAccept = async (id) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`${API}/consultations/${id}/accept`, {method:"POST",headers:{Authorization:`Bearer ${token}`}});
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Erreur ${res.status}`);
+      }
+
+      // Vider les données précédentes
+      setConsultationData(null);
+      setAnalysis(null);
+      setExplainText("");
+      setMessages([]);
+      setActiveTab("messages");
+
+      // Forcer le re-déclenchement du useEffect même si id === selectedConsultation
+      setSelectedConsultation(null);
+      setTimeout(() => setSelectedConsultation(id), 100);
+
+      fetchAll();
+    } catch (e) {
+      alert("Impossible d'accepter la consultation: " + (e.message || e));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+  const handleReject = async (id) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`${API}/consultations/${id}/reject`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: new URLSearchParams({ reason: "" })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Error ${res.status}`);
+      }
+      console.log("✅ Consultation rejected");
+      setActionLoading(null);
+      fetchAll();
+    } catch (e) {
+      console.error("❌ Error rejecting consultation:", e);
+      alert("Failed to reject: " + (e.message || e));
+      setActionLoading(null);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!msgInput.trim() || !selectedConsultation) return;
@@ -492,36 +821,216 @@ export default function DoctorDashboard() {
   };
 
   const handleRunAnalysis = async () => {
-    setAnalysisLoading(true); setExplainText(""); setExplaining(true);
+    setAnalysisLoading(true);
+    setExplainText("");
+    setExplaining(false);
+    setAnalysis(null);
+
     try {
-      const res = await fetch(`${API}/consultations/${selectedConsultation}/run-analysis`, {method:"POST",headers:{Authorization:`Bearer ${token}`}});
-      const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = "", fullExplain = "";
-      while (true) {
-        const {done, value} = await reader.read(); if (done) break;
-        buffer += decoder.decode(value, {stream:true}); const lines = buffer.split("\n"); buffer = lines.pop();
-        for (const line of lines) { if (line.startsWith("data: ")) { try { const evt = JSON.parse(line.slice(6)); if (evt.type === "explain_chunk") { fullExplain += evt.text; setExplainText(fullExplain); } if (evt.type === "done"||evt.type==="saved") setExplaining(false); } catch {} } }
+      const res = await fetch(
+        `${API}/consultations/${selectedConsultation}/run-analysis?gradcam=true`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Erreur serveur ${res.status}`);
       }
-      const dR = await fetch(`${API}/consultations/${selectedConsultation}`, {headers:{Authorization:`Bearer ${token}`}});
-      if (dR.ok) { const d = await dR.json(); setAnalysis(d.analysis); setConsultationData(d.consultation); }
-    } catch (e) {} finally { setAnalysisLoading(false); setExplaining(false); }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullExplain = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === "[DONE]") continue;
+
+          try {
+            const evt = JSON.parse(jsonStr);
+
+            if (evt.type === "prediction") {
+              // ← C'était le bug : cet event n'était jamais traité
+              setAnalysis({
+                prediction:    evt.prediction,
+                confidence:    evt.confidence,
+                probabilities: JSON.stringify(evt.probabilities || {}),
+                gradcam_b64:   evt.gradcam_image || "",
+                out_of_domain: evt.out_of_domain || false,
+                warning:       evt.warning || "",
+                explain_text:  "",
+              });
+              setAnalysisLoading(false);
+              if (!evt.out_of_domain) setExplaining(true);
+            }
+
+            if (evt.type === "explain_chunk") {
+              fullExplain += evt.text;
+              setExplainText(fullExplain);
+            }
+
+            if (evt.type === "saved") {
+              setExplaining(false);
+            }
+
+            if (evt.type === "error" || evt.type === "save_error") {
+              console.error("SSE error:", evt);
+              setExplaining(false);
+            }
+
+          } catch (_) { /* ligne mal formée, on ignore */ }
+        }
+      }
+
+      // Recharger depuis la DB pour avoir l'analyse complète sauvegardée
+      await new Promise(r => setTimeout(r, 500)); // laisser le backend finir la sauvegarde
+      const dR = await fetch(`${API}/consultations/${selectedConsultation}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (dR.ok) {
+        const d = await dR.json();
+        if (d.analysis) {
+          setAnalysis(d.analysis);
+          if (d.analysis.explain_text) setExplainText(d.analysis.explain_text);
+        }
+        if (d.consultation) setConsultationData(d.consultation);
+        setMessages(d.messages || []);
+      }
+
+    } catch (e) {
+      console.error("❌ Analyse error:", e);
+      alert("Erreur lors de l'analyse : " + e.message);
+    } finally {
+      setAnalysisLoading(false);
+      setExplaining(false);
+      fetchAll();
+    }
   };
 
   const handleDownloadPDF = async () => {
-    if (!analysis || !consultationData) return;
-    setPdfLoading(true);
-    try {
-      const imgRes = await fetch(`http://localhost:8000/${consultationData.image_path}`);
-      const blob = await imgRes.blob();
-      const form = new FormData(); form.append("file", new File([blob], "image.jpg", {type:blob.type}));
-      form.append("explain_text", explainText || analysis.explain_text || "");
-      const params = new URLSearchParams({model:consultationData.model_key||"chest",patient_id:consultationData.patient_name||"Patient",prediction:analysis.prediction,confidence:String(analysis.confidence),probabilities:JSON.stringify(analysis.probabilities||{}),report_id:`DOC-${Date.now().toString(36).toUpperCase()}`});
-      const res = await fetch(`${API}/report?${params}`, {method:"POST",body:form});
-      const pdfBlob = await res.blob();
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement("a"); a.href = url; a.download = `rapport_${consultationData.id}.pdf`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    } catch (e) { alert("Erreur PDF: " + e.message); } finally { setPdfLoading(false); }
-  };
+  if (!analysis || !consultationData) return;
+  if (explaining) {
+    alert("Veuillez attendre la fin de l'explication IA avant de telecharger le rapport PDF.");
+    return;
+  }
+  setPdfLoading(true);
+  
+  try {
+    console.log("📄 Génération du PDF...");
+    console.log("Consultation data:", consultationData);
+    
+    // 1. Récupérer l'image - plusieurs tentatives avec différents chemins
+    let imageBlob = null;
+    let imagePath = consultationData.image_path;
+    
+    // Essayer différents chemins possibles
+    const possiblePaths = [
+      `http://localhost:8000/uploads/${imagePath?.split('/').pop()}`,
+      `http://localhost:8000/${imagePath}`,
+      `http://localhost:8000/uploads/consultations/${imagePath?.split('/').pop()}`,
+    ];
+    
+    for (const path of possiblePaths) {
+      try {
+        console.log("Tentative chargement image:", path);
+        const imgRes = await fetch(path, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (imgRes.ok) {
+          imageBlob = await imgRes.blob();
+          console.log("✅ Image chargée depuis:", path);
+          break;
+        }
+      } catch (err) {
+        console.warn("Échec chargement depuis:", path, err.message);
+      }
+    }
+    
+    if (!imageBlob) {
+      console.warn("⚠️ Image originale non trouvée, utilisation d'une image par défaut");
+      const defaultImgRes = await fetch("https://placehold.co/800x600/e2e8f0/475569?text=Radiographie");
+      if (defaultImgRes.ok) {
+        imageBlob = await defaultImgRes.blob();
+      } else {
+        throw new Error("Impossible de charger l'image");
+      }
+    }
+    
+    // 2. Préparer le formulaire
+    const form = new FormData(); 
+    form.append("file", new File([imageBlob], "radiographie.jpg", { type: "image/jpeg" }));
+    form.append("explain_text", explainText || analysis.explain_text || "");
+    form.append("gradcam_image", analysis.gradcam_b64 || "");
+    
+    const reportProbabilities = (() => {
+      const raw = analysis.probabilities || {};
+      if (typeof raw === "string") {
+        try {
+          const parsed = JSON.parse(raw);
+          return JSON.stringify(parsed && typeof parsed === "object" ? parsed : {});
+        } catch {
+          return "{}";
+        }
+      }
+      return JSON.stringify(raw);
+    })();
+    
+    // 3. Paramètres du rapport
+    const params = new URLSearchParams({
+      model: consultationData.model_key || "chest",
+      patient_id: consultationData.patient_name || "Patient",
+      prediction: analysis.prediction,
+      confidence: String(analysis.confidence || 0),
+      probabilities: reportProbabilities,
+      report_id: `MEDAI-${Date.now().toString(36).toUpperCase()}`
+    });
+    
+    console.log("📤 Envoi requête PDF...");
+    
+    // 4. Générer le PDF
+    const res = await fetch(`${API}/report?${params}`, { 
+      method: "POST", 
+      headers: { 
+        Authorization: `Bearer ${token}`,
+      }, 
+      body: form 
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Erreur API PDF:", res.status, errorText);
+      throw new Error(`Erreur ${res.status}: ${errorText}`);
+    }
+    
+    // 5. Télécharger le PDF
+    const pdfBlob = await res.blob();
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a"); 
+    a.href = url; 
+    a.download = `rapport_medical_${consultationData.id}_${new Date().toISOString().slice(0,19)}.pdf`;
+    document.body.appendChild(a); 
+    a.click(); 
+    document.body.removeChild(a); 
+    URL.revokeObjectURL(url);
+    
+    console.log("✅ PDF téléchargé avec succès");
+    
+  } catch (e) { 
+    console.error("❌ Erreur PDF:", e);
+    alert("Erreur de génération du PDF: " + e.message + "\n\nVeuillez réessayer ou contacter l'administrateur.");
+  } finally { 
+    setPdfLoading(false); 
+  }
+};
 
   const handleClose = async () => {
     const form = new FormData(); form.append("doctor_notes", closeNotes);
@@ -540,6 +1049,45 @@ export default function DoctorDashboard() {
     closed: assigned.filter(c=>c.status==="closed").length,
   }), [queue, assigned]);
 
+  // Domaines display avec couleurs
+  const getDomainColor = (d) => {
+    const colors = {
+      chest: { color: "#2D5F9E", bg: "#EFF6FF" },
+      brain: { color: "#6B4FA0", bg: "#F5F3FF" },
+      lung: { color: "#D62828", bg: "#FEF2F2" },
+      retina: { color: "#0E7490", bg: "#ECFEFF" },
+    };
+    return colors[d] || { color: "#64748B", bg: "#F1F5F9" };
+  };
+
+  const getDomainIcon = (d) => {
+    const icons = { chest: "🫁", brain: "🧠", lung: "🔬", retina: "👁️" };
+    return icons[d] || "🏥";
+  };
+
+  const getDomainLabel = (d) => {
+    const labels = { chest: "Radiologie Thoracique", brain: "Neurologie & IRM", lung: "Cancer Pulmonaire", retina: "Rétinopathie Diabétique" };
+    return labels[d] || d;
+  };
+
+  const getDomainAccuracy = (d) => {
+    const acc = { chest: "97.3%", brain: "96.2%", lung: "94.8%", retina: "92.1%" };
+    return acc[d] || "—";
+  };
+
+  const getDomainClasses = (d) => {
+    const classes = { chest: "10 pathologies", brain: "4 tumeurs", lung: "3 classes", retina: "5 stades DR" };
+    return classes[d] || "—";
+  };
+  const CIMIcons = {
+  Book: ({ size = 22, color = "currentColor" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  ),
+};
+
   return (
     <div className="pd3">
       {/* NAVIGATION */}
@@ -549,13 +1097,19 @@ export default function DoctorDashboard() {
           <span className="pd3-nav-name">Med<span className="accent">AI</span></span>
         </div>
         <div className="pd3-nav-links">
-          {[{id:"overview",label:"Vue d'ensemble"},{id:"consultations",label:"Consultations"},{id:"messages",label:"Messages & Analyse"},{id:"analytics",label:"Statistiques"}].map(tab=>(
-            <button key={tab.id} className={`pd3-nav-link ${activeTab===tab.id?"active":""}`} onClick={()=>setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>{tab.label}</button>
+          {[
+            {id:"overview",label:"Vue d'ensemble"},
+            {id:"consultations",label:"Consultations"},
+            {id:"messages",label:"Messages & Analyse"},
+            {id:"analytics",label:"Statistiques"},
+            {id:"cim11",label:"CIM-11"}
+          ].map(tab=>(
+            <button type="button" key={tab.id} className={`pd3-nav-link ${activeTab===tab.id?"active":""}`} onClick={(e) => { e.preventDefault(); setActiveTab(tab.id); }} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>{tab.label}</button>
           ))}
         </div>
         <div className="pd3-nav-actions">
           <div ref={profileRef} style={{position:"relative"}}>
-            <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={()=>setShowProfileMenu(!showProfileMenu)}>
+            <button type="button" className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={()=>setShowProfileMenu(!showProfileMenu)}>
               <I.User size={15}/> {firstName}
             </button>
             <AnimatePresence>
@@ -564,18 +1118,34 @@ export default function DoctorDashboard() {
                   <div style={{padding:"16px 20px",borderBottom:"1px solid #F1F5F9",background:"#FAFBFC"}}>
                     <div style={{fontWeight:700,fontSize:"0.88rem",color:"#0A1628"}}>{displayName}</div>
                     <div style={{fontSize:"0.72rem",color:"#8899AA"}}>{user?.specialty}</div>
+                    {userDomains.length > 0 && (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:8}}>
+                        {userDomains.map(d => {
+                          const cfg = getDomainColor(d);
+                          return (
+                            <span key={d} style={{
+                              display:"inline-flex",alignItems:"center",gap:3,
+                              padding:"1px 6px",borderRadius:6,fontSize:"0.6rem",fontWeight:600,
+                              background:cfg.bg,color:cfg.color,
+                            }}>
+                              {getDomainIcon(d)} {d}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <button onClick={()=>{setShowProfileMenu(false);logout();navigate("/login");}} style={{width:"100%",padding:"10px 14px",border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:"0.82rem",color:"#EF4444",fontWeight:600,fontFamily:"inherit"}}><I.LogOut size={16}/> Déconnexion</button>
+                  <button type="button" onClick={()=>{setShowProfileMenu(false);logout();navigate("/login");}} style={{width:"100%",padding:"10px 14px",border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:"0.82rem",color:"#EF4444",fontWeight:600,fontFamily:"inherit"}}><I.LogOut size={16}/> Déconnexion</button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
           <div ref={notifRef} style={{position:"relative"}}>
-            <motion.button className="pd3-btn-icon" onClick={()=>setShowNotif(!showNotif)} whileHover={{scale:1.05}}>
+            <motion.button type="button" className="pd3-btn-icon" onClick={()=>setShowNotif(!showNotif)} whileHover={{scale:1.05}}>
               <I.Bell size={18} color="#fff"/>
               {unreadCount>0 && <span className="pd3-btn-badge">{unreadCount>9?"9+":unreadCount}</span>}
             </motion.button>
-            <AnimatePresence>{showNotif&&(<motion.div className="pd3-notif-panel" initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><div className="pd3-notif-header"><span className="pd3-notif-title"><I.Bell size={15} color="#D4A500"/> Notifications</span><button onClick={()=>setShowNotif(false)} className="pd3-notif-action"><I.X size={16}/></button></div><div className="pd3-notif-body" style={{maxHeight:350,overflowY:"auto"}}>{notifications.length===0?<div className="pd3-notif-empty"><I.Bell size={26} color="#D4A500"/><div className="pd3-notif-empty-text">Aucune notification</div></div>:notifications.map(n=><div key={n.id} className="pd3-notif-item" onClick={()=>{try{const d=JSON.parse(n.data||"{}");if(d.consultation_id){setSelectedConsultation(d.consultation_id);setActiveTab("messages")}}catch{}setShowNotif(false)}}><div className="pd3-notif-item-content"><div className="pd3-notif-item-title">{n.title}</div><div className="pd3-notif-item-msg">{n.message?.substring(0,80)}</div></div></div>)}</div></motion.div>)}</AnimatePresence>
+            <AnimatePresence>{showNotif&&(<motion.div className="pd3-notif-panel" initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><div className="pd3-notif-header"><span className="pd3-notif-title"><I.Bell size={15} color="#D4A500"/> Notifications</span><button type="button" onClick={()=>setShowNotif(false)} className="pd3-notif-action"><I.X size={16}/></button></div><div className="pd3-notif-body" style={{maxHeight:350,overflowY:"auto"}}>{notifications.length===0?<div className="pd3-notif-empty"><I.Bell size={26} color="#D4A500"/><div className="pd3-notif-empty-text">Aucune notification</div></div>:notifications.map(n=><div key={n.id} className="pd3-notif-item" onClick={()=>{try{const d=JSON.parse(n.data||"{}");if(d.consultation_id){setSelectedConsultation(d.consultation_id);setActiveTab("messages")}}catch{}setShowNotif(false)}}><div className="pd3-notif-item-content"><div className="pd3-notif-item-title">{n.title}</div><div className="pd3-notif-item-msg">{n.message?.substring(0,80)}</div></div></div>)}</div></motion.div>)}</AnimatePresence>
           </div>
         </div>
       </motion.nav>
@@ -590,10 +1160,28 @@ export default function DoctorDashboard() {
             <motion.div initial={{opacity:0,y:25}} animate={{opacity:1,y:0}}><div className="pd3-hero-status"><span className="pd3-status-pulse"/><span>ESPACE MÉDECIN</span><span className="pd3-status-sep"/><span>CERTIFIÉ CE MÉDICAL</span></div></motion.div>
             <motion.h1 className="pd3-hero-welcome" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.1}}>{greeting},<br/><span className="highlight">{firstName}</span></motion.h1>
             <motion.div className="pd3-hero-date" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.2}}><I.Calendar size={14} color="rgba(255,255,255,0.5)"/> {currentTime.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} <span style={{margin:"0 8px",opacity:.3}}>•</span> {currentTime.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</motion.div>
-            <motion.p className="pd3-hero-subtitle" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.25}}>{user?.specialty||"Spécialiste"} · Gérez vos consultations et analyses médicales</motion.p>
+            <motion.p className="pd3-hero-subtitle" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.25}}>
+              {user?.specialty||"Spécialiste"} · Gérez vos consultations et analyses médicales
+              {userDomains.length > 0 && (
+                <span style={{display:"inline-flex",alignItems:"center",gap:6,marginLeft:12,flexWrap:"wrap"}}>
+                  {userDomains.map(d => {
+                    const cfg = getDomainColor(d);
+                    return (
+                      <span key={d} style={{
+                        display:"inline-flex",alignItems:"center",gap:3,
+                        padding:"2px 8px",borderRadius:6,fontSize:"0.7rem",fontWeight:600,
+                        background:cfg.bg,color:cfg.color,
+                      }}>
+                        {getDomainIcon(d)} {d}
+                      </span>
+                    );
+                  })}
+                </span>
+              )}
+            </motion.p>
             <motion.div className="pd3-hero-actions" initial={{opacity:0,y:25}} animate={{opacity:1,y:0}} transition={{duration:.6,delay:.35}}>
-              <button className="pd3-btn pd3-btn-gold pd3-btn-lg" onClick={()=>setActiveTab("consultations")}><I.Folder size={18}/> File d'attente ({stats.queue})</button>
-              <button className="pd3-btn pd3-btn-outline-light pd3-btn-lg" onClick={()=>navigate("/classification")}><I.Scan size={16}/> Analyse libre</button>
+              <button type="button" className="pd3-btn pd3-btn-gold pd3-btn-lg" onClick={()=>setActiveTab("consultations")}><I.Folder size={18}/> File d'attente ({stats.queue})</button>
+              <button type="button" className="pd3-btn pd3-btn-outline-light pd3-btn-lg" onClick={()=>navigate("/classification")}><I.Scan size={16}/> Analyse libre</button>
             </motion.div>
           </div>
           <motion.div className="pd3-hero-visual" initial={{opacity:0,x:40}} animate={{opacity:1,x:0}} transition={{duration:.7,delay:.3}}>
@@ -618,19 +1206,291 @@ export default function DoctorDashboard() {
 
       {/* BODY */}
       <div className="pd3-body">
-        <Reveal><div className="pd3-tabs">{[{id:"overview",label:"Vue d'ensemble",icon:<I.Activity size={16}/>},{id:"consultations",label:"Consultations",icon:<I.Folder size={16}/>},{id:"messages",label:"Messages & Analyse",icon:<I.Message size={16}/>},{id:"analytics",label:"Statistiques",icon:<I.Star size={16}/>}].map(tab=>(<button key={tab.id} className={`pd3-tab ${activeTab===tab.id?"active":""}`} onClick={()=>setActiveTab(tab.id)}><span className="pd3-tab-icon">{tab.icon}</span> {tab.label}</button>))}</div></Reveal>
+        <Reveal><div className="pd3-tabs">
+  {[
+    {id:"overview",label:"Vue d'ensemble",icon:<I.Activity size={16}/>},
+    {id:"consultations",label:"Consultations",icon:<I.Folder size={16}/>},
+    {id:"messages",label:"Messages & Analyse",icon:<I.Message size={16}/>},
+    {id:"analytics",label:"Statistiques",icon:<I.Star size={16}/>},
+    {id:"video",label:"Vidéo",icon:<I.Video size={16}/>},  // NOUVEAU
+    {id:"cim11",label:"Assistant CIM-11",icon:<I.Book size={16}/>}
+  ].map(tab=>(
+    <button 
+      type="button" 
+      key={tab.id} 
+      className={`pd3-tab ${activeTab===tab.id?"active":""}`} 
+      onClick={(e) => { 
+        e.preventDefault(); 
+        e.stopPropagation(); 
+        const currentScroll = window.scrollY;
+        setActiveTab(tab.id);
+        setTimeout(() => window.scrollTo(0, currentScroll), 0);
+      }}
+    >
+      <span className="pd3-tab-icon">{tab.icon}</span> {tab.label}
+    </button>
+  ))}
+</div></Reveal>
 
         <AnimatePresence mode="wait">
-          {activeTab==="overview"&&(<motion.div key="overview" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Activity size={12}/> VUE D'ENSEMBLE</div><h2 className="pd3-section-title">Tableau de bord <span className="accent">médecin</span></h2><p className="pd3-section-sub">Gérez vos consultations en temps réel</p></div></Reveal><div className="pd3-metrics-grid">{[{icon:I.Folder,label:"En attente",value:stats.queue,color:"#D4A500",bg:"rgba(212,165,0,0.08)"},{icon:I.Clock,label:"En cours",value:stats.active,color:"#3B82F6",bg:"rgba(59,130,246,0.08)"},{icon:I.Check,label:"Analysées",value:stats.analyzed,color:"#10B981",bg:"rgba(16,185,129,0.08)"},{icon:I.Shield,label:"Terminées",value:stats.closed,color:"#6B7280",bg:"rgba(107,114,128,0.08)"}].map((s,i)=>(<Reveal key={i} delay={i*.06}><motion.div className="pd3-metric" style={{"--metric-color":s.color}} whileHover={{y:-6}}><div className="pd3-metric-icon" style={{background:s.bg,color:s.color}}><s.icon size={24}/></div><div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div><div className="pd3-metric-label">{s.label}</div></motion.div></Reveal>))}</div><Reveal delay={.1}><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Sparkles size={16} color="#D4A500"/> Actions rapides</span></div></Reveal><div className="pd3-actions-grid">{[{icon:I.Folder,label:"File d'attente",desc:"Gérer les demandes",color:"#D4A500",bg:"rgba(212,165,0,0.08)",action:()=>setActiveTab("consultations")},{icon:I.Scan,label:"Analyse libre",desc:"Classifier une image",color:"#8B5CF6",bg:"rgba(139,92,246,0.08)",action:()=>navigate("/classification")},{icon:I.Message,label:"Messages",desc:"Communiquer avec patients",color:"#10B981",bg:"rgba(16,185,129,0.08)",action:()=>setActiveTab("messages")},{icon:I.BarChart,label:"Statistiques",desc:"Vue globale",color:"#3B82F6",bg:"rgba(59,130,246,0.08)",action:()=>setActiveTab("analytics")}].map((a,i)=>(<Reveal key={i} delay={.12+i*.06}><motion.button className="pd3-action" onClick={a.action} whileHover={{y:-5}}><div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color}}><a.icon size={22}/></div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div><div className="pd3-action-label">{a.label}</div><div className="pd3-action-desc">{a.desc}</div></motion.button></Reveal>))}</div><Reveal delay={.15}><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Folder size={16} color="#D4A500"/> Consultations récentes</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{loading?<div style={{textAlign:"center",padding:40}}><I.Sparkles size={32} color="#D4A500"/></div>:[...assigned.slice(0,3),...queue.slice(0,2)].slice(0,5).map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}}/>)}</div></Reveal></motion.div>)}
+          {/* OVERVIEW TAB */}
+          {activeTab==="overview"&&(<motion.div key="overview" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Activity size={12}/> VUE D'ENSEMBLE</div><h2 className="pd3-section-title">Tableau de bord <span className="accent">médecin</span></h2><p className="pd3-section-sub">Gérez vos consultations en temps réel</p></div></Reveal><div className="pd3-metrics-grid">{[{icon:I.Folder,label:"En attente",value:stats.queue,color:"#D4A500",bg:"rgba(212,165,0,0.08)"},{icon:I.Clock,label:"En cours",value:stats.active,color:"#3B82F6",bg:"rgba(59,130,246,0.08)"},{icon:I.Check,label:"Analysées",value:stats.analyzed,color:"#10B981",bg:"rgba(16,185,129,0.08)"},{icon:I.Shield,label:"Terminées",value:stats.closed,color:"#6B7280",bg:"rgba(107,114,128,0.08)"}].map((s,i)=>(<Reveal key={i} delay={i*.06}><motion.div className="pd3-metric" style={{"--metric-color":s.color}} whileHover={{y:-6}}><div className="pd3-metric-icon" style={{background:s.bg,color:s.color}}><s.icon size={24}/></div><div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div><div className="pd3-metric-label">{s.label}</div></motion.div></Reveal>))}</div>
+          
+          {/* Section Accès rapide par domaine (comme dans MedecinDashboard) */}
+          {userDomains.length > 1 && (
+            <div style={{marginTop:20,marginBottom:30,background:"white",borderRadius:20,padding:"22px",border:"1px solid #E2E8F0"}}>
+              <h2 style={{fontSize:"1rem",fontWeight:800,color:"#0A2647",marginBottom:16}}>Mes spécialités</h2>
+              <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(userDomains.length,4)}, 1fr)`,gap:12}}>
+                {userDomains.map(d => {
+                  const cfg = getDomainColor(d);
+                  return (
+                    <div key={d} style={{
+                      padding:"16px",borderRadius:14,
+                      background:cfg.bg,border:`1px solid ${cfg.color}30`,
+                      cursor:"pointer",transition:"all .2s",
+                    }}
+                      onClick={() => navigate("/classification")}
+                      onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                      onMouseLeave={e => e.currentTarget.style.transform = ""}
+                    >
+                      <div style={{fontSize:"1.8rem",marginBottom:8}}>{getDomainIcon(d)}</div>
+                      <div style={{fontSize:".82rem",fontWeight:700,color:cfg.color,marginBottom:4}}>{getDomainLabel(d)}</div>
+                      <div style={{fontSize:".7rem",color:"#64748B",marginBottom:2}}>{getDomainClasses(d)}</div>
+                      <div style={{fontSize:".7rem",fontWeight:600,color:cfg.color}}>Précision : {getDomainAccuracy(d)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
+          <Reveal delay={.1}><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Sparkles size={16} color="#D4A500"/> Actions rapides</span></div></Reveal>
+          <div className="pd3-actions-grid">
+            {[
+              {icon:I.Folder,label:"File d'attente",desc:"Gérer les demandes",color:"#D4A500",bg:"rgba(212,165,0,0.08)",action:()=>setActiveTab("consultations")},
+              {icon:I.Scan,label:"Analyse libre",desc:"Classifier une image",color:"#8B5CF6",bg:"rgba(139,92,246,0.08)",action:()=>navigate("/classification")},
+              {icon:I.Message,label:"Messages",desc:"Communiquer avec patients",color:"#10B981",bg:"rgba(16,185,129,0.08)",action:()=>setActiveTab("messages")},
+              {icon:I.BarChart,label:"Statistiques",desc:"Vue globale",color:"#3B82F6",bg:"rgba(59,130,246,0.08)",action:()=>setActiveTab("analytics")},
+              {icon:I.Book,label:"Assistant CIM-11",desc:"Classification OMS",color:"#0099cc",bg:"rgba(0,153,204,0.08)",action:()=>setActiveTab("cim11")}
+            ].map((a,i)=>(<Reveal key={i} delay={.12+i*.06}><motion.button type="button" className="pd3-action" onClick={a.action} whileHover={{y:-5}}><div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color}}><a.icon size={22}/></div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div><div className="pd3-action-label">{a.label}</div><div className="pd3-action-desc">{a.desc}</div></motion.button></Reveal>))}
+          </div>
+          <Reveal delay={.15}><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Folder size={16} color="#D4A500"/> Consultations récentes</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{loading?<div style={{textAlign:"center",padding:40}}><I.Sparkles size={32} color="#D4A500"/></div>:[...assigned.slice(0,3),...queue.slice(0,2)].slice(0,5).map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}}/>)}</div></Reveal></motion.div>)}
+
+          {/* CONSULTATIONS TAB */}
           {activeTab==="consultations"&&(<motion.div key="consultations" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Folder size={12}/> CONSULTATIONS</div><h2 className="pd3-section-title">File d'attente <span className="accent">({queue.length})</span></h2></div></Reveal><div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:32}}>{queue.map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}} onAccept={()=>handleAccept(c.id)} onReject={()=>handleReject(c.id)} actionLoading={actionLoading===c.id}/>)}</div>{assigned.filter(c=>c.status!=="closed").length>0&&<><Reveal><h2 className="pd3-section-title" style={{marginBottom:24}}>Mes dossiers <span className="accent">actifs</span></h2></Reveal><div style={{display:"flex",flexDirection:"column",gap:8}}>{assigned.filter(c=>c.status!=="closed").map(c=><ConsultationCard key={c.id} consultation={c} onClick={()=>{setSelectedConsultation(c.id);setActiveTab("messages");}}/>)}</div></>}</motion.div>)}
 
-          {activeTab==="messages"&&(<motion.div key="messages" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} style={{display:"grid",gridTemplateColumns:"1fr 420px",gap:20}}>
-            <ChatSection consultationData={consultationData} messages={messages} msgInput={msgInput} setMsgInput={setMsgInput} onSend={handleSendMessage} canMessage={canMessage} onClose={()=>setShowCloseModal(true)} model={model} loading={loading}/>
-            <AnalysisSection analysis={analysis} analysisLoading={analysisLoading} explainText={explainText} explaining={explaining} onRunAnalysis={handleRunAnalysis} onDownloadPDF={handleDownloadPDF} consultationData={consultationData} model={model}/>
-          </motion.div>)}
+          {/* MESSAGES & ANALYSE TAB */}
+{activeTab === "messages" && (
+  <motion.div 
+    key="messages" 
+    initial={{ opacity: 0, y: 15 }} 
+    animate={{ opacity: 1, y: 0 }} 
+    exit={{ opacity: 0, y: -10 }} 
+    style={{ 
+      display: "grid", 
+      gridTemplateColumns: "1fr 500px",  // Changé de 480px à 500px
+      gap: 28,                           // Augmenté
+      alignItems: "start",
+    }}
+  >
+    <ChatSection 
+      consultationData={consultationData} 
+      messages={messages} 
+      msgInput={msgInput} 
+      setMsgInput={setMsgInput} 
+      onSend={handleSendMessage} 
+      canMessage={canMessage} 
+      onClose={() => setShowCloseModal(true)} 
+      model={model} 
+      loading={loading}
+    />
+    <AnalysisSection 
+      analysis={analysis} 
+      analysisLoading={analysisLoading} 
+      explainText={explainText} 
+      explaining={explaining} 
+      onRunAnalysis={handleRunAnalysis} 
+      onDownloadPDF={handleDownloadPDF} 
+      consultationData={consultationData} 
+      model={model}
+    />
+  </motion.div>
+)}
 
+          {/* STATISTIQUES TAB */}
           {activeTab==="analytics"&&(<motion.div key="analytics" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}><Reveal><div className="pd3-section-header"><div className="pd3-section-badge"><I.Star size={12}/> STATISTIQUES</div><h2 className="pd3-section-title">Vue <span className="accent">globale</span></h2></div></Reveal><div className="pd3-metrics-grid">{[{icon:I.Folder,label:"Total",value:queue.length+assigned.length,color:"#0A1628"},{icon:I.Clock,label:"En attente",value:stats.queue,color:"#D4A500"},{icon:I.Activity,label:"En cours",value:stats.active,color:"#3B82F6"},{icon:I.Check,label:"Analysées",value:stats.analyzed,color:"#10B981"}].map((s,i)=><Reveal key={i} delay={i*.06}><motion.div className="pd3-metric"><div className="pd3-metric-icon" style={{background:`${s.color}15`,color:s.color}}><s.icon size={24}/></div><div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div><div className="pd3-metric-label">{s.label}</div></motion.div></Reveal>)}</div></motion.div>)}
+
+
+          {/* VIDEO TAB - CONSULTATION EN LIGNE */}
+{activeTab === "video" && (
+  <motion.div 
+    key="video" 
+    initial={{ opacity: 0 }} 
+    animate={{ opacity: 1 }} 
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0 }}
+  >
+    <Reveal>
+      <div className="pd3-section-header">
+        <div className="pd3-section-badge"><I.Video size={12}/> TÉLÉMÉDECINE</div>
+        <h2 className="pd3-section-title">Consultation <span className="accent">en ligne</span></h2>
+        <p className="pd3-section-sub">Appels vidéo sécurisés avec vos patients — Chiffrement de bout en bout</p>
+      </div>
+    </Reveal>
+
+    <div className="pd3-video-container" style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 380px",
+      gap: 24,
+      marginTop: 20,
+    }}>
+      {/* Section de gauche - Liste des consultations actives */}
+      <div>
+        <Reveal>
+          <div className="pd3-section-row">
+            <span className="pd3-section-row-title"><I.Video size={16} color="#D4A500"/> Consultations actives</span>
+          </div>
+        </Reveal>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {assigned.filter(c => c.status === "accepted" || c.status === "analyzed").length === 0 ? (
+            <div className="pd3-empty">
+              <div className="pd3-empty-icon"><I.Video size={32} color="#D4A500"/></div>
+              <div className="pd3-empty-title">Aucune consultation active</div>
+              <div className="pd3-empty-desc">Acceptez des consultations pour démarrer des appels vidéo</div>
+            </div>
+          ) : (
+            assigned.filter(c => c.status === "accepted" || c.status === "analyzed").map(consultation => {
+              const model = MODEL_CONFIG[consultation.model_key] || MODEL_CONFIG.chest;
+              const urgency = URGENCY_CONFIG[consultation.urgency] || URGENCY_CONFIG.normal;
+              return (
+                <motion.div
+                  key={consultation.id}
+                  className="pd3-video-card"
+                  style={{
+                    background: "#fff",
+                    borderRadius: 16,
+                    padding: "20px",
+                    border: selectedConsultation === consultation.id ? "2px solid #10B981" : "1px solid #E5E7EB",
+                    borderLeft: `4px solid ${urgency.color}`,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => {
+                    const currentScroll = window.scrollY;
+                    setSelectedConsultation(consultation.id);
+                    setTimeout(() => window.scrollTo(0, currentScroll), 0);
+                  }}
+                  whileHover={{ x: 4 }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{
+                      width: 50, height: 50, borderRadius: 14,
+                      background: model.bg, color: model.color,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {model.icon}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: "1rem", color: "#0A1628" }}>{consultation.patient_name}</span>
+                        <span style={{ fontSize: "0.65rem", color: "#8899AA" }}>#{consultation.id}</span>
+                        <span style={{
+                          padding: "2px 8px", borderRadius: 12, fontSize: "0.6rem",
+                          fontWeight: 600, background: urgency.bg, color: urgency.color
+                        }}>
+                          {urgency.label}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <StatusBadge status={consultation.status}/>
+                        <span style={{ fontSize: "0.7rem", color: "#8899AA" }}>{model.label}</span>
+                      </div>
+                    </div>
+                    <VideoCallButton 
+                      consultationId={consultation.id}
+                      consultationStatus={consultation.status}
+                      consultation={consultation}
+                    />
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Section de droite - Informations et guide */}
+      <div>
+        <div className="pd3-health-card" style={{ height: "auto", minHeight: "auto" }}>
+          <div className="pd3-health-bg-pattern"/>
+          <div className="pd3-health-content">
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{
+                width: 50, height: 50, borderRadius: 14,
+                background: "rgba(16,185,129,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                <I.Camera size={24} color="#10B981"/>
+              </div>
+              <div>
+                <h3 style={{ color: "#fff", fontSize: "1.1rem", fontWeight: 700 }}>Appel sécurisé</h3>
+                <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.75rem" }}>Chiffrement de bout en bout</p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <I.Shield size={20} color="#10B981"/>
+                <div><div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#fff" }}>Sécurité maximale</div><div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>Conforme RGPD / HIPAA</div></div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <I.Clock size={20} color="#10B981"/>
+                <div><div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#fff" }}>Qualité HD</div><div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>Jusqu'à 1080p</div></div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <I.Users size={20} color="#10B981"/>
+                <div><div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#fff" }}>Jusqu'à 5 participants</div><div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>Incluant le patient</div></div>
+              </div>
+            </div>
+
+            <div style={{
+              background: "rgba(16,185,129,0.1)",
+              borderRadius: 12,
+              padding: "16px",
+              border: "1px solid rgba(16,185,129,0.2)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <I.Message size={16} color="#10B981"/>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#10B981" }}>Comment démarrer ?</span>
+              </div>
+              <ol style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.7rem", lineHeight: 1.8, marginLeft: 20 }}>
+                <li>Acceptez une consultation en attente</li>
+                <li>Cliquez sur "Appel vidéo" dans la consultation</li>
+                <li>Une nouvelle fenêtre s'ouvre avec la salle Jitsi</li>
+                <li>Partagez le lien avec le patient si nécessaire</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+)}
+
+          {/* NOUVEAU: CIM-11 TAB */}
+         {/* NOUVEAU: CIM-11 TAB */}
+        {activeTab==="cim11"&&(
+          <motion.div 
+            key="cim11" 
+            initial={{opacity:0,y:15}} 
+            animate={{opacity:1,y:0}} 
+            exit={{opacity:0,y:-10}}
+            style={{ height: "auto" }}  // CHANGÉ: hauteur auto
+          >
+            <CIM11Section user={user} />
+          </motion.div>
+        )}
         </AnimatePresence>
 
         <Reveal><section className="pd3-platform"><div className="pd3-platform-grid">{[{icon:I.Scan,value:50000,suffix:"+",label:"Radiographies analysées"},{icon:I.Brain,value:98,suffix:".5%",label:"Précision de détection"},{icon:I.Lungs,value:14,suffix:"+",label:"Pathologies couvertes"},{icon:I.Shield,value:100,suffix:"%",label:"Données sécurisées"}].map((s,i)=><motion.div key={i} className="pd3-platform-item" whileHover={{y:-4}}><div className="pd3-platform-icon"><s.icon size={30} color="#D4A500"/></div><div className="pd3-platform-value">{s.value}{s.suffix}</div><div className="pd3-platform-label">{s.label}</div>{i<3&&<div className="pd3-platform-div"/>}</motion.div>)}</div></section></Reveal>
@@ -638,7 +1498,7 @@ export default function DoctorDashboard() {
         <footer className="hp-footer" style={{marginTop:40}}><div className="hp-footer-inner"><div className="hp-footer-grid"><div className="hp-footer-brand"><div className="hp-nav-logo" style={{marginBottom:16}}><div className="hp-logo-icon"><I.Lungs size={18} color="#fff"/></div><span style={{color:"#fff"}}>Med<span style={{color:"#FFD700"}}>AI</span></span></div><p>Plateforme médicale de diagnostic assisté par IA. Transformant la radiologie avec l'apprentissage profond depuis 2024.</p><div className="hp-footer-socials">{["LI","TW","GH","YT","IN"].map((s,i)=><div className="hp-footer-social" key={i}>{s}</div>)}</div></div><div><h4>PRODUIT</h4>{["Analyse IA","Radiologues","API Access","Mobile App","Tarifs"].map(x=><a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div><div><h4>ENTREPRISE</h4>{["À propos","Carrières","Recherche","Blog","Contact"].map(x=><a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div><div><h4>RESSOURCES</h4>{["Documentation","Études de cas","Whitepapers","Support","Statut"].map(x=><a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div></div><div className="hp-footer-bottom"><span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span><div className="hp-footer-bottom-links">{["Confidentialité","Conditions","Sécurité","HIPAA","RGPD","Contact"].map(x=><a href="#" key={x}>{x}</a>)}</div></div></div></footer>
       </div>
 
-      <AnimatePresence>{showCloseModal&&(<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><motion.div initial={{scale:.95}} animate={{scale:1}} style={{background:"#fff",borderRadius:20,padding:28,maxWidth:460,width:"100%"}}><h2 style={{fontWeight:800,color:"#0A1628",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><I.Shield size={20} color="#6B7280"/> Clôturer la consultation</h2><textarea value={closeNotes} onChange={e=>setCloseNotes(e.target.value)} placeholder="Notes de clôture, recommandations..." rows={4} style={{width:"100%",padding:12,borderRadius:12,border:"1.5px solid #E5E7EB",fontSize:"0.85rem",fontFamily:"inherit",resize:"none",outline:"none",marginBottom:18,boxSizing:"border-box"}}/><div style={{display:"flex",gap:10}}><button onClick={()=>{setShowCloseModal(false);setCloseNotes("");}} className="pd3-btn pd3-btn-outline" style={{flex:1}}>Annuler</button><button onClick={handleClose} className="pd3-btn pd3-btn-gold" style={{flex:1}}>Confirmer la clôture</button></div></motion.div></motion.div>)}</AnimatePresence>
+      <AnimatePresence>{showCloseModal&&(<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}><motion.div initial={{scale:.95}} animate={{scale:1}} style={{background:"#fff",borderRadius:20,padding:28,maxWidth:460,width:"100%"}}><h2 style={{fontWeight:800,color:"#0A1628",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><I.Shield size={20} color="#6B7280"/> Clôturer la consultation</h2><textarea value={closeNotes} onChange={e=>setCloseNotes(e.target.value)} placeholder="Notes de clôture, recommandations..." rows={4} style={{width:"100%",padding:12,borderRadius:12,border:"1.5px solid #E5E7EB",fontSize:"0.85rem",fontFamily:"inherit",resize:"none",outline:"none",marginBottom:18,boxSizing:"border-box"}}/><div style={{display:"flex",gap:10}}><button type="button" onClick={()=>{setShowCloseModal(false);setCloseNotes("");}} className="pd3-btn pd3-btn-outline" style={{flex:1}}>Annuler</button><button type="button" onClick={handleClose} className="pd3-btn pd3-btn-gold" style={{flex:1}}>Confirmer la clôture</button></div></motion.div></motion.div>)}</AnimatePresence>
     </div>
   );
 }

@@ -238,7 +238,7 @@ export default function HomePage() {
       <motion.nav className={`hp-nav ${scrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: .5, type: "spring", stiffness: 100 }}>
         <div className="hp-nav-logo" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
           <div className="hp-logo-icon"><LungIco size={20} color="white" /></div>
-          <span>Chest<span className="accent">AI</span></span>
+          <span>Med<span className="accent">AI</span></span>
         </div>
         <div className="hp-nav-links">
           <a href="#features" onClick={(e) => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: "smooth" }); }}>Features</a>
@@ -281,7 +281,7 @@ export default function HomePage() {
             
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .1 }}>
               AI-Powered<br />
-              <span className="gd">Chest X-Ray</span><br />
+              <span className="gd">MedAI</span><br />
               Diagnostics
             </motion.h1>
             
@@ -520,7 +520,7 @@ export default function HomePage() {
           <div className="hp-stitle">
             <div className="hp-sbadge">TESTIMONIALS</div>
             <h2>Trusted by <span className="gd">medical experts</span> worldwide</h2>
-            <p>Join over 500 healthcare institutions using ChestAI for clinical decision support.</p>
+            <p>Join over 500 healthcare institutions using MedAI for clinical decision support.</p>
           </div>
         </R>
         <div className="hp-tgrid">
@@ -577,7 +577,7 @@ export default function HomePage() {
             <div className="hp-footer-brand">
               <div className="hp-nav-logo" style={{ marginBottom: 16 }}>
                 <div className="hp-logo-icon"><LungIco size={18} color="white" /></div>
-                <span style={{ color: "#fff" }}>Chest<span style={{ color: "#FFD700" }}>AI</span></span>
+                <span style={{ color: "#fff" }}>Med<span style={{ color: "#FFD700" }}>AI</span></span>
               </div>
               <p>AI-powered chest X-ray diagnostics for modern healthcare. Transforming radiology with deep learning.</p>
               <div className="hp-footer-socials">
@@ -600,7 +600,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="hp-footer-bottom">
-            <span>© 2025 ChestAI. All rights reserved. Patent pending.</span>
+            <span>© 2025 MedAI. All rights reserved. Patent pending.</span>
             <div className="hp-footer-bottom-links">
               {["Privacy", "Terms", "Security", "HIPAA", "GDPR", "Sitemap"].map(x => <a href="#" key={x}>{x}</a>)}
             </div>

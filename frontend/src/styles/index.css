@@ -1884,3 +1884,14 @@ body {
 .animate-fadeInUp {
   animation: fadeInUp 0.6s ease-out forwards;
 }
+/* Empêcher le scroll automatique sur focus des boutons */
+button:focus,
+a:focus,
+[tabindex]:focus {
+  outline: none;
+}
+
+/* Désactiver le scroll behavior sur les clics de boutons */
+button {
+  scroll-margin: 0;
+}

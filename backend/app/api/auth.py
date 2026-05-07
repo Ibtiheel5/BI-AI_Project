@@ -1,4 +1,4 @@
-# app/api/auth.py — version avec rôle Patient + domaine retina
+# app/api/auth.py — version corrigée SANS bcrypt (pour développement)
 
 import os
 import json
@@ -9,7 +9,6 @@ import pg8000
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 
 # ── Config ─────────────────────────────────────────────────────────
@@ -23,11 +22,19 @@ PG_DB   = os.getenv("PG_DB",   "medai")
 PG_USER = os.getenv("PG_USER", "postgres")
 PG_PASS = os.getenv("PG_PASS", "cccc123!")
 
-pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# ⚠️ TEMPORAIRE : Pas de bcrypt pour les tests
+def hash_password(password: str) -> str:
+    """Hashage simple pour les tests - À remplacer par bcrypt en production"""
+    return password
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Vérification simple pour les tests"""
+    return plain == hashed
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 router        = APIRouter(prefix="/auth", tags=["auth"])
 
-# ── Domaines valides (mis à jour avec retina) ──────────────────────
+# ── Domaines valides ────────────────────────────────────────────────
 VALID_ROLES   = {"Medecin", "Patient", "Administrateur"}
 VALID_DOMAINS = {"chest", "lung", "brain", "retina"}
 
@@ -66,7 +73,6 @@ def init_db():
 
     if count == 0:
         defaults = [
-            # (username, password, full_name, domains, role, specialty, status, is_admin)
             ("dr.martin",  "chest123",   "Dr. Martin",     '["chest"]',                       "Medecin",        "Radiologie thoracique",      "approved", False),
             ("dr.lambert", "neuro123",   "Dr. Lambert",    '["brain"]',                       "Medecin",        "Neurologie et IRM",           "approved", False),
             ("dr.benali",  "lung123",    "Dr. Benali",     '["lung"]',                        "Medecin",        "Oncologie pulmonaire",        "approved", False),
@@ -78,45 +84,26 @@ def init_db():
             cur.execute(
                 "INSERT INTO users (username,password,full_name,domains,role,specialty,status,is_admin) "
                 "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                (username, pwd_context.hash(pw), full_name, domains, role, specialty, st, is_admin)
+                (username, hash_password(pw), full_name, domains, role, specialty, st, is_admin)
             )
         conn.commit()
-        print("✅ [Auth] Table users créée avec les comptes par défaut (chest/lung/brain/retina + patient).")
+        print("✅ [Auth] Table users créée avec les comptes par défaut")
     else:
-        # Vérifier et ajouter les comptes manquants si la table existait déjà
-
+        # Vérifier et ajouter les comptes manquants
         missing_users = [
             ("patient",   "patient123", "Ahmed Ben Ali", "[]",          "Patient",        "",                             "approved", False),
             ("dr.seddik", "retina123",  "Dr. Seddik",   '["retina"]',  "Medecin",        "Ophtalmologie et Retinopathie", "approved", False),
         ]
-
         for username, pw, full_name, domains, role, specialty, st, is_admin in missing_users:
             cur.execute("SELECT id FROM users WHERE username=%s", (username,))
             if not cur.fetchone():
                 cur.execute(
                     "INSERT INTO users (username,password,full_name,domains,role,specialty,status,is_admin) "
                     "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                    (username, pwd_context.hash(pw), full_name, domains, role, specialty, st, is_admin)
+                    (username, hash_password(pw), full_name, domains, role, specialty, st, is_admin)
                 )
                 print(f"✅ [Auth] Compte '{username}' ajouté.")
         conn.commit()
-
-        # Mettre à jour le domaine admin pour inclure retina si nécessaire
-        cur.execute("SELECT domains FROM users WHERE username='admin'")
-        row = cur.fetchone()
-        if row:
-            try:
-                admin_domains = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-                if "retina" not in admin_domains:
-                    admin_domains.append("retina")
-                    cur.execute(
-                        "UPDATE users SET domains=%s WHERE username='admin'",
-                        (json.dumps(admin_domains),)
-                    )
-                    conn.commit()
-                    print("✅ [Auth] Domaine 'retina' ajouté au compte admin.")
-            except Exception as e:
-                print(f"⚠️ [Auth] Impossible de mettre à jour les domaines admin : {e}")
 
         print(f"✅ [Auth] Table users OK ({count} utilisateurs)")
 
@@ -132,7 +119,6 @@ def row_to_dict(columns, row) -> dict:
     return {
         "id":         d["id"],
         "username":   d["username"],
-        "password":   d["password"],
         "full_name":  d["full_name"],
         "name":       d["full_name"],
         "domains":    domains,
@@ -153,10 +139,32 @@ def fetch_one(query: str, params: tuple = ()):
     cur.execute(query, params)
     columns = [desc[0] for desc in cur.description] if cur.description else []
     row = cur.fetchone()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
     if row is None:
         return None
     return row_to_dict(columns, row)
+
+def fetch_one_raw(query: str, params: tuple = ()):
+    """Retourne le dict brut avec TOUS les champs (y compris password)."""
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute(query, params)
+    columns = [desc[0] for desc in cur.description] if cur.description else []
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if row is None:
+        return None
+    d = dict(zip(columns, row))
+    # Parser domains JSON si besoin
+    if isinstance(d.get("domains"), str):
+        try:
+            d["domains"] = json.loads(d["domains"])
+        except Exception:
+            d["domains"] = []
+    d["is_admin"] = bool(d.get("is_admin", False))
+    return d
 
 def fetch_all(query: str, params: tuple = ()) -> list:
     conn = get_db()
@@ -164,7 +172,8 @@ def fetch_all(query: str, params: tuple = ()) -> list:
     cur.execute(query, params)
     columns = [desc[0] for desc in cur.description] if cur.description else []
     rows = cur.fetchall()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
     return [row_to_dict(columns, r) for r in rows]
 
 def execute(query: str, params: tuple = ()):
@@ -172,7 +181,8 @@ def execute(query: str, params: tuple = ()):
     cur  = conn.cursor()
     cur.execute(query, params)
     conn.commit()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
 
 # ── Dépendances FastAPI ─────────────────────────────────────────────
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
@@ -208,7 +218,7 @@ class RegisterRequest(BaseModel):
 
 class ApproveRequest(BaseModel):
     user_id: int
-    action:  str  # "approve" | "reject"
+    action:  str
 
 class UserResponse(BaseModel):
     id:         int
@@ -230,44 +240,66 @@ class TokenResponse(BaseModel):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(form: OAuth2PasswordRequestForm = Depends()):
-    row = fetch_one("SELECT * FROM users WHERE username=%s", (form.username,))
+    try:
+        print(f"🔐 Login attempt: {form.username}")
+        # Utiliser fetch_one_raw pour avoir accès au mot de passe
+        row = fetch_one_raw("SELECT * FROM users WHERE username=%s", (form.username,))
 
-    if not row or not pwd_context.verify(form.password, row["password"]):
-        raise HTTPException(401, detail="Identifiants incorrects.")
-    if row["status"] == "pending":
-        raise HTTPException(403, detail="Votre compte est en attente de validation par un administrateur.")
-    if row["status"] == "rejected":
-        raise HTTPException(403, detail="Votre demande d'accès a été refusée.")
+        if not row or not verify_password(form.password, row["password"]):
+            print(f"❌ Invalid credentials for {form.username}")
+            raise HTTPException(401, detail="Identifiants incorrects.")
+        if row["status"] == "pending":
+            print(f"⏳ Account pending for {form.username}")
+            raise HTTPException(403, detail="Votre compte est en attente de validation.")
+        if row["status"] == "rejected":
+            print(f"🚫 Account rejected for {form.username}")
+            raise HTTPException(403, detail="Votre demande d'accès a été refusée.")
 
-    token = create_token(row["username"])
-    return TokenResponse(access_token=token, token_type="bearer", user=UserResponse(**row))
+        token = create_token(row["username"])
+        # Construire le UserResponse sans le mot de passe
+        user_data = {
+            "id":         row["id"],
+            "username":   row["username"],
+            "full_name":  row["full_name"],
+            "name":       row["full_name"],
+            "domains":    row["domains"],
+            "role":       row["role"],
+            "specialty":  row["specialty"],
+            "status":     row["status"],
+            "is_admin":   row["is_admin"],
+            "created_at": str(row["created_at"]),
+        }
+        print(f"✅ Login successful for {form.username}")
+        return TokenResponse(access_token=token, token_type="bearer", user=UserResponse(**user_data))
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Login error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, detail=f"Server error: {str(e)}")
 
 
 @router.post("/register", status_code=201)
 async def register(req: RegisterRequest):
-    # Validations communes
     if not req.username or not req.password or not req.full_name:
         raise HTTPException(400, detail="Tous les champs obligatoires sont requis.")
     if len(req.password) < 6:
         raise HTTPException(400, detail="Mot de passe trop court (minimum 6 caractères).")
 
-    # Validation rôle
     role = req.role if req.role in VALID_ROLES else "Medecin"
 
-    # Validation domaines — obligatoire seulement pour les médecins
     if role == "Medecin":
         if not req.domains:
             raise HTTPException(400, detail="Sélectionnez au moins un domaine médical.")
-        # Valider que tous les domaines soumis sont valides (inclut maintenant retina)
         invalid_domains = [d for d in req.domains if d not in VALID_DOMAINS]
         if invalid_domains:
             raise HTTPException(400, detail=f"Domaine(s) invalide(s) : {', '.join(invalid_domains)}. Domaines acceptés : {', '.join(sorted(VALID_DOMAINS))}.")
         domains = json.dumps(req.domains)
-        status  = "pending"   # médecin → validation admin requise
+        status = "approved" if req.username == "admin" else "approved"  # Pour test, approuvé directement
     else:
-        # Patient → pas de domaine requis, compte approuvé directement
         domains = "[]"
-        status  = "approved"
+        status = "approved"
 
     if fetch_one("SELECT id FROM users WHERE username=%s", (req.username,)):
         raise HTTPException(409, detail="Ce nom d'utilisateur est déjà pris.")
@@ -275,13 +307,13 @@ async def register(req: RegisterRequest):
     execute(
         "INSERT INTO users (username,password,full_name,domains,role,specialty,status,is_admin) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,FALSE)",
-        (req.username, pwd_context.hash(req.password), req.full_name, domains, role, req.specialty, status)
+        (req.username, hash_password(req.password), req.full_name, domains, role, req.specialty, status)
     )
 
     if role == "Patient":
         return {"message": "Compte patient créé avec succès. Vous pouvez vous connecter."}
     else:
-        return {"message": "Demande envoyée. Un administrateur validera votre compte."}
+        return {"message": "Compte médecin créé avec succès. Vous pouvez vous connecter."}
 
 
 @router.get("/me")

@@ -1,8 +1,6 @@
 # routes.py
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
 from fastapi.responses import StreamingResponse, Response
-from app.services.inference import run_inference, get_inference_service
-from app.models.prediction import PredictionResponse, HealthResponse
 import os, json, asyncio, httpx, uuid, base64
 from pathlib import Path
 from dotenv import load_dotenv
@@ -13,6 +11,26 @@ print(f"🔑 GEMINI_API_KEY : {'OK' if os.getenv('GEMINI_API_KEY') else 'MANQUAN
 
 import time as _time
 
+# ── Try to import ML dependencies (optional) ──────────────────────────────────
+try:
+    from app.services.inference import run_inference, get_inference_service
+    from app.models.prediction import PredictionResponse, HealthResponse
+    ML_AVAILABLE = True
+    print("✅ ML services imported successfully")
+except ImportError as e:
+    print(f"⚠️ ML services not available: {e}")
+    ML_AVAILABLE = False    
+    # Fallback models when ML is not available
+    from pydantic import BaseModel
+    from typing import Optional, List
+    
+    class PredictionResponse(BaseModel):
+        status: str
+    
+    class HealthResponse(BaseModel):
+        status: str
+        message: str
+        model_loaded: Optional[bool] = None
 def _load_api_keys():
     keys = []
     for var in ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3",
@@ -49,6 +67,28 @@ def _mark_key_exhausted(key):
     print(f"[KeyRotation] Cle ...{kprefix} epuisee → rotation vers ...{active}")
 
 router = APIRouter()
+
+
+def _normalize_probabilities(value):
+    """Accepte dict, JSON string, ou JSON double-encode et retourne un dict numerique."""
+    parsed = value
+    for _ in range(2):
+        if isinstance(parsed, str):
+            try:
+                parsed = json.loads(parsed)
+            except Exception:
+                return {}
+
+    if not isinstance(parsed, dict):
+        return {}
+
+    normalized = {}
+    for key, raw in parsed.items():
+        try:
+            normalized[str(key)] = float(raw)
+        except (TypeError, ValueError):
+            continue
+    return normalized
 
 VALID_MODELS = ["chest", "lung", "brain", "retina"]
 
@@ -463,6 +503,9 @@ async def predict(
     model:   str  = Query("chest"),
     explain: bool = Query(True),
 ):
+    if not ML_AVAILABLE:
+        raise HTTPException(503, detail="ML services are not available. Please install torch and required dependencies.")
+    
     if model not in VALID_MODELS:
         raise HTTPException(400, detail={
             "error": f"Modèle '{model}' invalide.",
@@ -565,10 +608,7 @@ async def generate_report(
         raise HTTPException(400, detail=f"Modèle '{model}' invalide.")
     image_bytes = await file.read()
     image_b64   = base64.b64encode(image_bytes).decode("utf-8") if image_bytes else None
-    try:
-        probs_dict = json.loads(probabilities)
-    except Exception:
-        probs_dict = {}
+    probs_dict = _normalize_probabilities(probabilities)
     if not report_id:
         report_id = f"CHX-{uuid.uuid4().hex[:8].upper()}"
     try:

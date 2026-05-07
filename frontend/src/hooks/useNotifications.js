@@ -30,20 +30,13 @@ export const useNotifications = () => {
     }
   }, [post]);
 
-  const markAsRead = useCallback(
-    async (notificationId) => {
-      try {
-        await post(`/consultations/notifications/${notificationId}/read`, {});
-        setNotifications(prev =>
-          prev.map(n => (n.id === notificationId ? { ...n, is_read: true } : n))
-        );
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      } catch (err) {
-        console.error("Erreur:", err);
-      }
-    },
-    [post]
-  );
+  // Optimistic local update — no per-notification endpoint exists in backend
+  const markAsRead = useCallback((notificationId) => {
+    setNotifications(prev =>
+      prev.map(n => (n.id === notificationId ? { ...n, is_read: true } : n))
+    );
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  }, []);
 
   useEffect(() => {
     fetchNotifications();

@@ -30,7 +30,7 @@ router = APIRouter(prefix="/consultations", tags=["consultations"])
 
 VALID_STATUSES = {"pending", "accepted", "analyzed", "closed", "rejected"}
 VALID_URGENCY  = {"normal", "urgent", "critical"}
-VALID_MODELS   = {"chest", "lung", "brain"}
+VALID_MODELS   = {"chest", "lung", "brain", "retina"}
 
 # ── DB helpers ──────────────────────────────────────────────────────
 def get_db():
@@ -187,6 +187,66 @@ def create_notification(user_id: int, ntype: str, title: str, message: str, data
 
 
 # ── Modèles Pydantic ────────────────────────────────────────────────
+def build_fallback_explain(prediction: str, confidence: float, probabilities: dict, model_key: str, warning: str = "") -> str:
+    """Explication clinique locale si Gemini est indisponible ou trop court."""
+    try:
+        confidence_pct = float(confidence) * 100
+    except Exception:
+        confidence_pct = 0.0
+
+    model_labels = {
+        "chest": "radiographie thoracique",
+        "lung": "scanner CT pulmonaire",
+        "brain": "IRM cerebrale",
+        "retina": "retinographie du fond d'oeil",
+    }
+    model_label = model_labels.get(model_key, "image medicale")
+
+    if isinstance(probabilities, str):
+        try:
+            probabilities = json.loads(probabilities)
+        except Exception:
+            probabilities = {}
+    if not isinstance(probabilities, dict):
+        probabilities = {}
+
+    sorted_probs = []
+    for label, value in probabilities.items():
+        try:
+            sorted_probs.append((str(label), float(value)))
+        except Exception:
+            continue
+    sorted_probs.sort(key=lambda item: item[1], reverse=True)
+    differential = ", ".join(f"{label} ({value * 100:.1f}%)" for label, value in sorted_probs[1:4]) or "non disponible"
+
+    confidence_note = "elevee" if confidence_pct >= 80 else "intermediaire" if confidence_pct >= 55 else "faible"
+    warning_text = f"\n\nAttention particuliere : {warning}" if warning else ""
+
+    return (
+        "## Signes observes sur cette image\n"
+        f"L'analyse IA de cette {model_label} retient principalement la classe {prediction}. "
+        "Les regions mises en avant par la carte Grad-CAM doivent etre confrontees visuellement "
+        "a l'image originale afin de verifier leur concordance anatomique.\n\n"
+        "## Correlation signes visuels / decision du modele\n"
+        f"Le score de confiance est de {confidence_pct:.1f}%, ce qui correspond a une confiance {confidence_note}. "
+        f"Les principales hypotheses differentielles du modele sont : {differential}. "
+        "Une marge faible entre les classes doit faire privilegier la prudence diagnostique.\n\n"
+        "## Conduite clinique basee sur cette image\n"
+        "Cette prediction doit etre interpretee comme une aide a la decision. "
+        "Elle doit etre integree aux symptomes, antecedents, constantes, biologie et examens anterieurs du patient. "
+        "Une validation par le medecin responsable reste indispensable avant toute decision therapeutique.\n\n"
+        "## Limites de cette analyse\n"
+        "Le modele peut se tromper en cas d'image de mauvaise qualite, de cadrage incomplet, "
+        "d'artefact, de pathologie rare ou de discordance entre l'image fournie et le modele choisi."
+        f"{warning_text}"
+    )
+
+
+def explain_is_too_short(text: str) -> bool:
+    clean = (text or "").strip()
+    return len(clean.split()) < 45 or clean.lower() in {"ok", "normal", "aucune anomalie"}
+
+
 class ConsultationCreate(BaseModel):
     model_key:     str
     patient_notes: str = ""
@@ -373,7 +433,22 @@ async def get_consultation(
     # Vérifier les droits d'accès
     uid = current_user["id"]
     is_admin = current_user.get("is_admin", False)
-    if not is_admin and row["patient_id"] != uid and row["doctor_id"] != uid:
+    is_patient_owner = row["patient_id"] == uid
+    is_assigned_doctor = row["doctor_id"] == uid
+
+    # Médecin avec le bon domaine peut voir les consultations pending de sa spécialité
+    is_doctor_with_domain = False
+    if current_user.get("role") in ("Medecin", "Administrateur"):
+        domains = current_user.get("domains", [])
+        if isinstance(domains, str):
+            try:
+                domains = json.loads(domains)
+            except Exception:
+                domains = []
+        if row.get("model_key") in domains:
+            is_doctor_with_domain = True
+
+    if not is_admin and not is_patient_owner and not is_assigned_doctor and not is_doctor_with_domain:
         raise HTTPException(403, "Accès refusé.")
 
     # Récupérer l'analyse si elle existe
@@ -788,6 +863,32 @@ async def run_analysis_server_side(
             yield f"data: {_json.dumps({'type': 'explain_error', 'error': str(e)})}\n\n"
 
         # ── 4. Sauvegarder automatiquement l'analyse en DB ────────────
+                # ── 4. Sauvegarder automatiquement l'analyse en DB ────────────
+        if explain_is_too_short(full_explain):
+            fallback_explain = build_fallback_explain(
+                result["prediction"],
+                result["confidence"],
+                result["probabilities"],
+                model_key,
+                result.get("warning", ""),
+            )
+            if full_explain.strip():
+                full_explain = full_explain.strip() + "\n\n" + fallback_explain
+                event_data = {
+                    'type': 'explain_chunk',
+                    'text': "\n\n" + fallback_explain,
+                    'fallback': True
+                }
+                yield f"data: {_json.dumps(event_data)}\n\n"
+            else:
+                full_explain = fallback_explain
+                event_data = {
+                    'type': 'explain_chunk',
+                    'text': fallback_explain,
+                    'fallback': True
+                }
+                yield f"data: {_json.dumps(event_data)}\n\n"
+
         try:
             urgency = "normal"
             urgent_preds = {"glioma", "malignant", "COVID", "Pneumonia", "Pneumothorax", "Edema", "Mass", "Viral Pneumonia"}

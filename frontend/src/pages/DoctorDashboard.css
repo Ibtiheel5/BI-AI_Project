@@ -2956,3 +2956,38 @@
 .pd3-body > :last-child {
   margin-bottom: 0;
 }
+/* CORRECTION DÉFINITIVE DU SCROLL */
+.pd3-tab,
+.pd3-nav-link,
+.pd3-action,
+.pd3-metric,
+.pd3-btn,
+button {
+  scroll-margin: 0 !important;
+  scroll-snap-align: none !important;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+html {
+  scroll-behavior: auto !important;
+}
+
+*:focus {
+  outline: none !important;
+}
+
+/* Animation des onglets sans scroll */
+.pd3-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* Vidéo card hover */
+.pd3-video-card {
+  transition: all 0.2s ease;
+}
+
+.pd3-video-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
