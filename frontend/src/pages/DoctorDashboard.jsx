@@ -524,56 +524,776 @@ const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend
 // ═══════════════════════════════════════
 // COMPOSANT BOUTON APPEL VIDÉO
 // ═══════════════════════════════════════
-const VideoCallButton = ({ consultationId, consultationStatus, consultation }) => {
-  const [isJoining, setIsJoining] = useState(false);
-  
-  const startVideoCall = () => {
-    if (!consultationId) {
-      alert("Aucune consultation sélectionnée");
+// ═══════════════════════════════════════
+// MODAL DE PLANIFICATION DE RENDEZ-VOUS
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// MODAL DE PLANIFICATION DE RENDEZ-VOUS - VERSION AGENDA AVEC SAISIE MANUELLE
+// ═══════════════════════════════════════
+const AppointmentModal = ({ isOpen, onClose, consultation, onConfirm }) => {
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTime, setSelectedTime] = useState(null);
+  const [customHour, setCustomHour] = useState("");
+  const [customMinute, setCustomMinute] = useState("");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [timeInputMode, setTimeInputMode] = useState("preset"); // "preset" ou "manual"
+  const [weekStart, setWeekStart] = useState(1);
+
+  // Heures prédéfinies (créneaux standards)
+  const presetTimeSlots = [
+    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
+    "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
+    "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+    "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"
+  ];
+
+  // Jours fériés approximatifs (Tunisie)
+  const holidays = [
+    "01-01", "14-01", "20-03", "09-04", "01-05",
+    "25-07", "13-08", "15-10",
+  ];
+
+  const isHoliday = (date) => {
+    const monthDay = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return holidays.includes(monthDay);
+  };
+
+  const isWeekend = (date) => {
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  };
+
+  const isPastDate = (date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  const isPastTimeForToday = (date, time) => {
+    if (!selectedDate) return false;
+    const today = new Date();
+    const selectedDateTime = new Date(selectedDate);
+    
+    if (selectedDateTime.toDateString() !== today.toDateString()) return false;
+    
+    const [hours, minutes] = time.split(":");
+    const selectedHour = parseInt(hours);
+    const selectedMinute = parseInt(minutes);
+    const currentHour = today.getHours();
+    const currentMinute = today.getMinutes();
+    
+    return (selectedHour < currentHour) || (selectedHour === currentHour && selectedMinute < currentMinute);
+  };
+
+  // Valider l'heure saisie manuellement
+  const validateCustomTime = (hour, minute) => {
+    const h = parseInt(hour);
+    const m = parseInt(minute);
+    
+    if (isNaN(h) || isNaN(m)) return false;
+    if (h < 0 || h > 23) return false;
+    if (m < 0 || m > 59) return false;
+    
+    const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    if (isPastTimeForToday(selectedDate, timeStr)) return false;
+    
+    return true;
+  };
+
+  // Appliquer l'heure personnalisée
+  const applyCustomTime = () => {
+    if (!customHour || !customMinute) {
+      alert("Veuillez entrer une heure valide");
       return;
     }
-    if (consultationStatus !== "accepted" && consultationStatus !== "analyzed") {
-      alert("La consultation doit être acceptée avant de démarrer un appel vidéo");
+    
+    if (validateCustomTime(customHour, customMinute)) {
+      const timeStr = `${String(parseInt(customHour)).padStart(2, '0')}:${String(parseInt(customMinute)).padStart(2, '0')}`;
+      setSelectedTime(timeStr);
+      setTimeInputMode("preset");
+    } else {
+      alert("Heure invalide ou déjà passée. Veuillez saisir une heure entre 00:00 et 23:59");
+    }
+  };
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    
+    let startDayOfWeek = firstDay.getDay();
+    startDayOfWeek = (startDayOfWeek - weekStart + 7) % 7;
+    
+    const days = [];
+    
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      days.push({
+        date: new Date(year, month - 1, prevMonthLastDay - i),
+        isCurrentMonth: false,
+        isSelected: false
+      });
+    }
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, month, i);
+      days.push({
+        date: date,
+        isCurrentMonth: true,
+        isSelected: selectedDate && date.toDateString() === selectedDate.toDateString()
+      });
+    }
+    
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({
+        date: new Date(year, month + 1, i),
+        isCurrentMonth: false,
+        isSelected: false
+      });
+    }
+    
+    return days;
+  };
+
+  const changeMonth = (delta) => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1));
+    setSelectedDate(null);
+    setSelectedTime(null);
+  };
+
+  const selectDate = (date) => {
+    if (isPastDate(date) || isWeekend(date) || isHoliday(date)) return;
+    setSelectedDate(date);
+    setSelectedTime(null);
+    setCustomHour("");
+    setCustomMinute("");
+  };
+
+  const selectTime = (time) => {
+    if (isPastTimeForToday(selectedDate, time)) return;
+    setSelectedTime(time);
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedDate || !selectedTime) {
+      alert("Veuillez selectionner une date et une heure");
+      return;
+    }
+    setLoading(true);
+    await onConfirm(selectedDate, selectedTime, notes);
+    setLoading(false);
+    onClose();
+  };
+
+  const monthNames = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+  ];
+
+  const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+  const days = getDaysInMonth(currentMonth);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        zIndex: 2000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        style={{
+          background: "#fff",
+          borderRadius: 28,
+          padding: 32,
+          maxWidth: 800,
+          width: "100%",
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#0A1628", marginBottom: 8 }}>
+          Planifier un rendez-vous
+        </h2>
+        <p style={{ fontSize: "0.85rem", color: "#64748B", marginBottom: 24 }}>
+          Patient : {consultation?.patient_name}
+        </p>
+
+        {/* Calendrier */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "space-between",
+            marginBottom: 20
+          }}>
+            <button
+              type="button"
+              onClick={() => changeMonth(-1)}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                border: "1px solid #E2E8F0",
+                background: "#fff",
+                cursor: "pointer",
+                fontSize: "1.2rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ←
+            </button>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#0A1628" }}>
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </h3>
+            <button
+              type="button"
+              onClick={() => changeMonth(1)}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                border: "1px solid #E2E8F0",
+                background: "#fff",
+                cursor: "pointer",
+                fontSize: "1.2rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              →
+            </button>
+          </div>
+
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gap: 6,
+            marginBottom: 8
+          }}>
+            {dayNames.map(day => (
+              <div key={day} style={{ 
+                textAlign: "center", 
+                fontSize: "0.7rem", 
+                fontWeight: 600, 
+                color: "#64748B",
+                padding: "8px 0"
+              }}>
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gap: 6
+          }}>
+            {days.map((day, index) => {
+              const date = day.date;
+              const isDisabled = isPastDate(date) || isWeekend(date) || isHoliday(date);
+              const isSelected = day.isSelected;
+              const isToday = date.toDateString() === today.toDateString();
+              
+              let bgColor = "#fff";
+              let textColor = "#1E293B";
+              
+              if (isDisabled) {
+                bgColor = "#F1F5F9";
+                textColor = "#94A3B8";
+              }
+              if (isSelected) {
+                bgColor = "#D4A500";
+                textColor = "#fff";
+              }
+              
+              return (
+                <motion.button
+                  key={index}
+                  type="button"
+                  onClick={() => !isDisabled && selectDate(date)}
+                  disabled={isDisabled}
+                  whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                  style={{
+                    aspectRatio: 1,
+                    background: bgColor,
+                    border: isToday && !isSelected ? "2px solid #D4A500" : "1px solid #E2E8F0",
+                    borderRadius: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: isDisabled ? "not-allowed" : "pointer",
+                    transition: "all 0.2s",
+                    position: "relative",
+                  }}
+                >
+                  <span style={{ 
+                    fontSize: "0.85rem", 
+                    fontWeight: isSelected ? 700 : 500,
+                    color: textColor,
+                  }}>
+                    {date.getDate()}
+                  </span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Sélection des horaires */}
+        {selectedDate && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "space-between",
+              marginBottom: 12
+            }}>
+              <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#475569" }}>
+                Heure du rendez-vous
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setTimeInputMode("preset")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: 20,
+                    border: timeInputMode === "preset" ? "2px solid #D4A500" : "1px solid #E2E8F0",
+                    background: timeInputMode === "preset" ? "rgba(212,165,0,0.1)" : "#fff",
+                    fontSize: "0.7rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Créneaux
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimeInputMode("manual")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: 20,
+                    border: timeInputMode === "manual" ? "2px solid #D4A500" : "1px solid #E2E8F0",
+                    background: timeInputMode === "manual" ? "rgba(212,165,0,0.1)" : "#fff",
+                    fontSize: "0.7rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Saisie manuelle
+                </button>
+              </div>
+            </div>
+
+            {/* Mode créneaux prédéfinis */}
+            {timeInputMode === "preset" && (
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "repeat(5, 1fr)",
+                gap: 8,
+                maxHeight: 200,
+                overflowY: "auto",
+                padding: 4
+              }}>
+                {presetTimeSlots.map(time => {
+                  const isPast = isPastTimeForToday(selectedDate, time);
+                  const isSelected = selectedTime === time;
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => !isPast && selectTime(time)}
+                      disabled={isPast}
+                      style={{
+                        padding: "10px 8px",
+                        borderRadius: 10,
+                        border: isSelected ? "2px solid #D4A500" : "1px solid #E2E8F0",
+                        background: isSelected ? "rgba(212,165,0,0.1)" : "#fff",
+                        fontSize: "0.75rem",
+                        fontWeight: isSelected ? 600 : 500,
+                        color: isPast ? "#CBD5E1" : (isSelected ? "#D4A500" : "#475569"),
+                        cursor: isPast ? "not-allowed" : "pointer",
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      {time}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Mode saisie manuelle */}
+            {timeInputMode === "manual" && (
+              <div style={{ 
+                padding: "16px",
+                background: "#F8FAFC",
+                borderRadius: 16,
+                border: "1px solid #E2E8F0"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <label style={{ fontSize: "0.65rem", color: "#64748B", display: "block", marginBottom: 4 }}>Heure</label>
+                    <input
+                      type="number"
+                      value={customHour}
+                      onChange={(e) => {
+                        let val = parseInt(e.target.value);
+                        if (isNaN(val)) val = "";
+                        if (val > 23) val = 23;
+                        if (val < 0) val = 0;
+                        setCustomHour(val === "" ? "" : String(val));
+                      }}
+                      placeholder="00-23"
+                      min="0"
+                      max="23"
+                      style={{
+                        width: 70,
+                        padding: "10px",
+                        borderRadius: 10,
+                        border: "1.5px solid #E2E8F0",
+                        fontSize: "1rem",
+                        textAlign: "center",
+                        fontFamily: "monospace",
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: "1.5rem", color: "#64748B" }}>:</span>
+                  <div style={{ textAlign: "center" }}>
+                    <label style={{ fontSize: "0.65rem", color: "#64748B", display: "block", marginBottom: 4 }}>Minute</label>
+                    <input
+                      type="number"
+                      value={customMinute}
+                      onChange={(e) => {
+                        let val = parseInt(e.target.value);
+                        if (isNaN(val)) val = "";
+                        if (val > 59) val = 59;
+                        if (val < 0) val = 0;
+                        setCustomMinute(val === "" ? "" : String(val).padStart(2, '0'));
+                      }}
+                      placeholder="00-59"
+                      min="0"
+                      max="59"
+                      style={{
+                        width: 70,
+                        padding: "10px",
+                        borderRadius: 10,
+                        border: "1.5px solid #E2E8F0",
+                        fontSize: "1rem",
+                        textAlign: "center",
+                        fontFamily: "monospace",
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyCustomTime}
+                    style={{
+                      padding: "10px 20px",
+                      borderRadius: 10,
+                      background: "linear-gradient(135deg, #D4A500, #B8941E)",
+                      color: "#fff",
+                      border: "none",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      marginTop: 18,
+                    }}
+                  >
+                    Appliquer
+                  </button>
+                </div>
+                <div style={{ 
+                  marginTop: 12, 
+                  fontSize: "0.7rem", 
+                  color: "#64748B", 
+                  textAlign: "center",
+                  padding: "8px",
+                  background: "#fff",
+                  borderRadius: 8,
+                }}>
+                  ⏰ Saisissez une heure entre 00:00 et 23:59
+                </div>
+              </div>
+            )}
+
+            {selectedTime && (
+              <div style={{ 
+                marginTop: 12, 
+                padding: "10px 12px", 
+                background: "#F0FDF4",
+                borderRadius: 10,
+                fontSize: "0.75rem",
+                color: "#10B981",
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Rendez-vous planifié pour le {selectedDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} à {selectedTime}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notes */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#475569", display: "block", marginBottom: 8 }}>
+            Notes (optionnel)
+          </label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Instructions spéciales, préparation..."
+            rows={3}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 12,
+              border: "1.5px solid #E2E8F0",
+              fontSize: "0.85rem",
+              fontFamily: "inherit",
+              outline: "none",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
+        {/* Boutons d'action */}
+        <div style={{ display: "flex", gap: 12 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="pd3-btn pd3-btn-outline"
+            style={{ flex: 1 }}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={loading || !selectedDate || !selectedTime}
+            className="pd3-btn pd3-btn-gold"
+            style={{ flex: 1 }}
+          >
+            {loading ? "Planification..." : "Confirmer le rendez-vous"}
+          </button>
+        </div>
+
+        {/* Légende */}
+        <div style={{ 
+          display: "flex", 
+          gap: 16, 
+          marginTop: 24, 
+          paddingTop: 16, 
+          borderTop: "1px solid #E2E8F0",
+          fontSize: "0.7rem",
+          color: "#64748B",
+          flexWrap: "wrap"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 16, height: 16, background: "#fff", border: "1px solid #E2E8F0", borderRadius: 4 }} />
+            <span>Disponible</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 16, height: 16, background: "#D4A500", borderRadius: 4 }} />
+            <span>Sélectionné</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 16, height: 16, background: "#F1F5F9", border: "1px solid #CBD5E1", borderRadius: 4 }} />
+            <span>Indisponible</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 16, height: 16, border: "2px solid #D4A500", borderRadius: 4 }} />
+            <span>Aujourd'hui</span>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+// ═══════════════════════════════════════
+// COMPOSANT BOUTON APPEL VIDÉO AVEC PLANIFICATION
+// ═══════════════════════════════════════
+const VideoCallButton = ({ consultationId, consultationStatus, consultation }) => {
+  const [hasAppointment, setHasAppointment] = useState(false);
+  const [appointmentTime, setAppointmentTime] = useState(null);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+
+  useEffect(() => {
+    const checkAppointment = async () => {
+      const token = localStorage.getItem("medai-token");
+      if (!token || !consultationId) return;
+      try {
+        const res = await fetch(`${API}/consultations/${consultationId}/appointment`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.appointment) {
+            setHasAppointment(true);
+            setAppointmentTime(data.appointment.scheduled_at);
+          }
+        }
+      } catch (err) {
+        console.error("Erreur vérification rendez-vous:", err);
+      }
+    };
+    checkAppointment();
+  }, [consultationId]);
+
+  const canCall = consultationId && (consultationStatus === "accepted" || consultationStatus === "analyzed") && hasAppointment;
+  const isAppointmentTime = appointmentTime && new Date(appointmentTime) <= new Date();
+
+  const startVideoCall = () => {
+    if (!consultationId) {
+      alert("Aucune consultation selectionnee");
+      return;
+    }
+    if (!hasAppointment) {
+      alert("Veuillez d'abord planifier un rendez-vous avec le patient");
+      return;
+    }
+    if (!isAppointmentTime) {
+      alert(`Le rendez-vous est prevu pour le ${new Date(appointmentTime).toLocaleString("fr-FR")}. Veuillez patienter jusqu'a l'heure du rendez-vous.`);
       return;
     }
     setIsJoining(true);
-    // Ouvrir la salle vidéo dans un nouvel onglet
     window.open(`/video-consultation/${consultationId}?room=medai-${consultationId}`, "_blank");
     setTimeout(() => setIsJoining(false), 1000);
   };
-  
-  const canCall = consultationId && (consultationStatus === "accepted" || consultationStatus === "analyzed");
-  
+
+  const scheduleAppointment = async (date, time, notes) => {
+    const token = localStorage.getItem("medai-token");
+    const scheduledAt = new Date(date);
+    const [hours, minutes] = time.split(":");
+    scheduledAt.setHours(parseInt(hours), parseInt(minutes), 0);
+    
+    const res = await fetch(`${API}/consultations/${consultationId}/appointment`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        scheduled_at: scheduledAt.toISOString(),
+        notes: notes,
+        type: "video"
+      })
+    });
+    
+    if (res.ok) {
+      setHasAppointment(true);
+      setAppointmentTime(scheduledAt);
+      alert(`Rendez-vous planifie pour le ${scheduledAt.toLocaleString("fr-FR")}`);
+    } else {
+      alert("Erreur lors de la planification");
+    }
+  };
+
+  const canSchedule = consultationId && (consultationStatus === "accepted" || consultationStatus === "analyzed") && !hasAppointment;
+
   return (
-    <motion.button
-      type="button"
-      onClick={startVideoCall}
-      disabled={!canCall || isJoining}
-      className="pd3-btn"
-      style={{
-        background: !canCall ? "rgba(100,116,139,0.15)" : "linear-gradient(135deg, #059669, #10B981)",
-        color: !canCall ? "rgba(255,255,255,0.4)" : "#fff",
-        padding: "10px 20px",
-        borderRadius: "14px",
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        fontSize: "0.85rem",
-        fontWeight: 600,
-        cursor: !canCall ? "not-allowed" : "pointer",
-        border: !canCall ? "1px solid rgba(100,116,139,0.2)" : "none",
-      }}
-      whileHover={canCall ? { scale: 1.02 } : {}}
-      whileTap={canCall ? { scale: 0.98 } : {}}
-      title={!canCall ? "Acceptez d'abord la consultation" : "Démarrer un appel vidéo sécurisé"}
-    >
-      {isJoining ? (
-        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ width: 18, height: 18, border: "2px solid white", borderTopColor: "transparent", borderRadius: "50%" }} />
-      ) : (
-        <I.Video size={18} />
+    <>
+      {canSchedule && (
+        <motion.button
+          type="button"
+          onClick={() => setShowAppointmentModal(true)}
+          className="pd3-btn"
+          style={{
+            background: "linear-gradient(135deg, #D4A500, #B8941E)",
+            color: "#fff",
+            padding: "10px 20px",
+            borderRadius: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          title="Planifier un rendez-vous avec le patient"
+        >
+          <I.Calendar size={18} />
+          Planifier
+        </motion.button>
       )}
-      {isJoining ? "Connexion..." : "Appel vidéo"}
-    </motion.button>
+
+      {hasAppointment && (
+        <motion.button
+          type="button"
+          onClick={startVideoCall}
+          disabled={!isAppointmentTime || isJoining}
+          className="pd3-btn"
+          style={{
+            background: !isAppointmentTime ? "rgba(100,116,139,0.15)" : "linear-gradient(135deg, #059669, #10B981)",
+            color: !isAppointmentTime ? "rgba(255,255,255,0.4)" : "#fff",
+            padding: "10px 20px",
+            borderRadius: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            cursor: !isAppointmentTime ? "not-allowed" : "pointer",
+          }}
+          whileHover={isAppointmentTime ? { scale: 1.02 } : {}}
+          whileTap={isAppointmentTime ? { scale: 0.98 } : {}}
+          title={!isAppointmentTime ? `Rendez-vous le ${new Date(appointmentTime).toLocaleString("fr-FR")}` : "Demarrer l'appel video"}
+        >
+          {isJoining ? (
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ width: 18, height: 18, border: "2px solid white", borderTopColor: "transparent", borderRadius: "50%" }} />
+          ) : (
+            <>
+              {!isAppointmentTime ? <I.Clock size={18} /> : <I.Video size={18} />}
+              {!isAppointmentTime 
+                ? new Date(appointmentTime).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+                : "Appel video"}
+            </>
+          )}
+        </motion.button>
+      )}
+
+      <AppointmentModal
+        isOpen={showAppointmentModal}
+        onClose={() => setShowAppointmentModal(false)}
+        consultation={consultation}
+        onConfirm={scheduleAppointment}
+      />
+    </>
   );
 };
 

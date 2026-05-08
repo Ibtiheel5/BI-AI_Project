@@ -113,7 +113,7 @@ def init_consultation_tables():
             duration_minutes INT DEFAULT 30,
             video_link       TEXT DEFAULT '',
             location         TEXT DEFAULT '',
-            status           VARCHAR(20) DEFAULT 'scheduled',
+            status           VARCHAR(20) DEFAULT 'pending',
             notes            TEXT DEFAULT '',
             created_at       TIMESTAMP NOT NULL DEFAULT NOW()
         )
@@ -264,6 +264,12 @@ class AppointmentCreate(BaseModel):
     location:         str = ""
     notes:            str = ""
 
+class AppointmentSchedule(BaseModel):
+    scheduled_at: str
+    notes: Optional[str] = None
+    type: str = "video"
+    status: str = "pending"
+
 class MessageCreate(BaseModel):
     content:  str
     msg_type: str = "text"
@@ -332,6 +338,9 @@ async def get_my_consultations(
     status: Optional[str] = Query(None),
     current_user: dict    = Depends(get_current_user),
 ):
+    if current_user["role"] not in ("Patient", "Administrateur"):
+        raise HTTPException(403, "Réservé aux patients.")
+    
     if status:
         rows = fetch_all(
             """SELECT c.*, u.full_name as doctor_name, u.specialty as doctor_specialty
@@ -363,12 +372,14 @@ async def get_doctor_queue(
 
     domains = current_user.get("domains", [])
     if isinstance(domains, str):
-        domains = json.loads(domains)
+        try:
+            domains = json.loads(domains)
+        except:
+            domains = []
 
     if not domains:
         return {"consultations": [], "total": 0}
 
-    # Récupérer les consultations en attente correspondant aux domaines du médecin
     placeholders = ",".join(["%s"] * len(domains))
     rows = fetch_all(
         f"""SELECT c.*, u.full_name as patient_name
@@ -381,7 +392,7 @@ async def get_doctor_queue(
     return {"consultations": rows, "total": len(rows)}
 
 
-# ── Médecin : mes consultations acceptées ──────────────────────────
+# ── Médecin : mes consultations assignées ──────────────────────────
 @router.get("/assigned")
 async def get_assigned_consultations(
     status: Optional[str] = Query(None),
@@ -430,13 +441,11 @@ async def get_consultation(
     if not row:
         raise HTTPException(404, "Consultation introuvable.")
 
-    # Vérifier les droits d'accès
     uid = current_user["id"]
     is_admin = current_user.get("is_admin", False)
     is_patient_owner = row["patient_id"] == uid
     is_assigned_doctor = row["doctor_id"] == uid
 
-    # Médecin avec le bon domaine peut voir les consultations pending de sa spécialité
     is_doctor_with_domain = False
     if current_user.get("role") in ("Medecin", "Administrateur"):
         domains = current_user.get("domains", [])
@@ -451,13 +460,11 @@ async def get_consultation(
     if not is_admin and not is_patient_owner and not is_assigned_doctor and not is_doctor_with_domain:
         raise HTTPException(403, "Accès refusé.")
 
-    # Récupérer l'analyse si elle existe
     analysis = fetch_one(
         "SELECT * FROM analyses WHERE consultation_id = %s ORDER BY created_at DESC LIMIT 1",
         (consultation_id,)
     )
 
-    # Messages
     messages = fetch_all(
         """SELECT m.*, u.full_name as sender_name, u.role as sender_role
            FROM messages m JOIN users u ON m.sender_id = u.id
@@ -465,7 +472,6 @@ async def get_consultation(
         (consultation_id,)
     )
 
-    # Rendez-vous
     appointment = fetch_one(
         "SELECT * FROM appointments WHERE consultation_id = %s ORDER BY created_at DESC LIMIT 1",
         (consultation_id,)
@@ -499,7 +505,6 @@ async def accept_consultation(
         (current_user["id"], consultation_id)
     )
 
-    # Notifier le patient
     create_notification(
         row["patient_id"], "consultation_accepted",
         "Demande acceptée !",
@@ -544,6 +549,272 @@ async def reject_consultation(
     return {"message": "Consultation rejetée.", "status": "rejected"}
 
 
+# ── Rendez-vous (Appointments) ─────────────────────────────────────
+
+@router.post("/{consultation_id}/appointment")
+async def create_appointment_for_consultation(
+    consultation_id: int,
+    appointment_data: AppointmentSchedule,
+    current_user: dict = Depends(get_current_user),
+):
+    """Créer un rendez-vous pour une consultation"""
+    if current_user["role"] not in ("Medecin", "Administrateur"):
+        raise HTTPException(403, "Seul un médecin peut créer un rendez-vous.")
+
+    consultation = fetch_one("SELECT * FROM consultations WHERE id = %s", (consultation_id,))
+    if not consultation:
+        raise HTTPException(404, "Consultation introuvable")
+
+    if consultation["doctor_id"] != current_user["id"] and not current_user.get("is_admin"):
+        raise HTTPException(403, "Seul le médecin assigné peut créer un rendez-vous")
+
+    if consultation["status"] in ("closed", "rejected"):
+        raise HTTPException(400, "La consultation est terminée, impossible de créer un rendez-vous")
+
+    existing = fetch_one("SELECT id FROM appointments WHERE consultation_id = %s", (consultation_id,))
+    if existing:
+        raise HTTPException(400, "Un rendez-vous existe déjà pour cette consultation")
+
+    try:
+        scheduled_dt = datetime.fromisoformat(appointment_data.scheduled_at.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(400, "Format de date invalide. Utilisez ISO 8601")
+
+    execute(
+        """INSERT INTO appointments 
+           (consultation_id, doctor_id, patient_id, type, scheduled_at, notes, status)
+           VALUES (%s, %s, %s, %s, %s, %s, 'pending')""",
+        (
+            consultation_id,
+            current_user["id"],
+            consultation["patient_id"],
+            appointment_data.type,
+            scheduled_dt,
+            appointment_data.notes or "",
+        )
+    )
+
+    create_notification(
+        consultation["patient_id"],
+        "appointment_scheduled",
+        "Nouveau rendez-vous planifié",
+        f"Dr. {current_user['full_name']} a planifié un rendez-vous pour le {scheduled_dt.strftime('%d/%m/%Y à %H:%M')}",
+        {"consultation_id": consultation_id, "type": appointment_data.type}
+    )
+
+    return {"message": "Rendez-vous créé avec succès", "scheduled_at": scheduled_dt.isoformat()}
+
+
+@router.get("/{consultation_id}/appointment")
+async def get_appointment_for_consultation(
+    consultation_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Récupérer le rendez-vous d'une consultation"""
+    consultation = fetch_one("SELECT * FROM consultations WHERE id = %s", (consultation_id,))
+    if not consultation:
+        raise HTTPException(404, "Consultation introuvable")
+
+    uid = current_user["id"]
+    is_admin = current_user.get("is_admin", False)
+    if consultation["patient_id"] != uid and consultation["doctor_id"] != uid and not is_admin:
+        raise HTTPException(403, "Accès non autorisé")
+
+    appointment = fetch_one(
+        "SELECT * FROM appointments WHERE consultation_id = %s ORDER BY created_at DESC LIMIT 1",
+        (consultation_id,)
+    )
+
+    if not appointment:
+        return {"appointment": None}
+
+    doctor = fetch_one("SELECT full_name FROM users WHERE id = %s", (appointment["doctor_id"],))
+    patient = fetch_one("SELECT full_name FROM users WHERE id = %s", (appointment["patient_id"],))
+
+    return {
+        "appointment": {
+            "id": appointment["id"],
+            "consultation_id": appointment["consultation_id"],
+            "doctor_id": appointment["doctor_id"],
+            "patient_id": appointment["patient_id"],
+            "doctor_name": doctor["full_name"] if doctor else None,
+            "patient_name": patient["full_name"] if patient else None,
+            "scheduled_at": appointment["scheduled_at"].isoformat() if appointment["scheduled_at"] else None,
+            "notes": appointment["notes"],
+            "type": appointment["type"],
+            "status": appointment["status"],
+        }
+    }
+
+
+@router.get("/appointments/my")
+async def get_my_appointments(
+    current_user: dict = Depends(get_current_user),
+    status: Optional[str] = None,
+):
+    """Récupérer tous les rendez-vous du médecin ou patient connecté"""
+    uid = current_user["id"]
+
+    query = """
+        SELECT a.*, 
+               d.full_name as doctor_name,
+               p.full_name as patient_name,
+               c.model_key,
+               c.status as consultation_status
+        FROM appointments a
+        JOIN consultations c ON a.consultation_id = c.id
+        LEFT JOIN users d ON a.doctor_id = d.id
+        LEFT JOIN users p ON a.patient_id = p.id
+        WHERE (a.doctor_id = %s OR a.patient_id = %s)
+    """
+    params = [uid, uid]
+
+    if status:
+        query += " AND a.status = %s"
+        params.append(status)
+
+    query += " ORDER BY a.scheduled_at ASC"
+
+    appointments = fetch_all(query, tuple(params))
+
+    for apt in appointments:
+        if apt.get("scheduled_at"):
+            apt["scheduled_at"] = apt["scheduled_at"].isoformat() if hasattr(apt["scheduled_at"], 'isoformat') else str(apt["scheduled_at"])
+
+    return {"appointments": appointments}
+
+
+@router.get("/appointments")
+async def get_all_appointments(
+    current_user: dict = Depends(get_current_user),
+    status: Optional[str] = None,
+):
+    """Alias pour /appointments/my - récupérer les rendez-vous"""
+    return await get_my_appointments(current_user, status)
+
+
+@router.put("/appointments/{appointment_id}/accept")
+async def accept_appointment(
+    appointment_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Le patient accepte le rendez-vous"""
+    appointment = fetch_one("SELECT * FROM appointments WHERE id = %s", (appointment_id,))
+    if not appointment:
+        raise HTTPException(404, "Rendez-vous introuvable")
+    
+    if appointment["patient_id"] != current_user["id"] and not current_user.get("is_admin"):
+        raise HTTPException(403, "Non autorisé")
+    
+    if appointment["status"] != "pending":
+        raise HTTPException(400, "Ce rendez-vous ne peut pas être accepté")
+    
+    execute("UPDATE appointments SET status = 'accepted' WHERE id = %s", (appointment_id,))
+    
+    create_notification(
+        appointment["doctor_id"],
+        "appointment_accepted",
+        "Rendez-vous accepté",
+        f"Le patient a accepté le rendez-vous",
+        {"appointment_id": appointment_id, "consultation_id": appointment["consultation_id"]}
+    )
+    
+    return {"message": "Rendez-vous accepté", "status": "accepted"}
+
+
+@router.put("/appointments/{appointment_id}/reject")
+async def reject_appointment(
+    appointment_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Le patient refuse le rendez-vous"""
+    appointment = fetch_one("SELECT * FROM appointments WHERE id = %s", (appointment_id,))
+    if not appointment:
+        raise HTTPException(404, "Rendez-vous introuvable")
+    
+    if appointment["patient_id"] != current_user["id"] and not current_user.get("is_admin"):
+        raise HTTPException(403, "Non autorisé")
+    
+    if appointment["status"] != "pending":
+        raise HTTPException(400, "Ce rendez-vous ne peut pas être refusé")
+    
+    execute("UPDATE appointments SET status = 'rejected' WHERE id = %s", (appointment_id,))
+    
+    create_notification(
+        appointment["doctor_id"],
+        "appointment_rejected",
+        "Rendez-vous refusé",
+        f"Le patient a refusé le rendez-vous",
+        {"appointment_id": appointment_id, "consultation_id": appointment["consultation_id"]}
+    )
+    
+    return {"message": "Rendez-vous refusé", "status": "rejected"}
+
+
+@router.put("/appointments/{appointment_id}/cancel")
+async def cancel_appointment(
+    appointment_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Annuler un rendez-vous (médecin ou patient)"""
+    appointment = fetch_one("SELECT * FROM appointments WHERE id = %s", (appointment_id,))
+    if not appointment:
+        raise HTTPException(404, "Rendez-vous introuvable")
+
+    uid = current_user["id"]
+    is_admin = current_user.get("is_admin", False)
+    if appointment["doctor_id"] != uid and appointment["patient_id"] != uid and not is_admin:
+        raise HTTPException(403, "Non autorisé")
+
+    if appointment["status"] == "cancelled":
+        raise HTTPException(400, "Le rendez-vous est déjà annulé")
+
+    execute("UPDATE appointments SET status = 'cancelled' WHERE id = %s", (appointment_id,))
+
+    other_id = appointment["patient_id"] if uid == appointment["doctor_id"] else appointment["doctor_id"]
+    create_notification(
+        other_id,
+        "appointment_cancelled",
+        "Rendez-vous annulé",
+        f"Votre rendez-vous a été annulé",
+        {"appointment_id": appointment_id, "consultation_id": appointment["consultation_id"]}
+    )
+
+    return {"message": "Rendez-vous annulé"}
+# Ajouter à la fin du fichier, après les autres endpoints
+
+@router.get("/appointments/pending/check-expired")
+async def check_expired_appointments(
+    current_user: dict = Depends(require_admin),
+):
+    """Vérifier et annuler les rendez-vous en attente depuis plus de 20 minutes"""
+    # Récupérer tous les rendez-vous en attente
+    pending = fetch_all(
+        "SELECT * FROM appointments WHERE status = 'pending'"
+    )
+    
+    expired_count = 0
+    for apt in pending:
+        created_at = apt.get("created_at")
+        if created_at:
+            # Vérifier si plus de 20 minutes (20 * 60 = 1200 secondes)
+            if (datetime.now() - created_at).total_seconds() > 1200:
+                execute(
+                    "UPDATE appointments SET status = 'cancelled' WHERE id = %s",
+                    (apt["id"],)
+                )
+                expired_count += 1
+                # Notifier le médecin
+                create_notification(
+                    apt["doctor_id"],
+                    "appointment_expired",
+                    "Rendez-vous expiré",
+                    f"Le patient n'a pas accepté le rendez-vous dans les 20 minutes",
+                    {"appointment_id": apt["id"], "consultation_id": apt["consultation_id"]}
+                )
+    
+    return {"expired_count": expired_count}
+
 # ── Enregistrer le résultat IA (après inference) ───────────────────
 @router.post("/{consultation_id}/analysis")
 async def save_analysis(
@@ -563,11 +834,9 @@ async def save_analysis(
     if row["status"] != "accepted":
         raise HTTPException(400, "La consultation doit être acceptée avant l'analyse.")
 
-    # Vérifier que c'est le bon médecin
     if row["doctor_id"] != current_user["id"] and not current_user.get("is_admin"):
         raise HTTPException(403, "Seul le médecin assigné peut lancer l'analyse.")
 
-    # Calculer urgence automatique selon prediction
     urgency = "normal"
     urgent_preds = {"glioma", "malignant", "COVID", "Pneumonia", "Pneumothorax", "Edema", "Mass", "Viral Pneumonia"}
     medium_preds = {"meningioma", "Cardiomegaly", "Emphysema", "Nodule", "Lung_Opacity", "pituitary"}
@@ -576,7 +845,6 @@ async def save_analysis(
     elif prediction in medium_preds:
         urgency = "urgent"
 
-    # Sauvegarder l'analyse
     execute(
         """INSERT INTO analyses
            (consultation_id, prediction, confidence, probabilities, gradcam_b64, explain_text, out_of_domain, warning)
@@ -584,13 +852,11 @@ async def save_analysis(
         (consultation_id, prediction, confidence, probabilities, gradcam_b64, explain_text, out_of_domain, warning)
     )
 
-    # Mettre à jour le statut
     execute(
         "UPDATE consultations SET status='analyzed', urgency=%s, updated_at=NOW() WHERE id=%s",
         (urgency, consultation_id)
     )
 
-    # Notifier le patient — résultat disponible
     create_notification(
         row["patient_id"], "analysis_ready",
         "Résultat IA disponible",
@@ -658,7 +924,6 @@ async def send_message(
         (consultation_id, uid, body.content.strip(), body.msg_type)
     )
 
-    # Notifier l'autre partie
     other_id = row["doctor_id"] if uid == row["patient_id"] else row["patient_id"]
     if other_id:
         create_notification(
@@ -693,46 +958,6 @@ async def get_messages(
     return {"messages": messages}
 
 
-# ── Rendez-vous ────────────────────────────────────────────────────
-@router.post("/appointments", status_code=201)
-async def create_appointment(
-    body: AppointmentCreate,
-    current_user: dict = Depends(get_current_user),
-):
-    if current_user["role"] not in ("Medecin", "Administrateur"):
-        raise HTTPException(403, "Seul un médecin peut créer un rendez-vous.")
-
-    row = fetch_one("SELECT * FROM consultations WHERE id = %s", (body.consultation_id,))
-    if not row:
-        raise HTTPException(404, "Consultation introuvable.")
-    if row["doctor_id"] != current_user["id"] and not current_user.get("is_admin"):
-        raise HTTPException(403, "Seul le médecin assigné peut créer un RDV.")
-
-    try:
-        scheduled_dt = datetime.fromisoformat(body.scheduled_at)
-    except ValueError:
-        raise HTTPException(400, "Format de date invalide. Utilisez ISO 8601.")
-
-    execute(
-        """INSERT INTO appointments
-           (consultation_id, doctor_id, patient_id, type, scheduled_at, duration_minutes, video_link, location, notes)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-        (body.consultation_id, current_user["id"], row["patient_id"],
-         body.type, scheduled_dt, body.duration_minutes,
-         body.video_link, body.location, body.notes)
-    )
-
-    rdv_type = "vidéo" if body.type == "video" else "présentiel"
-    create_notification(
-        row["patient_id"], "appointment_scheduled",
-        f"Rendez-vous {rdv_type} planifié",
-        f"Dr. {current_user['full_name']} vous a proposé un RDV le {scheduled_dt.strftime('%d/%m/%Y à %H:%M')}.",
-        {"consultation_id": body.consultation_id, "type": body.type}
-    )
-
-    return {"message": f"Rendez-vous {rdv_type} créé.", "type": body.type}
-
-
 # ── Transfert de dossier ───────────────────────────────────────────
 @router.post("/{consultation_id}/transfer")
 async def transfer_consultation(
@@ -753,26 +978,23 @@ async def transfer_consultation(
     if not target:
         raise HTTPException(404, "Médecin destinataire introuvable.")
 
-    # Enregistrer le transfert
     execute(
         "INSERT INTO transfers (consultation_id, from_doctor_id, to_doctor_id, reason) VALUES (%s,%s,%s,%s)",
         (consultation_id, current_user["id"], body.to_doctor_id, body.reason)
     )
 
-    # Changer le médecin assigné
     execute(
         "UPDATE consultations SET doctor_id=%s, updated_at=NOW() WHERE id=%s",
         (body.to_doctor_id, consultation_id)
     )
 
-    # Notifier le nouveau médecin
     create_notification(
         body.to_doctor_id, "consultation_transferred",
         "Dossier transféré",
         f"Dr. {current_user['full_name']} vous a transféré un dossier. Motif : {body.reason or 'Non précisé'}",
         {"consultation_id": consultation_id}
     )
-    # Notifier le patient
+
     create_notification(
         row["patient_id"], "doctor_changed",
         "Votre médecin a changé",
@@ -786,18 +1008,13 @@ async def transfer_consultation(
     }
 
 
-# ── Lancer l'analyse IA côté serveur (évite le CORS sur /uploads) ──
+# ── Lancer l'analyse IA côté serveur ───────────────────────────────
 @router.post("/{consultation_id}/run-analysis")
 async def run_analysis_server_side(
     consultation_id: int,
     gradcam: bool = Query(True),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Lit l'image directement depuis le disque serveur et lance l'inférence.
-    Aucun fetch cross-origin côté frontend — résout le bug CORS sur /uploads.
-    Retourne un stream SSE identique à /api/v1/predict.
-    """
     import asyncio
     import base64
     from fastapi.responses import StreamingResponse
@@ -813,7 +1030,6 @@ async def run_analysis_server_side(
     if row["doctor_id"] != current_user["id"] and not current_user.get("is_admin"):
         raise HTTPException(403, "Seul le médecin assigné peut lancer l'analyse.")
 
-    # Lire l'image depuis le disque (pas de fetch réseau → pas de CORS)
     image_path = Path(row["image_path"])
     if not image_path.exists():
         raise HTTPException(404, f"Image introuvable sur le serveur : {image_path}")
@@ -824,7 +1040,6 @@ async def run_analysis_server_side(
     async def event_stream():
         import json as _json
 
-        # ── 1. Inférence ──────────────────────────────────────────────
         try:
             from app.services.inference import run_inference
             result = run_inference(image_bytes, with_gradcam=gradcam, model_key=model_key)
@@ -832,7 +1047,6 @@ async def run_analysis_server_side(
             yield f"data: {_json.dumps({'type': 'error', 'message': str(e)})}\n\n"
             return
 
-        # ── 2. Envoyer la prédiction immédiatement ────────────────────
         yield f"data: {_json.dumps({'type': 'prediction', 'prediction': result['prediction'], 'confidence': result['confidence'], 'probabilities': result['probabilities'], 'gradcam_image': result.get('gradcam_image'), 'out_of_domain': result.get('out_of_domain', False), 'warning': result.get('warning', '')})}\n\n"
         await asyncio.sleep(0)
 
@@ -840,7 +1054,6 @@ async def run_analysis_server_side(
             yield 'data: {"type":"done"}\n\n'
             return
 
-        # ── 3. Explication Gemini streamée ────────────────────────────
         full_explain = ""
         try:
             from app.api.routes import stream_gemini_fused, _cache_key
@@ -852,7 +1065,6 @@ async def run_analysis_server_side(
             ):
                 yield f"data: {chunk_json}\n\n"
                 await asyncio.sleep(0)
-                # Accumuler le texte pour la sauvegarde
                 try:
                     parsed = _json.loads(chunk_json)
                     if parsed.get("type") == "explain_chunk":
@@ -862,8 +1074,6 @@ async def run_analysis_server_side(
         except Exception as e:
             yield f"data: {_json.dumps({'type': 'explain_error', 'error': str(e)})}\n\n"
 
-        # ── 4. Sauvegarder automatiquement l'analyse en DB ────────────
-                # ── 4. Sauvegarder automatiquement l'analyse en DB ────────────
         if explain_is_too_short(full_explain):
             fallback_explain = build_fallback_explain(
                 result["prediction"],

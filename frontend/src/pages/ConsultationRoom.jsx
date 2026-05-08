@@ -3,34 +3,130 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { motion, AnimatePresence } from "framer-motion";
 import { predict } from "../services/api";
+import "./patient/PatientDashboard.css";
 
 const API = "http://localhost:8000/api/v1";
 
+// SVG Icons
+const Svg = ({ children, size = 24, color = "currentColor", sw = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+);
+
+const I = {
+  Video: ({ size = 20 }) => (
+    <Svg size={size}>
+      <rect x="2" y="5" width="14" height="14" rx="2"/>
+      <polyline points="16 9 22 5 22 19 16 15"/>
+    </Svg>
+  ),
+  Calendar: ({ size = 20 }) => (
+    <Svg size={size}>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </Svg>
+  ),
+  Clock: ({ size = 20 }) => (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </Svg>
+  ),
+  User: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </Svg>
+  ),
+  Message: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </Svg>
+  ),
+  Brain: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M12 5a3.5 3.5 0 0 1 3.5 3.5c0 1.4-.8 2.5-1.8 3.2v2.3a1.8 1.8 0 0 1-3.4 0v-2.3c-1-.7-1.8-1.8-1.8-3.2A3.5 3.5 0 0 1 12 5z"/>
+      <path d="M12 5v14"/>
+    </Svg>
+  ),
+  Shield: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </Svg>
+  ),
+  Send: ({ size = 20 }) => (
+    <Svg size={size}>
+      <line x1="22" y1="2" x2="11" y2="13"/>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </Svg>
+  ),
+  ArrowLeft: ({ size = 20 }) => (
+    <Svg size={size}>
+      <polyline points="15 18 9 12 15 6"/>
+    </Svg>
+  ),
+  Check: ({ size = 20 }) => (
+    <Svg size={size}>
+      <polyline points="20 6 9 17 4 12"/>
+    </Svg>
+  ),
+  X: ({ size = 20 }) => (
+    <Svg size={size}>
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </Svg>
+  ),
+  Download: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </Svg>
+  ),
+  Folder: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </Svg>
+  ),
+  ChevronRight: ({ size = 20 }) => (
+    <Svg size={size} sw={2.5}>
+      <polyline points="9 18 15 12 9 6"/>
+    </Svg>
+  ),
+  Sparkles: ({ size = 20 }) => (
+    <Svg size={size}>
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"/>
+    </Svg>
+  ),
+};
+
 const MODEL_META = {
-  brain: { label: "IRM cérébrale",          icon: "🧠", color: "#7C3AED", bg: "#EDE9FE", border: "#C4B5FD" },
-  lung:  { label: "Scanner CT pulmonaire",  icon: "🔬", color: "#DC2626", bg: "#FEE2E2", border: "#FCA5A5" },
-  chest: { label: "Radiographie thoracique",icon: "🫁", color: "#0369A1", bg: "#E0F2FE", border: "#7DD3FC" },
+  brain: { label: "IRM Cérébrale", icon: "🧠", color: "#8B5CF6", bg: "rgba(139,92,246,0.08)" },
+  lung:  { label: "Scanner CT",    icon: "🔬", color: "#EC4899", bg: "rgba(236,72,153,0.08)" },
+  chest: { label: "Radio Thorax",  icon: "🫁", color: "#3B82F6", bg: "rgba(59,130,246,0.08)" },
 };
 
 const PRED_SEVERITY = {
-  glioma:           { label: "URGENCE NEURO",  color: "#DC2626", bg: "#FEE2E2" },
-  malignant:        { label: "URGENCE ONCO",   color: "#DC2626", bg: "#FEE2E2" },
-  COVID:            { label: "URGENCE VITALE", color: "#DC2626", bg: "#FEE2E2" },
-  Pneumonia:        { label: "URGENCE VITALE", color: "#DC2626", bg: "#FEE2E2" },
-  Pneumothorax:     { label: "URGENCE VITALE", color: "#DC2626", bg: "#FEE2E2" },
-  Edema:            { label: "URGENCE VITALE", color: "#DC2626", bg: "#FEE2E2" },
-  Mass:             { label: "URGENCE ONCO",   color: "#DC2626", bg: "#FEE2E2" },
-  "Viral Pneumonia":{ label: "URGENCE VITALE", color: "#DC2626", bg: "#FEE2E2" },
-  meningioma:       { label: "SURVEILLANCE",   color: "#D97706", bg: "#FEF3C7" },
-  Cardiomegaly:     { label: "SURVEILLANCE",   color: "#D97706", bg: "#FEF3C7" },
-  Emphysema:        { label: "SURVEILLANCE",   color: "#D97706", bg: "#FEF3C7" },
-  Nodule:           { label: "BILAN COMPL.",   color: "#D97706", bg: "#FEF3C7" },
-  pituitary:        { label: "SURVEILLANCE",   color: "#D97706", bg: "#FEF3C7" },
-  Lung_Opacity:     { label: "SURVEILLANCE",   color: "#D97706", bg: "#FEF3C7" },
-  notumor:          { label: "NORMAL",         color: "#059669", bg: "#D1FAE5" },
-  normal:           { label: "NORMAL",         color: "#059669", bg: "#D1FAE5" },
-  benign:           { label: "BÉNIN",          color: "#0369A1", bg: "#E0F2FE" },
+  glioma:           { label: "URGENCE NEURO",  color: "#EF4444", bg: "#FEE2E2" },
+  malignant:        { label: "URGENCE ONCO",   color: "#EF4444", bg: "#FEE2E2" },
+  COVID:            { label: "URGENCE VITALE", color: "#EF4444", bg: "#FEE2E2" },
+  Pneumonia:        { label: "URGENCE VITALE", color: "#EF4444", bg: "#FEE2E2" },
+  Pneumothorax:     { label: "URGENCE VITALE", color: "#EF4444", bg: "#FEE2E2" },
+  Edema:            { label: "URGENCE VITALE", color: "#EF4444", bg: "#FEE2E2" },
+  Mass:             { label: "URGENCE ONCO",   color: "#EF4444", bg: "#FEE2E2" },
+  "Viral Pneumonia":{ label: "URGENCE VITALE", color: "#EF4444", bg: "#FEE2E2" },
+  meningioma:       { label: "SURVEILLANCE",   color: "#F59E0B", bg: "#FEF3C7" },
+  Cardiomegaly:     { label: "SURVEILLANCE",   color: "#F59E0B", bg: "#FEF3C7" },
+  Emphysema:        { label: "SURVEILLANCE",   color: "#F59E0B", bg: "#FEF3C7" },
+  Nodule:           { label: "BILAN COMPL.",   color: "#F59E0B", bg: "#FEF3C7" },
+  pituitary:        { label: "SURVEILLANCE",   color: "#F59E0B", bg: "#FEF3C7" },
+  Lung_Opacity:     { label: "SURVEILLANCE",   color: "#F59E0B", bg: "#FEF3C7" },
+  notumor:          { label: "NORMAL",         color: "#10B981", bg: "#D1FAE5" },
+  normal:           { label: "NORMAL",         color: "#10B981", bg: "#D1FAE5" },
+  benign:           { label: "BENIN",          color: "#3B82F6", bg: "#EFF6FF" },
 };
 
 function authHeaders() {
@@ -43,22 +139,22 @@ function ChatMessage({ msg, isMe }) {
   return (
     <div style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 12, gap: 8 }}>
       {!isMe && (
-        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#0A2647,#2D5F9E)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: ".75rem", fontWeight: 700, flexShrink: 0 }}>
-          {msg.sender_role === "Patient" ? "👤" : "👨‍⚕️"}
+        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#0A2647,#2D5F9E)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {msg.sender_role === "Patient" ? <I.User size={14} color="white" /> : <I.Shield size={14} color="white" />}
         </div>
       )}
       <div style={{ maxWidth: "72%" }}>
-        {!isMe && <div style={{ fontSize: ".65rem", color: "#94A3B8", marginBottom: 3 }}>{msg.sender_name}</div>}
+        {!isMe && <div style={{ fontSize: ".65rem", color: "#8899AA", marginBottom: 3 }}>{msg.sender_name}</div>}
         <div style={{
           padding: "10px 14px",
-          background: isMe ? "linear-gradient(135deg,#0A2647,#1B3B6F)" : "white",
+          background: isMe ? "linear-gradient(135deg,#0A1628,#13223E)" : "white",
           borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-          border: isMe ? "none" : "1px solid #E2E8F0",
-          boxShadow: "0 2px 8px rgba(10,38,71,.05)",
+          border: isMe ? "none" : "1px solid #E5E7EB",
+          boxShadow: "0 2px 8px rgba(10,22,40,.05)",
         }}>
-          <p style={{ margin: 0, fontSize: ".85rem", color: isMe ? "white" : "#0A2647", lineHeight: 1.6 }}>{msg.content}</p>
+          <p style={{ margin: 0, fontSize: ".85rem", color: isMe ? "white" : "#0A1628", lineHeight: 1.6 }}>{msg.content}</p>
         </div>
-        <div style={{ fontSize: ".6rem", color: "#94A3B8", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+        <div style={{ fontSize: ".6rem", color: "#8899AA", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
           {new Date(msg.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
         </div>
       </div>
@@ -71,92 +167,82 @@ function AnalysisPanel({ analysis, modelKey, showGradcam, onToggleGradcam }) {
   const [showExplain, setShowExplain] = useState(false);
   if (!analysis) return null;
 
-  const m   = MODEL_META[modelKey] || MODEL_META.chest;
-  const sev = PRED_SEVERITY[analysis.prediction] || { label: "ANALYSE", color: "#0369A1", bg: "#E0F2FE" };
+  const m = MODEL_META[modelKey] || MODEL_META.chest;
+  const sev = PRED_SEVERITY[analysis.prediction] || { label: "ANALYSE", color: "#3B82F6", bg: "#EFF6FF" };
   const probs = JSON.parse(analysis.probabilities || "{}");
   const sorted = Object.entries(probs).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxProb = sorted[0]?.[1] || 1;
 
   return (
-    <div style={{ background: "white", borderRadius: 16, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 2px 8px rgba(10,38,71,.06)" }}>
+    <div className="pd3-health-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="pd3-health-bg-pattern"/>
       <div style={{ height: 3, background: `linear-gradient(90deg,${sev.color},${sev.color}80)` }} />
-      <div style={{ padding: "18px 20px" }}>
-
-        {/* Diagnostic principal */}
+      <div className="pd3-health-content" style={{ padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: ".65rem", color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>RÉSULTAT IA</div>
-            <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0A2647", textTransform: "capitalize" }}>{analysis.prediction}</div>
+            <div className="pd3-section-badge" style={{ marginBottom: 8, display: "inline-flex" }}>RÉSULTAT IA</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0A1628", textTransform: "capitalize" }}>{analysis.prediction}</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: "1.6rem", fontWeight: 800, color: sev.color, lineHeight: 1 }}>{(analysis.confidence * 100).toFixed(1)}%</div>
-            <div style={{ fontSize: ".65rem", color: "#94A3B8" }}>confiance</div>
+            <div style={{ fontSize: ".65rem", color: "#8899AA" }}>confiance</div>
           </div>
         </div>
 
-        {/* Badge sévérité */}
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: sev.bg, marginBottom: 14 }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: sev.color }} />
           <span style={{ fontSize: ".68rem", fontWeight: 700, color: sev.color }}>{sev.label}</span>
         </div>
 
-        {/* Barre confiance */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ height: 7, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${analysis.confidence * 100}%`, background: `linear-gradient(90deg,${sev.color},${sev.color}cc)`, borderRadius: 4, transition: "width 1s ease" }} />
+          <div style={{ height: 7, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+            <motion.div 
+              style={{ height: "100%", width: `${analysis.confidence * 100}%`, background: `linear-gradient(90deg,${sev.color},${sev.color}cc)`, borderRadius: 4 }}
+              initial={{ width: 0 }}
+              animate={{ width: `${analysis.confidence * 100}%` }}
+              transition={{ duration: 1 }}
+            />
           </div>
         </div>
 
-        {/* Distribution probabilités */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: ".65rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Distribution</div>
+          <div style={{ fontSize: ".65rem", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Distribution</div>
           {sorted.map(([cls, prob], i) => (
             <div key={cls} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
-              <span style={{ fontSize: ".7rem", color: "#94A3B8", width: 16 }}>{i+1}</span>
-              <span style={{ fontSize: ".78rem", color: "#475569", flex: 1, textTransform: "capitalize" }}>{cls}</span>
-              <div style={{ width: 80, height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${(prob/maxProb)*100}%`, background: i === 0 ? sev.color : "#CBD5E1", borderRadius: 3 }} />
+              <span style={{ fontSize: ".7rem", color: "#8899AA", width: 16 }}>{i+1}</span>
+              <span style={{ fontSize: ".78rem", color: "rgba(255,255,255,0.7)", flex: 1, textTransform: "capitalize" }}>{cls}</span>
+              <div style={{ width: 80, height: 5, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
+                <motion.div 
+                  style={{ height: "100%", width: `${(prob/maxProb)*100}%`, background: i === 0 ? sev.color : "rgba(255,255,255,0.2)", borderRadius: 3 }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(prob/maxProb)*100}%` }}
+                  transition={{ duration: 0.8, delay: i * 0.1 }}
+                />
               </div>
-              <span style={{ fontSize: ".72rem", fontWeight: 700, color: i === 0 ? sev.color : "#94A3B8", width: 40, textAlign: "right" }}>
+              <span style={{ fontSize: ".72rem", fontWeight: 700, color: i === 0 ? sev.color : "rgba(255,255,255,0.5)", width: 40, textAlign: "right" }}>
                 {(prob * 100).toFixed(1)}%
               </span>
             </div>
           ))}
         </div>
 
-        {/* Grad-CAM toggle */}
         {analysis.gradcam_b64 && (
-          <button onClick={onToggleGradcam} style={{
-            width: "100%", padding: "8px 14px", marginBottom: 10,
-            background: showGradcam ? "linear-gradient(135deg,rgba(220,38,38,.12),rgba(220,38,38,.06))" : "#F8FAFC",
-            border: `1px solid ${showGradcam ? "#FCA5A5" : "#E2E8F0"}`,
-            borderRadius: 10, color: showGradcam ? "#DC2626" : "#475569",
-            fontSize: ".8rem", fontWeight: 600, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-          }}>
-            {showGradcam ? "🖼️ Image originale" : "🔥 Voir Grad-CAM"}
+          <button onClick={onToggleGradcam} className="pd3-btn pd3-btn-outline" style={{ width: "100%", marginBottom: 10, padding: "8px 14px", background: showGradcam ? "rgba(220,38,38,0.1)" : "rgba(255,255,255,0.05)", borderColor: showGradcam ? "#FCA5A5" : "rgba(255,255,255,0.1)", color: showGradcam ? "#EF4444" : "rgba(255,255,255,0.7)" }}>
+            {showGradcam ? "Image originale" : "Voir Grad-CAM"}
           </button>
         )}
 
-        {/* Explication IA */}
         {analysis.explain_text && (
           <>
-            <button onClick={() => setShowExplain(!showExplain)} style={{
-              width: "100%", padding: "8px 14px",
-              background: showExplain ? "linear-gradient(135deg,rgba(107,79,160,.1),rgba(107,79,160,.05))" : "#F8FAFC",
-              border: `1px solid ${showExplain ? "#C4B5FD" : "#E2E8F0"}`,
-              borderRadius: 10, color: showExplain ? "#7C3AED" : "#475569",
-              fontSize: ".8rem", fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-            }}>
-              🧠 {showExplain ? "Masquer" : "Voir"} l'explication clinique
+            <button onClick={() => setShowExplain(!showExplain)} className="pd3-btn pd3-btn-outline" style={{ width: "100%", marginBottom: 10, padding: "8px 14px", background: showExplain ? "rgba(139,92,246,0.1)" : "rgba(255,255,255,0.05)", borderColor: showExplain ? "#C4B5FD" : "rgba(255,255,255,0.1)", color: showExplain ? "#8B5CF6" : "rgba(255,255,255,0.7)" }}>
+              <I.Brain size={16} /> {showExplain ? "Masquer" : "Voir"} l'explication clinique
             </button>
 
             {showExplain && (
-              <div style={{ marginTop: 12, padding: "14px", background: "#F8FAFC", borderRadius: 12, border: "1px solid #E2E8F0", fontSize: ".78rem", color: "#475569", lineHeight: 1.7, maxHeight: 280, overflowY: "auto" }}>
+              <div style={{ marginTop: 12, padding: "14px", background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(232,184,48,0.1)", fontSize: ".78rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.7, maxHeight: 280, overflowY: "auto" }}>
                 {analysis.explain_text.split("\n").map((line, i) => (
                   line.startsWith("## ") ? (
-                    <div key={i} style={{ fontWeight: 700, color: "#0A2647", marginTop: 12, marginBottom: 4, fontSize: ".82rem" }}>
+                    <div key={i} style={{ fontWeight: 700, color: "#FFD700", marginTop: 12, marginBottom: 4, fontSize: ".82rem" }}>
                       {line.replace("## ", "")}
                     </div>
                   ) : (
@@ -191,7 +277,10 @@ export default function ConsultationRoom() {
   const [toast,        setToast]        = useState(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showRdv,      setShowRdv]      = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [customVideoLink, setCustomVideoLink] = useState("");
   const [doctors,      setDoctors]      = useState([]);
+  const [canJoin,      setCanJoin]      = useState(false);
   const [rdvForm,      setRdvForm]      = useState({ type: "video", scheduled_at: "", duration_minutes: 30, video_link: "", location: "", notes: "" });
   const [transferForm, setTransferForm] = useState({ to_doctor_id: "", reason: "" });
   const chatEndRef = useRef(null);
@@ -208,17 +297,38 @@ export default function ConsultationRoom() {
       setMessages(json.messages || []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  }, [id]);
+  }, [id, navigate]);
 
   useEffect(() => {
     fetchData();
-    pollRef.current = setInterval(fetchData, 8000); // poll messages toutes les 8s
+    pollRef.current = setInterval(fetchData, 8000);
     return () => clearInterval(pollRef.current);
   }, [fetchData]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ── Lancer l'analyse IA (médecin seulement) ─────────────────────
+  useEffect(() => {
+    const appointment = data?.appointment;
+    if (appointment && appointment.status === "accepted" && appointment.scheduled_at) {
+      const checkTime = () => {
+        const appointmentTime = new Date(appointment.scheduled_at);
+        const now = new Date();
+        setCanJoin(appointmentTime <= now);
+      };
+      checkTime();
+      const interval = setInterval(checkTime, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [data?.appointment]);
+
+  const joinVideoCall = useCallback(() => {
+    if (data?.appointment?.video_link && data.appointment.video_link.trim()) {
+      window.open(data.appointment.video_link, "_blank");
+    } else {
+      setShowJoinModal(true);
+    }
+  }, [data?.appointment]);
+
   const runAnalysis = async () => {
     if (!data?.consultation) return;
     const c = data.consultation;
@@ -227,7 +337,6 @@ export default function ConsultationRoom() {
     setRunning(true); setExplainText(""); setExplaining(true);
 
     try {
-      // Récupérer l'image depuis le serveur
       const imgRes = await fetch(`http://localhost:8000/${c.image_path.replace(/\\/g, "/")}`, { headers: authHeaders() });
       if (!imgRes.ok) throw new Error("Image introuvable sur le serveur.");
       const blob = await imgRes.blob();
@@ -245,7 +354,6 @@ export default function ConsultationRoom() {
 
       if (!predResult) throw new Error("Aucun résultat reçu.");
 
-      // Sauvegarder en DB
       const form = new FormData();
       form.append("prediction",    predResult.prediction);
       form.append("confidence",    predResult.confidence);
@@ -260,16 +368,15 @@ export default function ConsultationRoom() {
       });
       if (!saveRes.ok) throw new Error((await saveRes.json()).detail);
 
-      showToast("✅ Analyse enregistrée et visible par le patient.");
+      showToast("Analyse enregistrée et visible par le patient.");
       await fetchData();
 
     } catch (e) {
-      showToast("❌ " + e.message, "error");
+      showToast("Erreur: " + e.message, "error");
       setRunning(false); setExplaining(false);
     }
   };
 
-  // ── Envoyer un message ──────────────────────────────────────────
   const sendMessage = async () => {
     if (!msgInput.trim() || sendingMsg) return;
     setSendingMsg(true);
@@ -281,11 +388,10 @@ export default function ConsultationRoom() {
       if (!res.ok) throw new Error((await res.json()).detail);
       setMsgInput("");
       await fetchData();
-    } catch (e) { showToast("❌ " + e.message, "error"); }
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
     finally { setSendingMsg(false); }
   };
 
-  // ── Créer un RDV ────────────────────────────────────────────────
   const createRdv = async () => {
     try {
       const res = await fetch(`${API}/consultations/appointments`, {
@@ -293,13 +399,12 @@ export default function ConsultationRoom() {
         body: JSON.stringify({ consultation_id: parseInt(id), ...rdvForm, duration_minutes: parseInt(rdvForm.duration_minutes) }),
       });
       if (!res.ok) throw new Error((await res.json()).detail);
-      showToast(`✅ Rendez-vous ${rdvForm.type === "video" ? "vidéo" : "présentiel"} créé !`);
+      showToast(`Rendez-vous ${rdvForm.type === "video" ? "vidéo" : "présentiel"} créé !`);
       setShowRdv(false);
       await fetchData();
-    } catch (e) { showToast("❌ " + e.message, "error"); }
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
   };
 
-  // ── Transfert ───────────────────────────────────────────────────
   const doTransfer = async () => {
     if (!transferForm.to_doctor_id) { showToast("Sélectionnez un médecin.", "error"); return; }
     try {
@@ -308,26 +413,63 @@ export default function ConsultationRoom() {
         body: JSON.stringify({ to_doctor_id: parseInt(transferForm.to_doctor_id), reason: transferForm.reason }),
       });
       if (!res.ok) throw new Error((await res.json()).detail);
-      showToast("✅ Dossier transféré avec succès.");
+      showToast("Dossier transféré avec succès.");
       setShowTransfer(false);
       navigate("/doctor/queue");
-    } catch (e) { showToast("❌ " + e.message, "error"); }
+    } catch (e) { showToast("Erreur: " + e.message, "error"); }
   };
 
-  // ── Charger médecins pour transfert ────────────────────────────
+  const acceptAppointment = async (appointmentId) => {
+    const token = localStorage.getItem("medai-token");
+    try {
+      const res = await fetch(`${API}/consultations/appointments/${appointmentId}/accept`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast("Rendez-vous accepté !");
+        fetchData();
+      } else {
+        showToast("Erreur lors de l'acceptation", "error");
+      }
+    } catch (err) {
+      showToast("Erreur réseau", "error");
+    }
+  };
+
+  const rejectAppointment = async (appointmentId) => {
+    const token = localStorage.getItem("medai-token");
+    try {
+      const res = await fetch(`${API}/consultations/appointments/${appointmentId}/reject`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast("Rendez-vous refusé");
+        fetchData();
+      } else {
+        showToast("Erreur lors du refus", "error");
+      }
+    } catch (err) {
+      showToast("Erreur réseau", "error");
+    }
+  };
+
   useEffect(() => {
     if (!showTransfer) return;
     fetch(`${API}/doctors?model=${data?.consultation?.model_key || "chest"}`, { headers: authHeaders() })
       .then(r => r.json())
       .then(d => setDoctors(d.doctors || []))
       .catch(() => {});
-  }, [showTransfer]);
+  }, [showTransfer, data?.consultation?.model_key]);
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F1F5F9" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ width: 40, height: 40, border: "3px solid #E2E8F0", borderTopColor: "#0A2647", borderRadius: "50%", animation: "spin .8s linear infinite", margin: "0 auto 12px" }} />
-        <p style={{ color: "#64748B", fontFamily: "'DM Sans',sans-serif" }}>Chargement de la consultation…</p>
+    <div className="pd3" style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", flexDirection: "column", gap: 20 }}>
+        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
+          <I.Sparkles size={48} color="#D4A500"/>
+        </motion.div>
+        <p style={{ color: "var(--txt2)", fontWeight: 500 }}>Chargement de la consultation...</p>
       </div>
     </div>
   );
@@ -339,417 +481,483 @@ export default function ConsultationRoom() {
   const isDoctor  = user?.role === "Medecin" || user?.is_admin;
   const isPatient = user?.role === "Patient";
   const canChat   = ["accepted", "analyzed"].includes(c.status);
-  const sev       = analysis ? (PRED_SEVERITY[analysis.prediction] || { label: "ANALYSE", color: "#0369A1", bg: "#E0F2FE" }) : null;
+  const sev       = analysis ? (PRED_SEVERITY[analysis.prediction] || { label: "ANALYSE", color: "#3B82F6", bg: "#EFF6FF" }) : null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F1F5F9", fontFamily: "'DM Sans',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}
-      </style>
-
-      {/* Header */}
-      <div style={{ background: "linear-gradient(135deg,#0A2647,#1B3B6F)", padding: "20px 32px", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <button onClick={() => navigate(isDoctor ? "/doctor/queue" : "/patient")} style={{ background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 8, color: "white", padding: "6px 12px", cursor: "pointer", fontSize: ".8rem" }}>
-            ← Retour
+    <div className="pd3">
+      {/* Header Navigation */}
+      <motion.nav className="pd3-nav scrolled" style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(244,247,252,0.92)", backdropFilter: "blur(24px)", borderBottom: "1px solid var(--border)" }}>
+        <div className="pd3-nav-brand" onClick={() => navigate(isDoctor ? "/home" : "/patient")}>
+          <div className="pd3-nav-logo"><div className="pd3-nav-logo-inner">🏥</div></div>
+          <span className="pd3-nav-name">Med<span className="accent">AI</span></span>
+        </div>
+        <div className="pd3-nav-links">
+          <button className="pd3-nav-link active" style={{ background: "none", border: "none", cursor: "pointer" }}>Consultation #{c.id}</button>
+        </div>
+        <div className="pd3-nav-actions">
+          <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={() => navigate(isDoctor ? "/home" : "/patient")}>
+            <I.ArrowLeft size={15} /> Retour
           </button>
+        </div>
+      </motion.nav>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: m.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }}>{m.icon}</div>
-            <div>
-              <div style={{ fontSize: ".85rem", fontWeight: 700, color: "white" }}>
-                Consultation #{c.id} · {m.label}
-              </div>
-              <div style={{ fontSize: ".7rem", color: "rgba(255,255,255,.55)" }}>
-                {isDoctor ? `Patient: ${c.patient_name}` : `Médecin: ${c.doctor_name || "En attente"}`}
+      {/* Main Content */}
+      <div className="pd3-body" style={{ maxWidth: 1400, margin: "0 auto", padding: "32px" }}>
+        
+        {/* Header Info Card */}
+        <div className="pd3-health-card" style={{ marginBottom: 24, padding: "20px 28px" }}>
+          <div className="pd3-health-bg-pattern"/>
+          <div className="pd3-health-content" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: m.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>{m.icon}</div>
+              <div>
+                <div style={{ fontSize: "1rem", fontWeight: 700, color: "#fff" }}>{m.label}</div>
+                <div style={{ fontSize: ".75rem", color: "rgba(255,255,255,0.5)" }}>
+                  {isDoctor ? `Patient: ${c.patient_name}` : `Médecin: ${c.doctor_name || "En attente"}`}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Statut */}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {sev && c.status === "analyzed" && (
-              <span style={{ padding: "4px 12px", borderRadius: 20, background: sev.bg, color: sev.color, fontSize: ".72rem", fontWeight: 700 }}>{sev.label}</span>
-            )}
-            <span style={{
-              padding: "4px 12px", borderRadius: 20, fontSize: ".72rem", fontWeight: 700,
-              background: c.status === "analyzed" ? "#EDE9FE" : c.status === "accepted" ? "#D1FAE5" : c.status === "closed" ? "#F1F5F9" : "#FEF3C7",
-              color: c.status === "analyzed" ? "#7C3AED" : c.status === "accepted" ? "#059669" : c.status === "closed" ? "#64748B" : "#D97706",
-            }}>
-              {c.status === "pending" ? "⏳ En attente" : c.status === "accepted" ? "✅ Acceptée" : c.status === "analyzed" ? "🤖 Analysée" : c.status === "closed" ? "🔒 Clôturée" : c.status}
-            </span>
-          </div>
-
-          {/* Actions médecin */}
-          {isDoctor && (
-            <div style={{ display: "flex", gap: 8 }}>
-              {c.status === "accepted" && (
-                <button onClick={runAnalysis} disabled={running} style={{
-                  padding: "7px 16px", background: running ? "rgba(255,255,255,.1)" : "rgba(124,58,237,.9)",
-                  border: "none", borderRadius: 10, color: "white", fontSize: ".8rem", fontWeight: 700,
-                  cursor: running ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 7,
-                }}>
-                  {running ? <><span style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin .8s linear infinite" }} /> Analyse…</> : "🤖 Lancer l'analyse IA"}
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              {sev && c.status === "analyzed" && (
+                <span className="pd3-badge" style={{ background: sev.bg, color: sev.color }}>{sev.label}</span>
+              )}
+              <StatusBadge status={c.status} />
+              {isDoctor && c.status === "accepted" && (
+                <button onClick={runAnalysis} disabled={running} className="pd3-btn pd3-btn-gold pd3-btn-sm" style={{ background: running ? "rgba(255,255,255,0.1)" : "linear-gradient(135deg, #D4A500, #B8941E)", color: running ? "rgba(255,255,255,0.5)" : "#0A1628" }}>
+                  {running ? <><span style={{ width: 14, height: 14, border: "2px solid rgba(0,0,0,0.2)", borderTopColor: "#0A1628", borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite", marginRight: 8 }} /> Analyse...</> : <><I.Brain size={14} /> Lancer l'analyse IA</>}
                 </button>
               )}
-              {c.status === "analyzed" && (
+              {isDoctor && c.status === "analyzed" && (
                 <>
-                  <button onClick={() => setShowRdv(true)} style={{ padding: "7px 14px", background: "rgba(5,150,105,.9)", border: "none", borderRadius: 10, color: "white", fontSize: ".8rem", fontWeight: 700, cursor: "pointer" }}>
-                    📅 Planifier RDV
+                  <button onClick={() => setShowRdv(true)} className="pd3-btn pd3-btn-gold pd3-btn-sm">
+                    <I.Calendar size={14} /> Planifier RDV
                   </button>
-                  <button onClick={() => setShowTransfer(true)} style={{ padding: "7px 14px", background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 10, color: "white", fontSize: ".8rem", fontWeight: 600, cursor: "pointer" }}>
-                    ↗ Transférer
+                  <button onClick={() => setShowTransfer(true)} className="pd3-btn pd3-btn-outline pd3-btn-sm" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>
+                    <I.Shield size={14} /> Transférer
                   </button>
                 </>
               )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 32px 60px", display: "grid", gridTemplateColumns: "1fr 380px", gap: 20, alignItems: "start" }}>
-
-        {/* ── Colonne gauche ── */}
-        <div>
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 3, marginBottom: 18, background: "white", borderRadius: 12, padding: 4, border: "1px solid #E2E8F0", width: "fit-content" }}>
-            {[
-              { key: "analysis", label: "Résultat IA", show: true },
-              { key: "image",    label: "Image",        show: true },
-              { key: "chat",     label: `Chat (${messages.length})`, show: canChat },
-              { key: "rdv",      label: "Rendez-vous",  show: !!appointment },
-            ].filter(t => t.show).map(t => (
-              <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
-                padding: "8px 18px", background: activeTab === t.key ? "#0A2647" : "transparent",
-                color: activeTab === t.key ? "white" : "#64748B", border: "none", borderRadius: 9,
-                fontSize: ".82rem", fontWeight: activeTab === t.key ? 700 : 500, cursor: "pointer", transition: "all .2s",
-              }}>{t.label}</button>
-            ))}
           </div>
+        </div>
 
-          {/* ── Analyse ── */}
-          {activeTab === "analysis" && (
-            <div style={{ animation: "fadeUp .3s ease" }}>
-              {!analysis ? (
-                <div style={{ background: "white", borderRadius: 16, padding: "48px", textAlign: "center", border: "1px solid #E2E8F0" }}>
-                  {c.status === "pending" && (
-                    <>
-                      <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>⏳</div>
-                      <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0A2647", marginBottom: 6 }}>En attente d'un médecin</div>
-                      <div style={{ fontSize: ".82rem", color: "#94A3B8" }}>L'analyse démarrera après acceptation d'un médecin.</div>
-                    </>
-                  )}
-                  {c.status === "accepted" && isDoctor && (
-                    <>
-                      <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🤖</div>
-                      <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0A2647", marginBottom: 6 }}>Prêt pour l'analyse</div>
-                      <div style={{ fontSize: ".82rem", color: "#64748B", marginBottom: 20 }}>Cliquez sur "Lancer l'analyse IA" pour démarrer.</div>
-                      <button onClick={runAnalysis} disabled={running} style={{ padding: "12px 28px", background: "linear-gradient(135deg,#0A2647,#1B3B6F)", border: "none", borderRadius: 12, color: "white", fontSize: ".9rem", fontWeight: 700, cursor: "pointer" }}>
-                        🤖 Lancer l'analyse IA
-                      </button>
-                    </>
-                  )}
-                  {c.status === "accepted" && isPatient && (
-                    <>
-                      <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>⏳</div>
-                      <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0A2647", marginBottom: 6 }}>Votre médecin prépare l'analyse</div>
-                      <div style={{ fontSize: ".82rem", color: "#94A3B8" }}>Vous serez notifié dès que les résultats seront disponibles.</div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {/* Résultat IA avec streaming */}
-                  <div style={{ background: "white", borderRadius: 16, border: "1px solid #E2E8F0", overflow: "hidden", marginBottom: 16 }}>
-                    <div style={{ height: 3, background: `linear-gradient(90deg,${sev?.color||"#2D5F9E"},${sev?.color||"#2D5F9E"}80)` }} />
-                    <div style={{ padding: "20px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                        <div>
-                          <div style={{ fontSize: ".65rem", color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>RÉSULTAT IA — visible patient + médecin</div>
-                          <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0A2647", textTransform: "capitalize" }}>{analysis.prediction}</div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: "1.8rem", fontWeight: 800, color: sev?.color, lineHeight: 1 }}>{(analysis.confidence * 100).toFixed(1)}%</div>
-                          <span style={{ padding: "3px 10px", borderRadius: 20, background: sev?.bg, color: sev?.color, fontSize: ".65rem", fontWeight: 700 }}>{sev?.label}</span>
-                        </div>
-                      </div>
+        {/* Tabs */}
+        <div className="pd3-tabs" style={{ marginBottom: 24 }}>
+          {[
+            { key: "analysis", label: "Résultat IA", icon: <I.Brain size={16} />, show: true },
+            { key: "image",    label: "Image", icon: <I.Folder size={16} />, show: true },
+            { key: "chat",     label: `Chat (${messages.length})`, icon: <I.Message size={16} />, show: canChat },
+            { key: "rdv",      label: "Rendez-vous", icon: <I.Calendar size={16} />, show: !!appointment },
+          ].filter(t => t.show).map(t => (
+            <button key={t.key} className={`pd3-tab ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)}>
+              <span className="pd3-tab-icon">{t.icon}</span> {t.label}
+            </button>
+          ))}
+        </div>
 
-                      {/* Image + Grad-CAM */}
-                      {c.image_path && (
-                        <div style={{ borderRadius: 12, overflow: "hidden", background: "#0A2647", marginBottom: 14, maxHeight: 280 }}>
-                          <img
-                            src={showGradcam && analysis.gradcam_b64
-                              ? `data:image/jpeg;base64,${analysis.gradcam_b64}`
-                              : `http://localhost:8000/${c.image_path.replace(/\\/g, "/")}`}
-                            alt="Image médicale"
-                            style={{ width: "100%", maxHeight: 280, objectFit: "contain", display: "block" }}
-                            onError={e => e.target.style.display = "none"}
-                          />
-                        </div>
+        {/* Tab Content */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 24, alignItems: "start" }}>
+          
+          {/* Left Column */}
+          <div>
+            {/* Analysis Tab */}
+            {activeTab === "analysis" && (
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                {!analysis ? (
+                  <div className="pd3-health-card" style={{ textAlign: "center", padding: "60px 40px" }}>
+                    <div className="pd3-health-bg-pattern"/>
+                    <div className="pd3-health-content">
+                      {c.status === "pending" && (
+                        <>
+                          <I.Clock size={48} color="rgba(255,255,255,0.3)" />
+                          <div style={{ fontSize: "1rem", fontWeight: 700, color: "rgba(255,255,255,0.7)", marginTop: 16, marginBottom: 8 }}>En attente d'un médecin</div>
+                          <div style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)" }}>L'analyse démarrera après acceptation d'un médecin.</div>
+                        </>
                       )}
-
-                      {analysis.gradcam_b64 && (
-                        <button onClick={() => setShowGradcam(!showGradcam)} style={{
-                          padding: "7px 14px", background: showGradcam ? "rgba(220,38,38,.1)" : "#F8FAFC",
-                          border: `1px solid ${showGradcam ? "#FCA5A5" : "#E2E8F0"}`,
-                          borderRadius: 9, color: showGradcam ? "#DC2626" : "#475569",
-                          fontSize: ".78rem", fontWeight: 600, cursor: "pointer", marginBottom: 14,
-                        }}>
-                          {showGradcam ? "🖼️ Image originale" : "🔥 Voir Grad-CAM"}
-                        </button>
+                      {c.status === "accepted" && isDoctor && (
+                        <>
+                          <I.Brain size={48} color="rgba(255,255,255,0.3)" />
+                          <div style={{ fontSize: "1rem", fontWeight: 700, color: "rgba(255,255,255,0.7)", marginTop: 16, marginBottom: 8 }}>Prêt pour l'analyse</div>
+                          <div style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>Cliquez sur "Lancer l'analyse IA" pour démarrer.</div>
+                          <button onClick={runAnalysis} disabled={running} className="pd3-btn pd3-btn-gold">
+                            <I.Brain size={16} /> Lancer l'analyse IA
+                          </button>
+                        </>
                       )}
-
-                      {/* Explication IA en streaming ou sauvegardée */}
-                      {(explainText || analysis.explain_text) && (
-                        <div style={{ padding: "14px", background: "#F8FAFC", borderRadius: 12, border: "1px solid #E2E8F0", maxHeight: 300, overflowY: "auto" }}>
-                          <div style={{ fontSize: ".65rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
-                            Explication clinique {explaining && <span style={{ animation: "pulse 1.5s infinite" }}>●</span>}
-                          </div>
-                          {(explainText || analysis.explain_text).split("\n").map((line, i) => (
-                            line.startsWith("## ") ? (
-                              <div key={i} style={{ fontWeight: 700, color: "#0A2647", marginTop: 10, marginBottom: 3, fontSize: ".82rem" }}>{line.replace("## ", "")}</div>
-                            ) : (
-                              <p key={i} style={{ margin: "0 0 3px", fontSize: ".78rem", color: "#475569", lineHeight: 1.65 }}>{line}</p>
-                            )
-                          ))}
-                          {explaining && <span style={{ color: "#2D5F9E", animation: "pulse 1s infinite" }}>▌</span>}
-                        </div>
+                      {c.status === "accepted" && isPatient && (
+                        <>
+                          <I.Clock size={48} color="rgba(255,255,255,0.3)" />
+                          <div style={{ fontSize: "1rem", fontWeight: 700, color: "rgba(255,255,255,0.7)", marginTop: 16, marginBottom: 8 }}>Votre médecin prépare l'analyse</div>
+                          <div style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)" }}>Vous serez notifié dès que les résultats seront disponibles.</div>
+                        </>
                       )}
                     </div>
                   </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* ── Image ── */}
-          {activeTab === "image" && c.image_path && (
-            <div style={{ background: "white", borderRadius: 16, padding: 20, border: "1px solid #E2E8F0", animation: "fadeUp .3s ease" }}>
-              <div style={{ borderRadius: 12, overflow: "hidden", background: "#0A2647" }}>
-                <img src={`http://localhost:8000/${c.image_path.replace(/\\/g, "/")}`} alt="Image médicale" style={{ width: "100%", maxHeight: 500, objectFit: "contain", display: "block" }} onError={e => e.target.style.display = "none"} />
-              </div>
-              <div style={{ marginTop: 12, fontSize: ".75rem", color: "#94A3B8", textAlign: "center" }}>
-                {m.icon} {m.label} · {new Date(c.created_at).toLocaleDateString("fr-FR")}
-              </div>
-            </div>
-          )}
-
-          {/* ── Chat ── */}
-          {activeTab === "chat" && (
-            <div style={{ background: "white", borderRadius: 16, border: "1px solid #E2E8F0", overflow: "hidden", animation: "fadeUp .3s ease" }}>
-              <div style={{ padding: "12px 18px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", fontSize: ".8rem", fontWeight: 600, color: "#0A2647" }}>
-                💬 Discussion · {messages.length} message{messages.length !== 1 ? "s" : ""}
-              </div>
-              <div style={{ padding: "16px", minHeight: 350, maxHeight: 420, overflowY: "auto" }}>
-                {messages.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "#94A3B8", fontSize: ".85rem" }}>
-                    <div style={{ fontSize: "2rem", marginBottom: 8 }}>💬</div>
-                    Aucun message pour l'instant. Commencez la discussion.
-                  </div>
                 ) : (
-                  messages.map(msg => (
-                    <ChatMessage key={msg.id} msg={msg} isMe={msg.sender_id === user?.id} />
-                  ))
+                  <AnalysisPanel analysis={analysis} modelKey={c.model_key} showGradcam={showGradcam} onToggleGradcam={() => setShowGradcam(!showGradcam)} />
                 )}
-                <div ref={chatEndRef} />
-              </div>
-              <div style={{ padding: "12px 16px", borderTop: "1px solid #F1F5F9", display: "flex", gap: 10 }}>
-                <input
-                  value={msgInput} onChange={e => setMsgInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
-                  placeholder="Écrivez votre message… (Entrée pour envoyer)"
-                  style={{ flex: 1, padding: "10px 14px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 12, fontSize: ".85rem", outline: "none", fontFamily: "'DM Sans',sans-serif" }}
-                  onFocus={e => e.target.style.borderColor = "#2D5F9E"}
-                  onBlur={e  => e.target.style.borderColor = "#E2E8F0"}
-                />
-                <button onClick={sendMessage} disabled={!msgInput.trim() || sendingMsg} style={{ padding: "10px 18px", background: !msgInput.trim() ? "#E2E8F0" : "linear-gradient(135deg,#0A2647,#1B3B6F)", border: "none", borderRadius: 12, color: !msgInput.trim() ? "#94A3B8" : "white", fontSize: ".85rem", fontWeight: 700, cursor: !msgInput.trim() ? "not-allowed" : "pointer" }}>
-                  {sendingMsg ? "…" : "→"}
-                </button>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
 
-          {/* ── RDV ── */}
-          {activeTab === "rdv" && appointment && (
-            <div style={{ background: "white", borderRadius: 16, padding: 24, border: "1px solid #E2E8F0", animation: "fadeUp .3s ease" }}>
-              <div style={{ fontSize: ".7rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 14 }}>RENDEZ-VOUS PLANIFIÉ</div>
-              {[
-                ["Type", appointment.type === "video" ? "🎥 Vidéo consultation" : "🏥 Présentiel"],
-                ["Date", new Date(appointment.scheduled_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })],
-                ["Heure", new Date(appointment.scheduled_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })],
-                ["Durée", `${appointment.duration_minutes} minutes`],
-              ].map(([l, v]) => (
-                <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #F8FAFC" }}>
-                  <span style={{ fontSize: ".78rem", color: "#64748B" }}>{l}</span>
-                  <span style={{ fontSize: ".85rem", fontWeight: 600, color: "#0A2647" }}>{v}</span>
+            {/* Image Tab */}
+            {activeTab === "image" && c.image_path && (
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <div className="pd3-health-card" style={{ padding: 20 }}>
+                  <div className="pd3-health-bg-pattern"/>
+                  <div className="pd3-health-content">
+                    <div style={{ borderRadius: 12, overflow: "hidden", background: "#0A1628", marginBottom: 12 }}>
+                      <img 
+                        src={`http://localhost:8000/${c.image_path.replace(/\\/g, "/")}`} 
+                        alt="Image médicale" 
+                        style={{ width: "100%", maxHeight: 450, objectFit: "contain", display: "block" }} 
+                        onError={e => e.target.style.display = "none"} 
+                      />
+                    </div>
+                    <div style={{ fontSize: ".75rem", color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
+                      {m.icon} {m.label} · {new Date(c.created_at).toLocaleDateString("fr-FR")}
+                    </div>
+                  </div>
                 </div>
-              ))}
-              {appointment.video_link && (
-                <a href={appointment.video_link} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: 16, padding: "12px", background: "linear-gradient(135deg,#059669,#047857)", borderRadius: 12, color: "white", textAlign: "center", fontSize: ".9rem", fontWeight: 700, textDecoration: "none" }}>
-                  🎥 Rejoindre la consultation vidéo →
-                </a>
-              )}
-            </div>
-          )}
-        </div>
+              </motion.div>
+            )}
 
-        {/* ── Colonne droite : résumé + notes ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Chat Tab */}
+            {activeTab === "chat" && (
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <div className="pd3-health-card" style={{ padding: 0, overflow: "hidden" }}>
+                  <div className="pd3-health-bg-pattern"/>
+                  <div className="pd3-health-content" style={{ padding: 0 }}>
+                    <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(232,184,48,0.1)", background: "rgba(0,0,0,0.2)" }}>
+                      <div className="pd3-section-row-title" style={{ color: "#FFD700" }}>
+                        <I.Message size={16} /> Discussion · {messages.length} message{messages.length !== 1 ? "s" : ""}
+                      </div>
+                    </div>
+                    <div style={{ padding: "20px", minHeight: 400, maxHeight: 450, overflowY: "auto" }}>
+                      {messages.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "60px 20px", color: "rgba(255,255,255,0.3)" }}>
+                          <I.Message size={48} color="rgba(255,255,255,0.2)" />
+                          <div style={{ marginTop: 12, fontSize: ".9rem", fontWeight: 600 }}>Aucun message</div>
+                          <div style={{ marginTop: 4, fontSize: ".8rem" }}>Commencez la discussion avec le médecin</div>
+                        </div>
+                      ) : (
+                        messages.map(msg => <ChatMessage key={msg.id} msg={msg} isMe={msg.sender_id === user?.id} />)
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+                    <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(232,184,48,0.1)", display: "flex", gap: 12, background: "rgba(0,0,0,0.1)" }}>
+                      <textarea
+                        value={msgInput}
+                        onChange={e => setMsgInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                        placeholder="Écrivez votre message... (Entrée pour envoyer)"
+                        rows={2}
+                        style={{
+                          flex: 1,
+                          padding: "12px 16px",
+                          background: "rgba(255,255,255,0.08)",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          borderRadius: 12,
+                          fontSize: ".85rem",
+                          color: "#fff",
+                          fontFamily: "inherit",
+                          resize: "none",
+                          outline: "none",
+                        }}
+                      />
+                      <button 
+                        onClick={sendMessage} 
+                        disabled={!msgInput.trim() || sendingMsg} 
+                        className="pd3-btn pd3-btn-gold" 
+                        style={{ width: 52, height: 52, padding: 0, borderRadius: 12 }}
+                      >
+                        {sendingMsg ? "..." : <I.Send size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
-          {/* Résumé consultation */}
-          <div style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(10,38,71,.05)" }}>
-            <div style={{ fontSize: ".7rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 12 }}>RÉSUMÉ</div>
-            {[
-              ["Réf.", `#${c.id}`],
-              ["Type", m.label],
-              [isDoctor ? "Patient" : "Médecin", isDoctor ? c.patient_name : (c.doctor_name || "En attente")],
-              ["Urgence", c.urgency === "critical" ? "🔴 Critique" : c.urgency === "urgent" ? "🟡 Urgent" : "🟢 Normal"],
-              ["Date", new Date(c.created_at).toLocaleDateString("fr-FR")],
-            ].map(([l, v]) => (
-              <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F8FAFC" }}>
-                <span style={{ fontSize: ".73rem", color: "#94A3B8" }}>{l}</span>
-                <span style={{ fontSize: ".82rem", fontWeight: 600, color: "#0A2647" }}>{v}</span>
-              </div>
-            ))}
+            {/* RDV Tab */}
+            {activeTab === "rdv" && appointment && (
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <div className="pd3-health-card">
+                  <div className="pd3-health-bg-pattern"/>
+                  <div className="pd3-health-content">
+                    <div className="pd3-section-row-title" style={{ marginBottom: 16, color: "#FFD700" }}>
+                      <I.Calendar size={16} /> RENDEZ-VOUS {appointment.status === "accepted" ? "CONFIRMÉ" : appointment.status === "pending" ? "EN ATTENTE" : "PLANIFIÉ"}
+                    </div>
+                    
+                    <div style={{ marginBottom: 20 }}>
+                      {[
+                        ["Type", appointment.type === "video" ? "Vidéo consultation" : "Présentiel"],
+                        ["Date", new Date(appointment.scheduled_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })],
+                        ["Heure", new Date(appointment.scheduled_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })],
+                        ["Durée", `${appointment.duration_minutes || 30} minutes`],
+                      ].map(([l, v]) => (
+                        <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <span style={{ fontSize: ".78rem", color: "rgba(255,255,255,0.5)" }}>{l}</span>
+                          <span style={{ fontSize: ".85rem", fontWeight: 600, color: "rgba(255,255,255,0.9)" }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {appointment.status === "accepted" && canJoin && (
+                      <button onClick={joinVideoCall} className="pd3-btn pd3-btn-gold" style={{ width: "100%", padding: "12px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <I.Video size={18} /> Rejoindre l'appel vidéo
+                      </button>
+                    )}
+                    
+                    {appointment.status === "accepted" && !canJoin && (
+                      <div style={{ padding: "12px", background: "rgba(245,158,11,0.1)", borderRadius: 12, textAlign: "center", border: "1px solid rgba(245,158,11,0.2)" }}>
+                        <I.Clock size={16} color="#F59E0B" /> Le rendez-vous débutera à {new Date(appointment.scheduled_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    )}
+                    
+                    {appointment.status === "pending" && isPatient && (
+                      <div style={{ padding: "16px", background: "rgba(245,158,11,0.1)", borderRadius: 12, border: "1px solid rgba(245,158,11,0.2)", textAlign: "center" }}>
+                        <div style={{ marginBottom: 12 }}><I.Clock size={20} color="#F59E0B" /> En attente de votre confirmation</div>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <button onClick={() => acceptAppointment(appointment.id)} className="pd3-btn pd3-btn-gold" style={{ flex: 1, background: "#10B981" }}>
+                            <I.Check size={14} /> Accepter
+                          </button>
+                          <button onClick={() => rejectAppointment(appointment.id)} className="pd3-btn pd3-btn-outline" style={{ flex: 1, color: "#EF4444", borderColor: "#FCA5A5" }}>
+                            <I.X size={14} /> Refuser
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </div>
 
-          {/* Notes patient */}
-          {c.patient_notes && (
-            <div style={{ background: "white", borderRadius: 16, padding: "16px 18px", border: "1px solid #E2E8F0" }}>
-              <div style={{ fontSize: ".7rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>NOTE DU PATIENT</div>
-              <p style={{ fontSize: ".82rem", color: "#475569", lineHeight: 1.65, margin: 0, fontStyle: "italic" }}>"{c.patient_notes}"</p>
+          {/* Right Column - Summary */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div className="pd3-health-card">
+              <div className="pd3-health-bg-pattern"/>
+              <div className="pd3-health-content">
+                <div className="pd3-section-row-title" style={{ marginBottom: 16, color: "#FFD700" }}>
+                  <I.User size={16} /> RÉSUMÉ CONSULTATION
+                </div>
+                {[
+                  ["Référence", `#${c.id}`],
+                  ["Type", m.label],
+                  [isDoctor ? "Patient" : "Médecin", isDoctor ? c.patient_name : (c.doctor_name || "En attente")],
+                  ["Urgence", c.urgency === "critical" ? "Critique" : c.urgency === "urgent" ? "Urgent" : "Normal"],
+                  ["Date", new Date(c.created_at).toLocaleDateString("fr-FR")],
+                ].map(([l, v]) => (
+                  <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                    <span style={{ fontSize: ".75rem", color: "rgba(255,255,255,0.5)" }}>{l}</span>
+                    <span style={{ fontSize: ".8rem", fontWeight: 600, color: "rgba(255,255,255,0.9)" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
 
-          {/* Notes médecin */}
-          {c.doctor_notes && (
-            <div style={{ background: "#EFF6FF", borderRadius: 16, padding: "16px 18px", border: "1px solid #BFDBFE" }}>
-              <div style={{ fontSize: ".7rem", fontWeight: 700, color: "#0369A1", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>NOTE DU MÉDECIN</div>
-              <p style={{ fontSize: ".82rem", color: "#0A2647", lineHeight: 1.65, margin: 0 }}>{c.doctor_notes}</p>
-            </div>
-          )}
+            {appointment && appointment.status === "accepted" && canJoin && (
+              <div className="pd3-health-card">
+                <div className="pd3-health-bg-pattern"/>
+                <div className="pd3-health-content">
+                  <button onClick={joinVideoCall} className="pd3-btn pd3-btn-gold" style={{ width: "100%", padding: "14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <I.Video size={18} /> Rejoindre l'appel vidéo
+                  </button>
+                </div>
+              </div>
+            )}
 
-          {/* Résultat rapide si analysé */}
-          {analysis && (
-            <AnalysisPanel analysis={analysis} modelKey={c.model_key} showGradcam={showGradcam} onToggleGradcam={() => setShowGradcam(!showGradcam)} />
-          )}
+            {c.patient_notes && (
+              <div className="pd3-health-card">
+                <div className="pd3-health-bg-pattern"/>
+                <div className="pd3-health-content">
+                  <div className="pd3-section-row-title" style={{ marginBottom: 12, color: "#FFD700" }}>NOTE DU PATIENT</div>
+                  <p style={{ fontSize: ".8rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, fontStyle: "italic", margin: 0 }}>"{c.patient_notes}"</p>
+                </div>
+              </div>
+            )}
 
-          {/* Actions rapides médecin */}
-          {isDoctor && c.status === "analyzed" && !showRdv && !showTransfer && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowRdv(true)} style={{ flex: 1, padding: "10px", background: "linear-gradient(135deg,#059669,#047857)", border: "none", borderRadius: 12, color: "white", fontSize: ".82rem", fontWeight: 700, cursor: "pointer" }}>
-                📅 RDV
-              </button>
-              <button onClick={() => setShowTransfer(true)} style={{ flex: 1, padding: "10px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12, color: "#475569", fontSize: ".82rem", fontWeight: 600, cursor: "pointer" }}>
-                ↗ Transférer
-              </button>
-            </div>
-          )}
+            {c.doctor_notes && (
+              <div className="pd3-health-card" style={{ background: "rgba(59,130,246,0.1)" }}>
+                <div className="pd3-health-content">
+                  <div className="pd3-section-row-title" style={{ marginBottom: 12, color: "#3B82F6" }}>NOTE DU MÉDECIN</div>
+                  <p style={{ fontSize: ".8rem", color: "rgba(255,255,255,0.8)", lineHeight: 1.6, margin: 0 }}>{c.doctor_notes}</p>
+                </div>
+              </div>
+            )}
+
+            {analysis && (
+              <AnalysisPanel analysis={analysis} modelKey={c.model_key} showGradcam={showGradcam} onToggleGradcam={() => setShowGradcam(!showGradcam)} />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Modal RDV ── */}
-      {showRdv && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(10,38,71,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "white", borderRadius: 20, padding: "28px", maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(10,38,71,.3)" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0A2647", marginBottom: 20 }}>📅 Planifier un rendez-vous</h3>
-
-            {/* Type */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              {[{ key: "video", label: "🎥 Vidéo", desc: "Consultation en ligne" }, { key: "presentiel", label: "🏥 Présentiel", desc: "Rendez-vous en cabinet" }].map(t => (
-                <button key={t.key} onClick={() => setRdvForm(f => ({ ...f, type: t.key }))} style={{
-                  flex: 1, padding: "12px", background: rdvForm.type === t.key ? (t.key === "video" ? "#EDE9FE" : "#E0F2FE") : "#F8FAFC",
-                  border: `1.5px solid ${rdvForm.type === t.key ? (t.key === "video" ? "#7C3AED" : "#0369A1") : "#E2E8F0"}`,
-                  borderRadius: 12, cursor: "pointer", textAlign: "center",
-                }}>
-                  <div style={{ fontSize: ".9rem", marginBottom: 2 }}>{t.label}</div>
-                  <div style={{ fontSize: ".7rem", color: "#64748B" }}>{t.desc}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Date/Heure */}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: ".7rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>Date et heure *</label>
-              <input type="datetime-local" value={rdvForm.scheduled_at} onChange={e => setRdvForm(f => ({ ...f, scheduled_at: e.target.value }))}
-                style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: ".88rem", outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans',sans-serif" }} />
-            </div>
-
-            {/* Lien vidéo si video */}
-            {rdvForm.type === "video" && (
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: ".7rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>Lien vidéo (Jitsi / Zoom)</label>
-                <input value={rdvForm.video_link} onChange={e => setRdvForm(f => ({ ...f, video_link: e.target.value }))}
-                  placeholder="https://meet.jit.si/consultation-..."
-                  style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: ".88rem", outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
-            )}
-
-            {/* Lieu si présentiel */}
-            {rdvForm.type === "presentiel" && (
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: ".7rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>Adresse du cabinet</label>
-                <input value={rdvForm.location} onChange={e => setRdvForm(f => ({ ...f, location: e.target.value }))}
-                  placeholder="Adresse complète du cabinet"
-                  style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: ".88rem", outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowRdv(false)} style={{ flex: 1, padding: "11px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 12, color: "#475569", fontSize: ".88rem", fontWeight: 600, cursor: "pointer" }}>Annuler</button>
-              <button onClick={createRdv} disabled={!rdvForm.scheduled_at} style={{ flex: 2, padding: "11px", background: !rdvForm.scheduled_at ? "#E2E8F0" : "linear-gradient(135deg,#059669,#047857)", border: "none", borderRadius: 12, color: !rdvForm.scheduled_at ? "#94A3B8" : "white", fontSize: ".9rem", fontWeight: 700, cursor: !rdvForm.scheduled_at ? "not-allowed" : "pointer" }}>
-                Confirmer le rendez-vous
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal Transfert ── */}
-      {showTransfer && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(10,38,71,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "white", borderRadius: 20, padding: "28px", maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(10,38,71,.3)" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0A2647", marginBottom: 8 }}>↗ Transférer le dossier</h3>
-            <p style={{ fontSize: ".82rem", color: "#64748B", marginBottom: 20 }}>Sélectionnez un spécialiste. Le patient sera notifié du transfert.</p>
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: ".7rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>Médecin destinataire *</label>
-              <select value={transferForm.to_doctor_id} onChange={e => setTransferForm(f => ({ ...f, to_doctor_id: e.target.value }))}
-                style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: ".88rem", outline: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box" }}>
-                <option value="">Sélectionner un médecin…</option>
-                {doctors.filter(d => d.id !== user?.id).map(d => (
-                  <option key={d.id} value={d.id}>{d.name} — {d.specialite}</option>
+      {/* Modals */}
+      <AnimatePresence>
+        {/* Modal RDV */}
+        {showRdv && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} style={{ background: "#fff", borderRadius: 24, padding: 32, maxWidth: 500, width: "100%" }}>
+              <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0A1628", marginBottom: 20 }}>Planifier un rendez-vous</h2>
+              
+              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                {[{ key: "video", label: "Vidéo" }, { key: "presentiel", label: "Présentiel" }].map(t => (
+                  <button key={t.key} onClick={() => setRdvForm(f => ({ ...f, type: t.key }))} style={{
+                    flex: 1, padding: "12px", borderRadius: 12, border: `2px solid ${rdvForm.type === t.key ? "#D4A500" : "#E5E7EB"}`, background: rdvForm.type === t.key ? "rgba(212,165,0,0.08)" : "#fff", fontWeight: 600, cursor: "pointer"
+                  }}>{t.label}</button>
                 ))}
-              </select>
-            </div>
+              </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: ".7rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".08em", display: "block", marginBottom: 6 }}>Motif du transfert</label>
-              <textarea value={transferForm.reason} onChange={e => setTransferForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="Ex: Nécessite une expertise en neurochirurgie…"
-                rows={3}
-                style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: ".85rem", resize: "none", outline: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box" }} />
-            </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#475569", marginBottom: 6, display: "block" }}>Date et heure *</label>
+                <input type="datetime-local" value={rdvForm.scheduled_at} onChange={e => setRdvForm(f => ({ ...f, scheduled_at: e.target.value }))} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #E5E7EB", fontSize: ".9rem", outline: "none" }} />
+              </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowTransfer(false)} style={{ flex: 1, padding: "11px", background: "#F8FAFC", border: "1.5px solid #E2E8F0", borderRadius: 12, color: "#475569", fontSize: ".88rem", fontWeight: 600, cursor: "pointer" }}>Annuler</button>
-              <button onClick={doTransfer} style={{ flex: 2, padding: "11px", background: "linear-gradient(135deg,#0A2647,#1B3B6F)", border: "none", borderRadius: 12, color: "white", fontSize: ".9rem", fontWeight: 700, cursor: "pointer" }}>
-                Confirmer le transfert →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              {rdvForm.type === "video" && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#475569", marginBottom: 6, display: "block" }}>
+                    Lien de la réunion (optionnel)
+                  </label>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input 
+                      value={rdvForm.video_link} 
+                      onChange={e => setRdvForm(f => ({ ...f, video_link: e.target.value }))} 
+                      placeholder="https://meet.google.com/xxx ou https://meet.jit.si/medai-xxx"
+                      style={{ flex: 1, padding: "12px", borderRadius: 12, border: "1px solid #E5E7EB", fontSize: ".9rem", outline: "none" }} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const roomId = `medai-${c.id}-${Date.now().toString(36)}`;
+                        const defaultLink = `https://meet.jit.si/${roomId}`;
+                        setRdvForm(f => ({ ...f, video_link: defaultLink }));
+                      }}
+                      style={{ padding: "12px 16px", background: "#EFF6FF", borderRadius: 12, border: "1px solid #BFDBFE", cursor: "pointer", fontSize: ".8rem", fontWeight: 500, color: "#3B82F6" }}
+                    >
+                      Générer Jitsi
+                    </button>
+                  </div>
+                  <div style={{ fontSize: ".65rem", color: "#94A3B8", marginTop: 6 }}>
+                    Laissez vide pour que le patient entre son propre lien
+                  </div>
+                </div>
+              )}
+
+              {rdvForm.type === "presentiel" && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#475569", marginBottom: 6, display: "block" }}>Adresse</label>
+                  <input value={rdvForm.location} onChange={e => setRdvForm(f => ({ ...f, location: e.target.value }))} placeholder="Adresse du cabinet" style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #E5E7EB", fontSize: ".9rem", outline: "none" }} />
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
+                <button onClick={() => setShowRdv(false)} className="pd3-btn pd3-btn-outline" style={{ flex: 1 }}>Annuler</button>
+                <button onClick={createRdv} disabled={!rdvForm.scheduled_at} className="pd3-btn pd3-btn-gold" style={{ flex: 2 }}>Confirmer</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Modal Rejoindre - patient entre son lien */}
+        {showJoinModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} style={{ background: "#fff", borderRadius: 24, padding: 32, maxWidth: 500, width: "100%" }}>
+              <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0A1628", marginBottom: 8 }}>Rejoindre l'appel vidéo</h2>
+              <p style={{ fontSize: ".85rem", color: "#64748B", marginBottom: 20 }}>Entrez le lien de la réunion fourni par votre médecin</p>
+              
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#475569", marginBottom: 6, display: "block" }}>Lien de la réunion</label>
+                <input 
+                  type="text" 
+                  value={customVideoLink} 
+                  onChange={e => setCustomVideoLink(e.target.value)} 
+                  placeholder="https://meet.google.com/xxx ou https://meet.jit.si/xxx"
+                  style={{ width: "100%", padding: "12px 16px", borderRadius: 12, border: "1px solid #E5E7EB", fontSize: ".9rem", outline: "none" }}
+                />
+                <div style={{ fontSize: ".65rem", color: "#94A3B8", marginTop: 6 }}>
+                  Exemple: https://meet.jit.si/medai-consultation-123
+                </div>
+              </div>
+              
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => { setShowJoinModal(false); setCustomVideoLink(""); }} className="pd3-btn pd3-btn-outline" style={{ flex: 1 }}>Annuler</button>
+                <button 
+                  onClick={() => { 
+                    if (customVideoLink.trim()) {
+                      window.open(customVideoLink.trim(), "_blank");
+                      setShowJoinModal(false);
+                      setCustomVideoLink("");
+                    } else {
+                      alert("Veuillez entrer un lien valide");
+                    }
+                  }} 
+                  className="pd3-btn pd3-btn-gold" 
+                  style={{ flex: 1 }}
+                  disabled={!customVideoLink.trim()}
+                >
+                  Rejoindre
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Modal Transfert */}
+        {showTransfer && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} style={{ background: "#fff", borderRadius: 24, padding: 32, maxWidth: 500, width: "100%" }}>
+              <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0A1628", marginBottom: 20 }}>Transférer le dossier</h2>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#475569", marginBottom: 6, display: "block" }}>Médecin destinataire *</label>
+                <select value={transferForm.to_doctor_id} onChange={e => setTransferForm(f => ({ ...f, to_doctor_id: e.target.value }))} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #E5E7EB", fontSize: ".9rem", outline: "none" }}>
+                  <option value="">Sélectionner un médecin...</option>
+                  {doctors.filter(d => d.id !== user?.id).map(d => (
+                    <option key={d.id} value={d.id}>{d.name} — {d.specialite}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: ".75rem", fontWeight: 600, color: "#475569", marginBottom: 6, display: "block" }}>Motif</label>
+                <textarea value={transferForm.reason} onChange={e => setTransferForm(f => ({ ...f, reason: e.target.value }))} rows={3} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #E5E7EB", fontSize: ".85rem", resize: "none", outline: "none" }} />
+              </div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => setShowTransfer(false)} className="pd3-btn pd3-btn-outline" style={{ flex: 1 }}>Annuler</button>
+                <button onClick={doTransfer} className="pd3-btn pd3-btn-gold" style={{ flex: 2 }}>Confirmer le transfert</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", background: toast.type === "error" ? "#DC2626" : "#0A2647", borderRadius: 12, padding: "12px 24px", color: "white", fontSize: ".85rem", fontWeight: 500, zIndex: 9999, whiteSpace: "nowrap", boxShadow: "0 8px 32px rgba(10,38,71,.3)", animation: "fadeUp .3s ease" }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} style={{ position: "fixed", bottom: 30, left: "50%", transform: "translateX(-50%)", padding: "12px 24px", borderRadius: 12, background: toast.type === "error" ? "#EF4444" : "#10B981", color: "white", fontSize: ".85rem", fontWeight: 500, zIndex: 9999, whiteSpace: "nowrap" }}>
           {toast.msg}
-        </div>
+        </motion.div>
       )}
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
+
+// StatusBadge component
+const StatusBadge = ({ status }) => {
+  const cfg = { 
+    pending: { label: "En attente", color: "#F59E0B", bg: "#FFFBEB" },
+    accepted: { label: "En cours", color: "#3B82F6", bg: "#EFF6FF" },
+    analyzed: { label: "Analysée", color: "#10B981", bg: "#ECFDF5" },
+    closed: { label: "Clôturée", color: "#6B7280", bg: "#F9FAFB" },
+    rejected: { label: "Rejetée", color: "#EF4444", bg: "#FEE2E2" },
+  };
+  const s = cfg[status] || cfg.pending;
+  return <span className="pd3-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>;
+};

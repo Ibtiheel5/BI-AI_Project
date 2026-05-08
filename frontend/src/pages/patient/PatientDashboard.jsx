@@ -56,6 +56,9 @@ const I = {
   ChevronLeft: p => <Svg {...p} sw={2.5}><polyline points="15 18 9 12 15 6"/></Svg>,
   X: p => <Svg {...p} sw={2}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Svg>,
   Sparkles: p => <Svg {...p}><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"/></Svg>,
+  Video: p => <Svg {...p}><rect x="2" y="5" width="14" height="14" rx="2"/><polyline points="16 9 22 5 22 19 16 15"/></Svg>,
+  Camera: p => <Svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Svg>,
+  CalendarCheck: p => <Svg {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="16 16 12 12 8 16"/></Svg>,
 };
 
 // ═══════════════════════════════════════
@@ -88,7 +91,6 @@ const haversine = (lat1, lon1, lat2, lon2) => {
 // ═══════════════════════════════════════
 // LEAFLET MAP COMPONENT
 // ═══════════════════════════════════════
-// LEAFLET MAP COMPONENT - VERSION COMPLÈTEMENT CORRIGÉE
 const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nearestDoctorId }) => {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -102,31 +104,26 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nea
     
     const initMap = async () => {
       try {
-        // Attendre que le DOM soit prêt
         await new Promise(resolve => setTimeout(resolve, 100));
         
         if (!isMounted || !containerRef.current) return;
         
         const leaflet = await getLeaflet();
         
-        // Nettoyer l'ancienne carte
         if (mapRef.current) {
           mapRef.current.remove();
           mapRef.current = null;
         }
         
-        // Centre par défaut : Tunis
         const center = userLocation ? [userLocation.lat, userLocation.lng] : [36.8065, 10.1815];
         
-        // Créer la carte
         const map = leaflet.map(containerRef.current, {
           center: center,
           zoom: userLocation ? 12 : 8,
-          zoomControl: false, // On utilisera nos propres contrôles
+          zoomControl: false,
           attributionControl: true
         });
         
-        // ✅ SOLUTION : Utiliser OpenStreetMap standard (le plus fiable)
         leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19,
@@ -134,7 +131,6 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nea
           errorTileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
         }).addTo(map);
         
-        // Ajouter un fond de secours en cas d'erreur
         map.on('tileerror', function(error) {
           console.warn('Tile error:', error);
         });
@@ -142,14 +138,12 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nea
         mapRef.current = map;
         setMapLoaded(true);
         
-        // Forcer l'invalidation de la taille
         setTimeout(() => {
           if (mapRef.current) {
             mapRef.current.invalidateSize();
           }
         }, 200);
         
-        // Rafraîchir après le chargement complet
         setTimeout(() => {
           if (mapRef.current) {
             mapRef.current.invalidateSize();
@@ -181,7 +175,6 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nea
       const map = mapRef.current;
       if (!map) return;
 
-      // Nettoyer les marqueurs existants
       Object.values(markersRef.current).forEach(m => {
         if (map.hasLayer(m)) map.removeLayer(m);
       });
@@ -192,80 +185,77 @@ const MapView = ({ doctors, userLocation, selectedDoctorId, onDoctorSelect , nea
         userMarkerRef.current = null;
       }
 
-      // Icône médecin
-      // Remplacer la création du marqueur médecin par :
-const createDoctorIcon = (color, isNearest = false) => {
-  if (isNearest) {
-    return leaflet.divIcon({
-      html: `<div style="
-        width: 36px;
-        height: 36px;
-        background: #10B981;
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 3px solid white;
-        box-shadow: 0 0 0 3px rgba(16,185,129,0.4), 0 2px 6px rgba(0,0,0,0.3);
-        cursor: pointer;
-        animation: pulse-green 1.5s infinite;
-      ">
-        <div style="
-          width: 10px;
-          height: 10px;
-          background: white;
-          border-radius: 50%;
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(45deg);
-        "></div>
-      </div>`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 36],
-      popupAnchor: [0, -30],
-      className: 'doctor-marker nearest-marker'
-    });
-  }
-  return leaflet.divIcon({
-    html: `<div style="
-      width: 28px;
-      height: 28px;
-      background: ${color};
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      border: 2px solid white;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      cursor: pointer;
-    ">
-      <div style="
-        width: 8px;
-        height: 8px;
-        background: white;
-        border-radius: 50%;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(45deg);
-      "></div>
-    </div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
-    popupAnchor: [0, -25],
-    className: 'doctor-marker'
-  });
-};
+      const createDoctorIcon = (color, isNearest = false) => {
+        if (isNearest) {
+          return leaflet.divIcon({
+            html: `<div style="
+              width: 36px;
+              height: 36px;
+              background: #10B981;
+              border-radius: 50% 50% 50% 0;
+              transform: rotate(-45deg);
+              border: 3px solid white;
+              box-shadow: 0 0 0 3px rgba(16,185,129,0.4), 0 2px 6px rgba(0,0,0,0.3);
+              cursor: pointer;
+              animation: pulse-green 1.5s infinite;
+            ">
+              <div style="
+                width: 10px;
+                height: 10px;
+                background: white;
+                border-radius: 50%;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(45deg);
+              "></div>
+            </div>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 36],
+            popupAnchor: [0, -30],
+            className: 'doctor-marker nearest-marker'
+          });
+        }
+        return leaflet.divIcon({
+          html: `<div style="
+            width: 28px;
+            height: 28px;
+            background: ${color};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+          ">
+            <div style="
+              width: 8px;
+              height: 8px;
+              background: white;
+              border-radius: 50%;
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%) rotate(45deg);
+            "></div>
+          </div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 28],
+          popupAnchor: [0, -25],
+          className: 'doctor-marker'
+        });
+      };
 
-      // Ajouter les médecins
       doctors.forEach((doc, idx) => {
         const coords = CITY_COORDS[doc.ville];
         if (!coords) return;
         
-        // Position avec petit offset
         const lat = coords[0] + (idx % 5 - 2) * 0.003;
         const lng = coords[1] + (idx % 5 - 2) * 0.003;
         const color = DOCTOR_COLORS[doc.specialite] || "#D4A500";
-        const isNearest = doc.id === nearestDoctorId;
+        const isNearest = nearestDoctorId && doc.id === nearestDoctorId;
 
         const marker = leaflet.marker([lat, lng], { icon: createDoctorIcon(color, isNearest) });
+        
         
         marker.bindPopup(`
           <div style="font-family: 'Inter', sans-serif; min-width: 180px; padding: 4px;">
@@ -282,7 +272,6 @@ const createDoctorIcon = (color, isNearest = false) => {
         markersRef.current[doc.id] = marker;
       });
 
-      // Marqueur utilisateur
       if (userLocation) {
         const userIcon = leaflet.divIcon({
           html: `<div style="
@@ -302,14 +291,12 @@ const createDoctorIcon = (color, isNearest = false) => {
         userMarkerRef.current.bindPopup('<b style="color:#3B82F6;">📍 Votre position</b>');
         userMarkerRef.current.addTo(map);
         
-        // Centrer sur l'utilisateur
         if (!mapRef.current._initialCentered) {
           mapRef.current.setView([userLocation.lat, userLocation.lng], 12);
           mapRef.current._initialCentered = true;
         }
       }
       
-      // Ajuster les limites si pas de position utilisateur
       if (doctors.length > 0 && !userLocation && mapRef.current) {
         const bounds = [];
         doctors.forEach(doc => {
@@ -324,7 +311,7 @@ const createDoctorIcon = (color, isNearest = false) => {
     };
     
     updateMarkers();
-  }, [doctors, userLocation, onDoctorSelect, mapLoaded]);
+  }, [doctors, userLocation, onDoctorSelect, mapLoaded, nearestDoctorId]);
 
   // Voler vers médecin sélectionné
   useEffect(() => {
@@ -351,7 +338,6 @@ const createDoctorIcon = (color, isNearest = false) => {
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 450, background: "#E8ECF2" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%", background: "#E8ECF2", zIndex: 1 }} />
       
-      {/* Loading overlay */}
       {!mapLoaded && (
         <div style={{ 
           position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
@@ -363,18 +349,16 @@ const createDoctorIcon = (color, isNearest = false) => {
         </div>
       )}
       
-      {/* Contrôles */}
       <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 1000, display: "flex", flexDirection: "column", gap: 6 }}>
-        <button onClick={() => mapRef.current?.zoomIn()} style={zoomBtn}>+</button>
-        <button onClick={() => mapRef.current?.zoomOut()} style={zoomBtn}>−</button>
+        <button type="button" onClick={() => mapRef.current?.zoomIn()} style={zoomBtn}>+</button>
+        <button type="button" onClick={() => mapRef.current?.zoomOut()} style={zoomBtn}>−</button>
         {userLocation && (
-          <button onClick={() => mapRef.current?.flyTo([userLocation.lat, userLocation.lng], 13)} style={{...zoomBtn, background: "#3B82F6", color: "white" }}>
+          <button type="button" onClick={() => mapRef.current?.flyTo([userLocation.lat, userLocation.lng], 13)} style={{...zoomBtn, background: "#3B82F6", color: "white" }}>
             <I.Navigation size={16} color="white" />
           </button>
         )}
       </div>
       
-      {/* Légende */}
       <div style={{ position: "absolute", bottom: 20, left: 20, zIndex: 1000, background: "white", borderRadius: 8, padding: "6px 12px", fontSize: "0.65rem", display: "flex", gap: 10, border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 10, height: 10, borderRadius: "50% 50% 50% 0", background: "#D4A500", transform: "rotate(-45deg)" }} />
@@ -412,6 +396,592 @@ const zoomBtn = {
   justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.1)"
 };
 
+// ═══════════════════════════════════════
+// COMPOSANT BOUTON APPEL VIDÉO POUR PATIENT
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// COMPOSANT BOUTON APPEL VIDÉO POUR PATIENT (AVEC MINUTEUR 20 MIN)
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// COMPOSANT BOUTON APPEL VIDÉO POUR PATIENT (AVEC MINUTEUR 20 MIN)
+// ═══════════════════════════════════════
+const PatientVideoCallButton = ({ consultationId, consultationStatus, consultation }) => {
+  const [appointment, setAppointment] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(null);
+  
+  const fetchAppointment = async () => {
+    const token = localStorage.getItem("medai-token");
+    if (!token || !consultationId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/consultations/${consultationId}/appointment`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAppointment(data.appointment);
+        
+        // Calculer le temps restant pour accepter (20 minutes)
+        if (data.appointment && data.appointment.status === "pending" && data.appointment.created_at) {
+          const created = new Date(data.appointment.created_at);
+          const expiresAt = new Date(created.getTime() + 20 * 60 * 1000);
+          const now = new Date();
+          const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+          setTimeLeft(remaining);
+        }
+      }
+    } catch (err) {
+      console.error("Erreur vérification rendez-vous:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    fetchAppointment();
+  }, [consultationId]);
+  
+  // Minuteur pour mise à jour du temps restant
+  useEffect(() => {
+    if (!appointment || appointment.status !== "pending") return;
+    
+    const interval = setInterval(() => {
+      if (appointment.created_at) {
+        const created = new Date(appointment.created_at);
+        const expiresAt = new Date(created.getTime() + 20 * 60 * 1000);
+        const now = new Date();
+        const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+        setTimeLeft(remaining);
+        
+        // Si le temps est écoulé, recharger
+        if (remaining === 0) {
+          fetchAppointment();
+        }
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [appointment]);
+  
+  const formatTimeLeft = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  const acceptAppointment = async () => {
+    setIsAccepting(true);
+    const token = localStorage.getItem("medai-token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/consultations/appointments/${appointment.id}/accept`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert("Rendez-vous accepté !");
+        fetchAppointment();
+      } else {
+        alert("Erreur lors de l'acceptation");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur réseau");
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+  
+  const rejectAppointment = async () => {
+    setIsRejecting(true);
+    const token = localStorage.getItem("medai-token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/consultations/appointments/${appointment.id}/reject`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert("Rendez-vous refusé");
+        fetchAppointment();
+      } else {
+        alert("Erreur lors du refus");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur réseau");
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+  
+  if (loading || !appointment) return null;
+  
+  // Afficher uniquement pour les rendez-vous en attente
+  if (appointment.status !== "pending") return null;
+  
+  const aptDate = new Date(appointment.scheduled_at);
+  const isExpired = timeLeft === 0;
+  
+  return (
+    <div style={{
+      marginTop: 8,
+      padding: "12px",
+      background: "rgba(245,158,11,0.08)",
+      borderRadius: 10,
+      border: "1px solid rgba(245,158,11,0.2)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.7rem", color: "#F59E0B" }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span style={{ fontWeight: 600 }}>En attente de votre confirmation</span>
+        </div>
+        {timeLeft > 0 && !isExpired && (
+          <div style={{
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            color: timeLeft < 300 ? "#EF4444" : "#F59E0B",
+            background: "rgba(0,0,0,0.2)",
+            padding: "2px 8px",
+            borderRadius: 20,
+          }}>
+            ⏱️ {formatTimeLeft(timeLeft)}
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)", marginBottom: 12 }}>
+        {aptDate.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+      </div>
+      {!isExpired ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={acceptAppointment}
+            disabled={isAccepting}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              background: "#10B981",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {isAccepting ? "..." : "✓ Accepter"}
+          </button>
+          <button
+            type="button"
+            onClick={rejectAppointment}
+            disabled={isRejecting}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              background: "#EF4444",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {isRejecting ? "..." : "✗ Refuser"}
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          padding: "8px 12px",
+          background: "rgba(239,68,68,0.2)",
+          borderRadius: 8,
+          textAlign: "center",
+          fontSize: "0.75rem",
+          color: "#EF4444",
+        }}>
+          Temps écoulé - rendez-vous expiré
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════
+// COMPOSANT AFFICHAGE RENDEZ-VOUS
+// ═══════════════════════════════════════
+const AppointmentInfo = ({ consultationId }) => {
+  const [appointment, setAppointment] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAppointment = async () => {
+      const token = localStorage.getItem("medai-token");
+      if (!token || !consultationId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/consultations/${consultationId}/appointment`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAppointment(data.appointment);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAppointment();
+  }, [consultationId]);
+
+  if (loading || !appointment) return null;
+
+  const appointmentDate = new Date(appointment.scheduled_at);
+  const isUpcoming = appointmentDate > new Date();
+  const isToday = appointmentDate.toDateString() === new Date().toDateString();
+
+  return (
+    <div style={{
+      marginTop: 8,
+      padding: "8px 12px",
+      background: "rgba(16,185,129,0.08)",
+      borderRadius: 10,
+      border: "1px solid rgba(16,185,129,0.15)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.7rem", color: "#10B981" }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span style={{ fontWeight: 600 }}>
+          {isUpcoming ? "Rendez-vous prevu" : isToday ? "Rendez-vous aujourd'hui" : "Rendez-vous passe"}
+        </span>
+      </div>
+      <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
+        {appointmentDate.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+      </div>
+      {appointment.notes && (
+        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+          Note: {appointment.notes}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════
+// COMPOSANT LISTE DES RENDEZ-VOUS - VERSION CORRIGÉE
+// ═══════════════════════════════════════
+// COMPOSANT LISTE DES RENDEZ-VOUS - VERSION CORRIGÉE
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// COMPOSANT LISTE DES RENDEZ-VOUS - AVEC ACCEPTATION
+// ═══════════════════════════════════════
+const AppointmentsList = ({ appointments, loading, onRefresh }) => {
+  const [acceptingId, setAcceptingId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+
+  const acceptAppointment = async (appointmentId) => {
+    setAcceptingId(appointmentId);
+    const token = localStorage.getItem("medai-token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/consultations/appointments/${appointmentId}/accept`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert("Rendez-vous accepté !");
+        onRefresh();
+      } else {
+        alert("Erreur lors de l'acceptation");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur réseau");
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  const rejectAppointment = async (appointmentId) => {
+    setRejectingId(appointmentId);
+    const token = localStorage.getItem("medai-token");
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/consultations/appointments/${appointmentId}/reject`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert("Rendez-vous refusé");
+        onRefresh();
+      } else {
+        alert("Erreur lors du refus");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur réseau");
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: "40px", textAlign: "center" }}>
+        <div className="pd3-api-spinner" />
+        <p style={{ marginTop: 12, color: "var(--txt3)" }}>Chargement des rendez-vous...</p>
+      </div>
+    );
+  }
+
+  if (!appointments || appointments.length === 0) {
+    return (
+      <div className="pd3-empty">
+        <div className="pd3-empty-icon"><I.Calendar size={32} color="#D4A500"/></div>
+        <div className="pd3-empty-title">Aucun rendez-vous</div>
+        <div className="pd3-empty-desc">Vous n'avez aucun rendez-vous programmé pour le moment.</div>
+        <button className="pd3-btn pd3-btn-gold pd3-btn-sm" onClick={() => window.location.href = "/patient/consultation/new"}>
+          <I.Upload size={14}/> Nouvelle consultation
+        </button>
+      </div>
+    );
+  }
+
+  const now = new Date();
+  const pendingAppointments = appointments.filter(a => {
+    if (!a.scheduled_at) return false;
+    return a.status === "pending" && new Date(a.scheduled_at) >= now;
+  });
+  
+  const upcomingAppointments = appointments.filter(a => {
+    if (!a.scheduled_at) return false;
+    return a.status === "accepted" && new Date(a.scheduled_at) >= now;
+  }).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  
+  const pastAppointments = appointments.filter(a => {
+    if (!a.scheduled_at) return false;
+    return new Date(a.scheduled_at) < now || a.status === "cancelled" || a.status === "rejected";
+  }).sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+
+  const joinVideoCall = (consultationId) => {
+    window.open(`/video-consultation/${consultationId}?room=medai-${consultationId}`, "_blank");
+  };
+
+  const getSpecialtyLabel = (modelKey) => {
+    const labels = {
+      chest: "Radiologie thoracique",
+      brain: "Neurologie",
+      lung: "Pneumologie",
+      retina: "Ophtalmologie"
+    };
+    return labels[modelKey] || "Consultation médicale";
+  };
+
+  return (
+    <div>
+      {/* Rendez-vous en attente de confirmation */}
+      {pendingAppointments.length > 0 && (
+        <>
+          <div className="pd3-section-row" style={{ marginTop: 16 }}>
+            <span className="pd3-section-row-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              En attente de confirmation
+            </span>
+          </div>
+          {pendingAppointments.map(apt => {
+            const aptDate = new Date(apt.scheduled_at);
+            const isToday = aptDate.toDateString() === now.toDateString();
+            
+            return (
+              <motion.div
+                key={apt.id}
+                className="pd3-appt-card"
+                whileHover={{ x: 4 }}
+                style={{ 
+                  cursor: "default",
+                  background: "#FFFBEB",
+                  border: "1px solid #FDE68A"
+                }}
+              >
+                <div className="pd3-appt-avatar" style={{
+                  background: "linear-gradient(135deg, #F59E0B, #D97706)",
+                  color: "#fff"
+                }}>
+                  {apt.doctor_name ? apt.doctor_name.charAt(0) : "D"}
+                </div>
+                <div className="pd3-appt-info">
+                  <div className="pd3-appt-name">{apt.doctor_name ? `Dr. ${apt.doctor_name}` : "Médecin"}</div>
+                  <div className="pd3-appt-specialty">{getSpecialtyLabel(apt.model_key)}</div>
+                  <div style={{ fontSize: "0.65rem", color: "#F59E0B", marginTop: 4 }}>
+                    En attente de votre confirmation
+                  </div>
+                </div>
+                <div className="pd3-appt-time-block">
+                  <div className="pd3-appt-date">
+                    {aptDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                  </div>
+                  <div className="pd3-appt-time">
+                    {aptDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                  {isToday && (
+                    <div className="pd3-appt-time" style={{ color: "#F59E0B", fontSize: "0.65rem" }}>Aujourd'hui</div>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="pd3-appt-action"
+                    onClick={() => acceptAppointment(apt.id)}
+                    disabled={acceptingId === apt.id}
+                    style={{ background: "#10B981", color: "white", border: "none" }}
+                  >
+                    {acceptingId === apt.id ? "..." : "✓ Accepter"}
+                  </button>
+                  <button
+                    type="button"
+                    className="pd3-appt-action"
+                    onClick={() => rejectAppointment(apt.id)}
+                    disabled={rejectingId === apt.id}
+                    style={{ background: "#EF4444", color: "white", border: "none" }}
+                  >
+                    {rejectingId === apt.id ? "..." : "✗ Refuser"}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Rendez-vous acceptés à venir */}
+      {upcomingAppointments.length > 0 && (
+        <>
+          <div className="pd3-section-row" style={{ marginTop: pendingAppointments.length > 0 ? 24 : 16 }}>
+            <span className="pd3-section-row-title"><I.Calendar size={16} color="#D4A500"/> Prochains rendez-vous</span>
+            {onRefresh && (
+              <button className="pd3-section-link" onClick={onRefresh}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Rafraîchir
+              </button>
+            )}
+          </div>
+          {upcomingAppointments.map(apt => {
+            const aptDate = new Date(apt.scheduled_at);
+            const isToday = aptDate.toDateString() === now.toDateString();
+            const canJoin = apt.type === "video" && aptDate <= now;
+            
+            return (
+              <motion.div
+                key={apt.id}
+                className="pd3-appt-card"
+                whileHover={{ x: 4 }}
+                style={{ cursor: "pointer", background: "var(--card)" }}
+                onClick={() => window.location.href = `/patient/consultation/${apt.consultation_id}`}
+              >
+                <div className="pd3-appt-avatar" style={{
+                  background: "linear-gradient(135deg, #0A2647, #1B3B6F)",
+                  color: "#fff"
+                }}>
+                  {apt.doctor_name ? apt.doctor_name.charAt(0) : "D"}
+                </div>
+                <div className="pd3-appt-info">
+                  <div className="pd3-appt-name">{apt.doctor_name ? `Dr. ${apt.doctor_name}` : "Médecin"}</div>
+                  <div className="pd3-appt-specialty">{getSpecialtyLabel(apt.model_key)}</div>
+                </div>
+                <div className="pd3-appt-time-block">
+                  <div className="pd3-appt-date">
+                    {aptDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                  </div>
+                  <div className="pd3-appt-time">
+                    {aptDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                  {isToday && (
+                    <div className="pd3-appt-time" style={{ color: "#10B981", fontSize: "0.65rem" }}>Aujourd'hui</div>
+                  )}
+                </div>
+                {canJoin && (
+                  <button
+                    type="button"
+                    className="pd3-appt-action"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      joinVideoCall(apt.consultation_id);
+                    }}
+                    style={{ background: "#10B981", color: "white", border: "none" }}
+                  >
+                    <I.Video size={12} /> Rejoindre
+                  </button>
+                )}
+              </motion.div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Rendez-vous passés */}
+      {pastAppointments.length > 0 && (
+        <>
+          <div className="pd3-section-row" style={{ marginTop: 24 }}>
+            <span className="pd3-section-row-title"><I.Clock size={16} color="#6B7280"/> Historique</span>
+          </div>
+          {pastAppointments.slice(0, 5).map(apt => {
+            const aptDate = new Date(apt.scheduled_at);
+            const isCancelled = apt.status === "cancelled" || apt.status === "rejected";
+            return (
+              <motion.div
+                key={apt.id}
+                className="pd3-appt-card"
+                whileHover={{ x: 4 }}
+                style={{ cursor: "pointer", opacity: 0.7, background: isCancelled ? "#FEF2F2" : "var(--card)" }}
+                onClick={() => window.location.href = `/patient/consultation/${apt.consultation_id}`}
+              >
+                <div className="pd3-appt-avatar" style={{
+                  background: isCancelled ? "rgba(239,68,68,0.15)" : "rgba(100,116,139,0.15)",
+                  color: isCancelled ? "#EF4444" : "#64748B"
+                }}>
+                  {apt.doctor_name ? apt.doctor_name.charAt(0) : "D"}
+                </div>
+                <div className="pd3-appt-info">
+                  <div className="pd3-appt-name">{apt.doctor_name ? `Dr. ${apt.doctor_name}` : "Médecin"}</div>
+                  <div className="pd3-appt-specialty">{getSpecialtyLabel(apt.model_key)}</div>
+                  {isCancelled && <div style={{ fontSize: "0.65rem", color: "#EF4444" }}>Annulé</div>}
+                </div>
+                <div className="pd3-appt-time-block">
+                  <div className="pd3-appt-date">{aptDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</div>
+                  <div className="pd3-appt-time">{aptDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</div>
+                </div>
+                <I.ChevronRight size={16} color="#64748B" />
+              </motion.div>
+            );
+          })}
+          {pastAppointments.length > 5 && (
+            <div style={{ textAlign: "center", marginTop: 12 }}>
+              <span style={{ fontSize: "0.7rem", color: "#64748B" }}>+ {pastAppointments.length - 5} autres rendez-vous</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════
 // SHARED COMPONENTS
@@ -450,20 +1020,164 @@ const StatusBadge = ({ status }) => {
 };
 
 const ConsultationCard = ({ consultation, onClick }) => {
-  const cfg = { chest:{color:"#2D5F9E",bg:"rgba(45,95,158,0.08)",icon:<I.Lungs size={22}/>}, brain:{color:"#6B4FA0",bg:"rgba(107,79,160,0.08)",icon:<I.Brain size={22}/>}, lung:{color:"#D4A500",bg:"rgba(212,165,0,0.08)",icon:<I.Scan size={22}/>} };
-  const c = cfg[consultation.model_key] || {color:"#64748B",bg:"rgba(100,116,139,0.08)",icon:<I.Folder size={22}/>};
-  const fd = new Date(consultation.created_at).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});
+  const cfg = { 
+    chest: { color: "#2D5F9E", bg: "rgba(45,95,158,0.08)", icon: <I.Lungs size={22} /> }, 
+    brain: { color: "#6B4FA0", bg: "rgba(107,79,160,0.08)", icon: <I.Brain size={22} /> }, 
+    lung: { color: "#D4A500", bg: "rgba(212,165,0,0.08)", icon: <I.Scan size={22} /> } 
+  };
+  const c = cfg[consultation.model_key] || { color: "#64748B", bg: "rgba(100,116,139,0.08)", icon: <I.Folder size={22} /> };
+  const fd = new Date(consultation.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  
+  const canVideoCall = consultation.status === "accepted" || consultation.status === "analyzed";
+  
+  // État pour le rendez-vous
+  const [appointment, setAppointment] = useState(null);
+  const [loadingAppointment, setLoadingAppointment] = useState(true);
+  
+  useEffect(() => {
+    const checkAppointment = async () => {
+      const token = localStorage.getItem("medai-token");
+      if (!token || !consultation.id) {
+        setLoadingAppointment(false);
+        return;
+      }
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/consultations/${consultation.id}/appointment`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAppointment(data.appointment);
+        }
+      } catch (err) {
+        console.error("Erreur vérification rendez-vous:", err);
+      } finally {
+        setLoadingAppointment(false);
+      }
+    };
+    checkAppointment();
+  }, [consultation.id]);
+  
+  // Vérifier si le rendez-vous est accepté et à l'heure
+  const isAppointmentAccepted = appointment?.status === "accepted";
+  const isAppointmentTime = appointment?.scheduled_at && new Date(appointment.scheduled_at) <= new Date();
+  const canJoin = canVideoCall && isAppointmentAccepted && isAppointmentTime;
+  
+  // Vérifier si le rendez-vous est en attente
+  const isAppointmentPending = appointment?.status === "pending";
+  
+  const joinVideoCall = (e) => {
+    e.stopPropagation();
+    if (canJoin) {
+      window.open(`/video-consultation/${consultation.id}?room=medai-${consultation.id}`, "_blank");
+    }
+  };
+
   return (
-    <motion.div className="pd3-consult-card" style={{"--accent-color":c.color}} onClick={onClick} whileHover={{x:6}}>
-      <div className="pd3-consult-card-accent"/>
-      <div className="pd3-consult-icon" style={{background:c.bg,color:c.color}}>{c.icon}</div>
-      <div className="pd3-consult-body">
-        <div className="pd3-consult-header"><span className="pd3-consult-id">Dossier #{consultation.id}</span><StatusBadge status={consultation.status}/></div>
-        <div className="pd3-consult-date">{fd}</div>
-        <div className="pd3-consult-doctor">{consultation.doctor_name ? `Dr. ${consultation.doctor_name}` : "En attente"}</div>
-        {consultation.prediction && <div className="pd3-prediction">{consultation.prediction}</div>}
+    <motion.div 
+      className="pd3-consult-card" 
+      style={{ "--accent-color": c.color, cursor: "pointer", flexDirection: "column", alignItems: "stretch" }} 
+      onClick={onClick} 
+      whileHover={{ x: 6 }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="pd3-consult-card-accent" />
+        <div className="pd3-consult-icon" style={{ background: c.bg, color: c.color }}>{c.icon}</div>
+        <div className="pd3-consult-body">
+          <div className="pd3-consult-header">
+            <span className="pd3-consult-id">Dossier #{consultation.id}</span>
+            <StatusBadge status={consultation.status} />
+          </div>
+          <div className="pd3-consult-date">{fd}</div>
+          <div className="pd3-consult-doctor">{consultation.doctor_name ? `Dr. ${consultation.doctor_name}` : "En attente"}</div>
+          {consultation.prediction && <div className="pd3-prediction">{consultation.prediction}</div>}
+        </div>
+        <I.ChevronRight size={18} />
       </div>
-      <I.ChevronRight size={18}/>
+      
+      {/* Bouton Rejoindre l'appel vidéo - visible quand rendez-vous accepté et heure atteinte */}
+      {canJoin && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={joinVideoCall}
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              background: "linear-gradient(135deg, #059669, #10B981)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 12,
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="5" width="14" height="14" rx="2"/>
+              <polyline points="16 9 22 5 22 19 16 15"/>
+            </svg>
+            Rejoindre l'appel vidéo
+          </button>
+        </div>
+      )}
+      
+      {/* Afficher les infos de rendez-vous uniquement si consultation acceptée et rendez-vous existe */}
+      {canVideoCall && !loadingAppointment && appointment && (
+        <>
+          {/* Si rendez-vous en attente - afficher le minuteur */}
+          {isAppointmentPending && (
+            <PatientVideoCallButton 
+              consultationId={consultation.id} 
+              consultationStatus={consultation.status}
+              consultation={consultation}
+            />
+          )}
+          
+          {/* Si rendez-vous accepté - afficher les infos */}
+          {isAppointmentAccepted && (
+            <div style={{
+              marginTop: 8,
+              padding: "8px 12px",
+              background: "rgba(16,185,129,0.08)",
+              borderRadius: 10,
+              border: "1px solid rgba(16,185,129,0.15)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.7rem", color: "#10B981" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span style={{ fontWeight: 600 }}>
+                  {isAppointmentTime ? "Rendez-vous disponible maintenant" : "Rendez-vous accepté"}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
+                {new Date(appointment.scheduled_at).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+              </div>
+            </div>
+          )}
+          
+          {/* Si rendez-vous refusé ou annulé */}
+          {(appointment.status === "rejected" || appointment.status === "cancelled") && (
+            <div style={{
+              marginTop: 8,
+              padding: "8px 12px",
+              background: "rgba(239,68,68,0.08)",
+              borderRadius: 10,
+              border: "1px solid rgba(239,68,68,0.15)",
+            }}>
+              <div style={{ fontSize: "0.7rem", color: "#EF4444" }}>
+                Rendez-vous {appointment.status === "rejected" ? "refusé" : "expiré ou annulé"}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </motion.div>
   );
 };
@@ -568,8 +1282,8 @@ const NotificationItem = ({ notification, onRead }) => {
 export default function PatientDashboard({ initialTab = "overview" }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { consultations, stats, loading: cLoading, refetch: refetchConsultations } = usePatientData();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, refetch: refetchNotifs } = useNotifications();
+  const { consultations, stats, loading: cLoading } = usePatientData();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   const [greeting, setGreeting] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -583,6 +1297,8 @@ export default function PatientDashboard({ initialTab = "overview" }) {
   const [specialtyFilter, setSpecialtyFilter] = useState("all");
   const [selectedDoctorId, setSelectedDoctorId] = useState(null);
   const [mapView, setMapView] = useState("map");
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const notifRef = useRef(null);
 
   const { scrollYProgress } = useScroll();
@@ -597,12 +1313,10 @@ export default function PatientDashboard({ initialTab = "overview" }) {
   
   // ── Horloge (rafraîchissement limité à 60 secondes au lieu de 1 seconde) ──
   useEffect(() => { 
-    const i = setInterval(() => setCurrentTime(new Date()), 60000); // 1 minute
+    const i = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(i); 
   }, []);
   
-  // ── Click outside pour fermer les notifications ───────────────────────────
-
   // ── Scroll listener avec throttle pour performance ────────────────────────
   useEffect(() => { 
     let ticking = false;
@@ -619,13 +1333,49 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     return () => window.removeEventListener("scroll", handleScroll); 
   }, []);
 
-  // ───❌ SUPPRESSION COMPLÈTE DU POLLING AUTOMATIQUE ❌───────────────────────
-  // Le bloc suivant a été SUPPRIMÉ pour éviter tout rafraîchissement automatique
-  // Les données ne se rafraîchissent que :
-  //   1. Au chargement initial de la page
-  //   2. Lors d'un rechargement manuel (F5)
-  //   3. Si l'utilisateur navigue vers une autre page et revient
-  // ───────────────────────────────────────────────────────────────────────────
+  // ── Fetch appointments ────────────────────────────────────────────────────
+  const fetchAppointments = useCallback(async () => {
+    const token = localStorage.getItem("medai-token");
+    if (!token) {
+      setAppointmentsLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/consultations/appointments/my", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAppointments(data.appointments || []);
+      } else {
+        // Fallback: essayer l'autre endpoint
+        const res2 = await fetch("http://localhost:8000/api/v1/consultations/appointments", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res2.ok) {
+          const data = await res2.json();
+          setAppointments(data.appointments || []);
+        }
+      }
+    } catch (err) {
+      console.error("Erreur chargement rendez-vous:", err);
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  }, []);
+
+  // ── Charger les rendez-vous au montage ─────────────────────────────────────
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
+  // ── Rafraîchir toutes les 30 secondes ─────────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAppointments();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchAppointments]);
 
   // ── Fetch doctors (une seule fois) ────────────────────────────────────────
   useEffect(() => {
@@ -660,7 +1410,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
       }
     };
     fetchDocs();
-  }, []); // ← Dépendances vides = exécution une seule fois
+  }, []);
 
   // ── Geolocation (une seule fois) ──────────────────────────────────────────
   useEffect(() => {
@@ -670,7 +1420,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
       () => console.log("Geolocation denied"),
       { timeout: 8000 }
     );
-  }, []); // ← Une seule fois
+  }, []);
 
   // ── Computed values ───────────────────────────────────────────────────────
   const doctorsWithDistance = useMemo(() => doctors.map(d => {
@@ -696,15 +1446,14 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     return result.sort((a,b) => (a.distance ?? 9999) - (b.distance ?? 9999));
   }, [doctorsWithDistance, searchQuery, specialtyFilter]);
 
-  // Après le calcul de filteredDoctors, ajouter :
-const nearestDoctor = useMemo(() => {
-  if (!userLocation || filteredDoctors.length === 0) return null;
-  return filteredDoctors.reduce((nearest, current) => {
-    if (!nearest) return current;
-    if ((current.distance ?? Infinity) < (nearest.distance ?? Infinity)) return current;
-    return nearest;
-  }, null);
-}, [filteredDoctors, userLocation]);
+  const nearestDoctor = useMemo(() => {
+    if (!userLocation || filteredDoctors.length === 0) return null;
+    return filteredDoctors.reduce((nearest, current) => {
+      if (!nearest) return current;
+      if ((current.distance ?? Infinity) < (nearest.distance ?? Infinity)) return current;
+      return nearest;
+    }, null);
+  }, [filteredDoctors, userLocation]);
 
   const specialties = useMemo(() => [...new Set(doctors.map(d => d.specialite).filter(Boolean))].sort(), [doctors]);
 
@@ -735,11 +1484,6 @@ const nearestDoctor = useMemo(() => {
     { icon:I.Lungs, value:14, suffix:"+", label:"Pathologies couvertes" },
     { icon:I.Shield, value:100, suffix:"%", label:"Données sécurisées" },
   ];
-  const handleLogout = () => {
-  localStorage.removeItem("medai-token");
-  localStorage.removeItem("medai-user");
-  window.location.href = "/";
-};
 
   if (cLoading) {
     return (
@@ -975,7 +1719,7 @@ const nearestDoctor = useMemo(() => {
             </motion.div>
           )}
 
-                    {/* DOCTORS TAB - VERSION CORRIGÉE AVEC GÉOLOCALISATION */}
+          {/* DOCTORS TAB */}
           {activeTab === "doctors" && (
             <motion.div key="doctors" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
               <Reveal>
@@ -988,7 +1732,6 @@ const nearestDoctor = useMemo(() => {
                 </div>
               </Reveal>
               
-              {/* Barre d'outils */}
               <Reveal>
                 <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center",marginBottom:24}}>
                   <div style={{position:"relative",flex:"1 1 250px"}}>
@@ -1007,7 +1750,6 @@ const nearestDoctor = useMemo(() => {
                     {specialties.map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
                   
-                  {/* Bouton de géolocalisation */}
                   <button 
                     onClick={() => {
                       if (navigator.geolocation) {
@@ -1054,136 +1796,119 @@ const nearestDoctor = useMemo(() => {
                 </div>
               </Reveal>
 
-              {/* Affichage Carte ou Liste */}
-              {/* Affichage Carte ou Liste */}
-{doctorsLoading ? (
-  <div className="pd3-api-loading">...</div>
-) : mapView === "map" ? (
-  <div className="pd3-map-full-container" style={{overflow:"hidden",marginBottom:32,borderRadius:"var(--radius-xl)",border:"1px solid var(--border)"}}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 350px",height:600}}>
-      <MapView 
-        doctors={filteredDoctors} 
-        userLocation={userLocation} 
-        selectedDoctorId={selectedDoctorId} 
-        onDoctorSelect={d => setSelectedDoctorId(d.id)}
-        nearestDoctorId={nearestDoctor?.id}  // ← AJOUTER CETTE LIGNE
-      />
-      <div className="pd3-map-sidebar">
-        <div className="pd3-map-sidebar-header">
-          <span>Médecins à proximité</span>
-          <span style={{fontSize:"0.7rem",color:"var(--txt3)"}}>
-            {filteredDoctors.length} résultat{filteredDoctors.length>1?"s":""}
-          </span>
-        </div>
-        <div className="pd3-map-sidebar-list" style={{maxHeight:540,overflowY:"auto"}}>
-          {filteredDoctors.length === 0 ? (
-            <div style={{padding:"40px 20px",textAlign:"center",color:"var(--txt3)"}}>
-              <I.Map size={32} color="var(--txt3)"/>
-              <p style={{marginTop:12}}>Aucun médecin trouvé</p>
-              <p style={{fontSize:"0.7rem"}}>Essayez de modifier vos filtres</p>
-            </div>
-          ) : (
-            filteredDoctors.map((d, idx) => {
-              // ↓↓↓ AJOUTER CETTE LIGNE ↓↓↓
-              const isNearestDoctor = nearestDoctor && d.id === nearestDoctor.id;
-              // ↑↑↑ AJOUTER CETTE LIGNE ↑↑↑
-              
-              return (
-                <motion.div
-                  key={d.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  // ↓↓↓ MODIFIER LE className ↓↓↓
-                  className={`pd3-map-sidebar-item ${selectedDoctorId === d.id ? "active" : ""} ${isNearestDoctor ? "nearest" : ""}`}
-                  // ↑↑↑ MODIFIER LE className ↑↑↑
-                  onClick={() => setSelectedDoctorId(d.id)}
-                  // ↓↓↓ MODIFIER LE style ↓↓↓
-                  style={{
-                    cursor: "pointer",
-                    padding: "14px 18px",
-                    borderBottom: "1px solid var(--border)",
-                    transition: "all 0.2s",
-                    background: isNearestDoctor ? "rgba(16,185,129,0.08)" : "transparent",
-                    borderLeft: isNearestDoctor ? "3px solid #10B981" : "3px solid transparent",
-                  }}
-                  // ↑↑↑ MODIFIER LE style ↑↑↑
-                >
-                  <div className="pd3-map-sidebar-item-name" style={{fontWeight:700,color:"var(--navy)",marginBottom:4}}>
-                    {d.name}
+              {doctorsLoading ? (
+                <div className="pd3-api-loading"><div className="pd3-api-spinner"/><span style={{color:"var(--txt3)"}}>Chargement des médecins...</span></div>
+              ) : mapView === "map" ? (
+                <div className="pd3-map-full-container" style={{overflow:"hidden",marginBottom:32,borderRadius:"var(--radius-xl)",border:"1px solid var(--border)"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 350px",height:600}}>
+                    <MapView 
+                      doctors={filteredDoctors} 
+                      userLocation={userLocation} 
+                      selectedDoctorId={selectedDoctorId} 
+                      onDoctorSelect={d => setSelectedDoctorId(d.id)}
+                      nearestDoctorId={nearestDoctor?.id}
+                    />
+                    <div className="pd3-map-sidebar">
+                      <div className="pd3-map-sidebar-header">
+                        <span>Médecins à proximité</span>
+                        <span style={{fontSize:"0.7rem",color:"var(--txt3)"}}>
+                          {filteredDoctors.length} résultat{filteredDoctors.length>1?"s":""}
+                        </span>
+                      </div>
+                      <div className="pd3-map-sidebar-list" style={{maxHeight:540,overflowY:"auto"}}>
+                        {filteredDoctors.length === 0 ? (
+                          <div style={{padding:"40px 20px",textAlign:"center",color:"var(--txt3)"}}>
+                            <I.Map size={32} color="var(--txt3)"/>
+                            <p style={{marginTop:12}}>Aucun médecin trouvé</p>
+                            <p style={{fontSize:"0.7rem"}}>Essayez de modifier vos filtres</p>
+                          </div>
+                        ) : (
+                          filteredDoctors.map((d, idx) => {
+                            const isNearestDoctor = nearestDoctor && d.id === nearestDoctor.id;
+                            return (
+                              <motion.div
+                                key={d.id}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: idx * 0.03 }}
+                                className={`pd3-map-sidebar-item ${selectedDoctorId === d.id ? "active" : ""} ${isNearestDoctor ? "nearest" : ""}`}
+                                onClick={() => setSelectedDoctorId(d.id)}
+                                style={{
+                                  cursor: "pointer",
+                                  padding: "14px 18px",
+                                  borderBottom: "1px solid var(--border)",
+                                  transition: "all 0.2s",
+                                  background: isNearestDoctor ? "rgba(16,185,129,0.08)" : "transparent",
+                                  borderLeft: isNearestDoctor ? "3px solid #10B981" : "3px solid transparent",
+                                }}
+                              >
+                                <div className="pd3-map-sidebar-item-name" style={{fontWeight:700,color:"var(--navy)",marginBottom:4}}>
+                                  {d.name}
+                                </div>
+                                <div className="pd3-map-sidebar-item-specialty" style={{fontSize:"0.72rem",color:"var(--gold-dk)",fontWeight:600,marginBottom:6}}>
+                                  {d.specialite}
+                                </div>
+                                {d.ville && (
+                                  <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginBottom:4}}>
+                                    <I.Map size={11} color="var(--txt3)"/> {d.ville}
+                                  </div>
+                                )}
+                                {d.distance !== null && (
+                                  <div className={`pd3-map-sidebar-item-distance ${isNearestDoctor ? "nearest" : ""}`} style={{fontSize:"0.7rem",color:"var(--success)",fontWeight:700,marginTop:6,display:"flex",alignItems:"center",gap:4}}>
+                                    <I.Navigation size={11} color="var(--success)"/> {d.distance} km
+                                  </div>
+                                )}
+                                {d.phones?.[0] && (
+                                  <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginTop:6}}>
+                                    <I.Phone size={11} color="var(--txt3)"/> {d.phones[0]}
+                                  </div>
+                                )}
+                                {d.address && (
+                                  <div className="pd3-map-sidebar-item-address" style={{fontSize:"0.65rem",color:"var(--txt3)",marginTop:4}}>
+                                    {d.address.length > 60 ? d.address.substring(0,60)+"..." : d.address}
+                                  </div>
+                                )}
+                                {isNearestDoctor && (
+                                  <div style={{
+                                    marginTop: 8,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    background: "#10B98115",
+                                    color: "#10B981",
+                                    fontSize: "0.6rem",
+                                    fontWeight: 700,
+                                    padding: "3px 10px",
+                                    borderRadius: 20,
+                                    width: "fit-content",
+                                  }}>
+                                    <I.Navigation size={10} color="#10B981"/> Le plus proche de vous
+                                  </div>
+                                )}
+                              </motion.div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="pd3-map-sidebar-item-specialty" style={{fontSize:"0.72rem",color:"var(--gold-dk)",fontWeight:600,marginBottom:6}}>
-                    {d.specialite}
-                  </div>
-                  {d.ville && (
-                    <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginBottom:4}}>
-                      <I.Map size={11} color="var(--txt3)"/> {d.ville}
-                    </div>
-                  )}
-                  {d.distance !== null && (
-                    <div className={`pd3-map-sidebar-item-distance ${isNearestDoctor ? "nearest" : ""}`} style={{fontSize:"0.7rem",color:"var(--success)",fontWeight:700,marginTop:6,display:"flex",alignItems:"center",gap:4}}>
-                      <I.Navigation size={11} color="var(--success)"/> {d.distance} km
-                    </div>
-                  )}
-                  {d.phones?.[0] && (
-                    <div className="pd3-map-sidebar-item-address" style={{display:"flex",alignItems:"center",gap:6,fontSize:"0.7rem",color:"var(--txt3)",marginTop:6}}>
-                      <I.Phone size={11} color="var(--txt3)"/> {d.phones[0]}
-                    </div>
-                  )}
-                  {d.address && (
-                    <div className="pd3-map-sidebar-item-address" style={{fontSize:"0.65rem",color:"var(--txt3)",marginTop:4}}>
-                      {d.address.length > 60 ? d.address.substring(0,60)+"..." : d.address}
-                    </div>
-                  )}
-                  
-                  {/* ↓↓↓ AJOUTER CETTE SECTION POUR LE BADGE "PLUS PROCHE" ↓↓↓ */}
-                  {isNearestDoctor && (
-                    <div style={{
-                      marginTop: 8,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      background: "#10B98115",
-                      color: "#10B981",
-                      fontSize: "0.6rem",
-                      fontWeight: 700,
-                      padding: "3px 10px",
-                      borderRadius: 20,
-                      width: "fit-content",
-                    }}>
-                      <I.Navigation size={10} color="#10B981"/> Le plus proche de vous
-                    </div>
-                  )}
-                  {/* ↑↑↑ AJOUTER CETTE SECTION ↑↑↑ */}
-                  
-                </motion.div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-) : (
-  // Vue liste
-  <div className="pd3-doctors-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))",gap:16}}>
-    {filteredDoctors.map(d => {
-      // ↓↓↓ AJOUTER CETTE LIGNE ↓↓↓
-      const isNearest = nearestDoctor && d.id === nearestDoctor.id;
-      // ↑↑↑ AJOUTER CETTE LIGNE ↑↑↑
-      
-      return (
-        <DoctorCardAPI 
-          key={d.id} 
-          doctor={d} 
-          distance={d.distance} 
-          isNearest={isNearest}  // ← AJOUTER CETTE PROP
-          onClick={() => {setSelectedDoctorId(d.id);setMapView("map");}}
-        />
-      );
-    })}
-  </div>
-)}
+                </div>
+              ) : (
+                <div className="pd3-doctors-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))",gap:16}}>
+                  {filteredDoctors.map(d => {
+                    const isNearest = nearestDoctor && d.id === nearestDoctor.id;
+                    return (
+                      <DoctorCardAPI 
+                        key={d.id} 
+                        doctor={d} 
+                        distance={d.distance} 
+                        isNearest={isNearest}
+                        onClick={() => {setSelectedDoctorId(d.id);setMapView("map");}}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -1192,9 +1917,9 @@ const nearestDoctor = useMemo(() => {
             <motion.div key="dossiers" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
               <Reveal>
                 <div className="pd3-section-header">
-                  <div className="pd3-section-badge"><I.Folder size={12}/> DOSSIERS MÉDICAUX</div>
+                  <div className="pd3-section-badge"><I.Folder size={12}/> DOSSIERS MEDICAUX</div>
                   <h2 className="pd3-section-title">Historique <span className="accent">complet</span></h2>
-                  <p className="pd3-section-sub">Consultez et suivez tous vos dossiers médicaux</p>
+                  <p className="pd3-section-sub">Consultez et suivez tous vos dossiers medicaux</p>
                 </div>
               </Reveal>
               <Reveal>
@@ -1205,13 +1930,13 @@ const nearestDoctor = useMemo(() => {
               </Reveal>
               <div className="pd3-consult-list">
                 {(consultations || []).length === 0 ? (
-                  <div className="pd3-empty"><div className="pd3-empty-icon"><I.Folder size={36} color="#D4A500"/></div><div className="pd3-empty-title">Aucun dossier</div><div className="pd3-empty-desc">Créez votre premier dossier</div><button className="pd3-btn pd3-btn-gold" onClick={()=>navigate("/patient/consultation/new")}><I.Upload size={16}/> Premier dossier</button></div>
+                  <div className="pd3-empty"><div className="pd3-empty-icon"><I.Folder size={36} color="#D4A500"/></div><div className="pd3-empty-title">Aucun dossier</div><div className="pd3-empty-desc">Creez votre premier dossier</div><button className="pd3-btn pd3-btn-gold" onClick={()=>navigate("/patient/consultation/new")}><I.Upload size={16}/> Premier dossier</button></div>
                 ) : (consultations || []).map(c => <ConsultationCard key={c.id} consultation={c} onClick={()=>navigate(`/patient/consultation/${c.id}`)}/>)}
               </div>
             </motion.div>
           )}
 
-          {/* APPOINTMENTS TAB */}
+          {/* APPOINTMENTS TAB - VERSION CORRIGÉE */}
           {activeTab === "appointments" && (
             <motion.div key="appointments" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
               <Reveal>
@@ -1221,31 +1946,65 @@ const nearestDoctor = useMemo(() => {
                   <p className="pd3-section-sub">Planifiez et gérez vos rendez-vous médicaux</p>
                 </div>
               </Reveal>
+              
               <div className="pd3-appt-grid">
                 <div>
-                  <Reveal><div className="pd3-section-row"><span className="pd3-section-row-title"><I.Calendar size={16} color="#D4A500"/> Prochains rendez-vous</span></div></Reveal>
-                  <div className="pd3-appt-list">
-                    <div className="pd3-empty"><div className="pd3-empty-icon"><I.Calendar size={32} color="#D4A500"/></div><div className="pd3-empty-title">Aucun rendez-vous</div><div className="pd3-empty-desc">Planifiez votre première consultation</div></div>
-                  </div>
-                  <Reveal delay={.2}>
-                    <button className="pd3-btn pd3-btn-gold" style={{marginTop:16,width:"100%"}} onClick={()=>navigate("/patient/appointments")}>
-                      <I.Calendar size={16}/> Planifier un rendez-vous
-                    </button>
-                  </Reveal>
+                  <AppointmentsList 
+                    appointments={appointments}
+                    loading={appointmentsLoading}
+                    onRefresh={fetchAppointments}
+                  />
                 </div>
                 <Reveal delay={.1}>
                   <div className="pd3-calendar">
-                    <div className="pd3-calendar-header"><span className="pd3-calendar-title">Janvier 2025</span><div className="pd3-calendar-nav"><button className="pd3-cal-nav-btn"><I.ChevronLeft size={14}/></button><button className="pd3-cal-nav-btn"><I.ChevronRight size={14}/></button></div></div>
-                    <div className="pd3-calendar-days">{["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=><span key={d}>{d}</span>)}</div>
+                    <div className="pd3-calendar-header">
+                      <span className="pd3-calendar-title">
+                        {new Date().toLocaleString("fr-FR", { month: "long", year: "numeric" })}
+                      </span>
+                      <div className="pd3-calendar-nav">
+                        <button className="pd3-cal-nav-btn" onClick={() => {}}><I.ChevronLeft size={14}/></button>
+                        <button className="pd3-cal-nav-btn" onClick={() => {}}><I.ChevronRight size={14}/></button>
+                      </div>
+                    </div>
+                    <div className="pd3-calendar-days">
+                      {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d => <span key={d}>{d}</span>)}
+                    </div>
                     <div className="pd3-calendar-grid">
-                      {Array.from({length:31},(_,i)=>{const day=i+1,hasAppt=[5,7].includes(day),isToday=day===2;return<motion.div key={i} className={`pd3-cal-day ${isToday?"today":""} ${hasAppt?"has-appt":""}`} whileHover={{scale:1.1}}>{day}{hasAppt&&<div className="pd3-cal-dot"/>}</motion.div>;})}
+                      {Array.from({length: 35}, (_, i) => {
+                        const day = i + 1;
+                        const hasAppt = appointments.some(apt => {
+                          if (!apt.scheduled_at) return false;
+                          const aptDate = new Date(apt.scheduled_at);
+                          return aptDate.getDate() === day && aptDate.getMonth() === new Date().getMonth() && apt.status !== "cancelled";
+                        });
+                        const isToday = day === new Date().getDate();
+                        return (
+                          <motion.div 
+                            key={i} 
+                            className={`pd3-cal-day ${isToday ? "today" : ""} ${hasAppt ? "has-appt" : ""}`} 
+                            whileHover={{ scale: 1.05 }}
+                          >
+                            {day <= 31 ? day : day - 31}
+                            {hasAppt && day <= 31 && <div className="pd3-cal-dot"/>}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                    <div className="pd3-calendar-footer" style={{ marginTop: 16, textAlign: "center" }}>
+                      <button 
+                        className="pd3-btn pd3-btn-gold pd3-btn-sm" 
+                        onClick={() => navigate("/patient/consultation/new")}
+                        style={{ width: "100%" }}
+                      >
+                        <I.Upload size={14}/> Demander une consultation
+                      </button>
                     </div>
                   </div>
                 </Reveal>
               </div>
             </motion.div>
           )}
-
+          
           {/* HEALTH TAB */}
           {activeTab === "health" && (
             <motion.div key="health" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
@@ -1320,7 +2079,7 @@ const nearestDoctor = useMemo(() => {
           </section>
         </Reveal>
 
-        {/* ========== FOOTER PREMIUM (IDENTIQUE À HOMEPAGE) ========== */}
+        {/* FOOTER */}
         <footer className="hp-footer">
           <div className="hp-footer-inner">
             <div className="hp-footer-grid">
