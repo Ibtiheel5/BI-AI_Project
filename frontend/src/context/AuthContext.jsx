@@ -380,38 +380,42 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ── Register ──────────────────────────────────────────────────
-  const register = useCallback(async ({
-    username,
-    password,
-    fullName,
-    domains,
-    specialty,
-    role = "Medecin"
-  }) => {
-    console.log("📝 Inscription:", username, role);
-    
-    const online = await isBackendOnline();
-    
-    if (!online) {
-      throw new Error(
-        "Le serveur backend n'est pas accessible. " +
-        "Veuillez démarrer le serveur avec:\n" +
-        "uvicorn main:app --port 8000 --reload"
-      );
-    }
+ // Dans AuthContext.jsx - modifiez la fonction register
 
-    return authFetch("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({
-        username,
-        password,
-        full_name: fullName,
-        domains,
-        specialty: specialty || "",
-        role,
-      }),
-    });
-  }, []);
+const register = useCallback(async ({
+  username,
+  email,      // <-- AJOUTEZ email ici
+  password,
+  fullName,
+  domains,
+  specialty,
+  role = "Medecin"
+}) => {
+  console.log("📝 Inscription:", username, email, role);
+  
+  const online = await isBackendOnline();
+  
+  if (!online) {
+    throw new Error(
+      "Le serveur backend n'est pas accessible. " +
+      "Veuillez démarrer le serveur avec:\n" +
+      "uvicorn main:app --port 8000 --reload"
+    );
+  }
+
+  return authFetch("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      email,      // <-- AJOUTEZ email ici
+      password,
+      full_name: fullName,
+      domains,
+      specialty: specialty || "",
+      role,
+    }),
+  });
+}, []);
 
   // ── Admin helpers ──────────────────────────────────────────────
   const getAllUsers = useCallback(async () => {
@@ -423,12 +427,31 @@ export function AuthProvider({ children }) {
     return users.map(normalizeUser);
   }, []);
 
-  const getPendingUsers = useCallback(async () => {
-    const token = getToken();
-    if (!token || token === "local-token") return [];
-    const users = await authFetch("/auth/pending");
+  // Dans AuthContext.jsx
+// Dans AuthContext.jsx - remplacez getPendingUsers par :
+const getPendingUsers = useCallback(async () => {
+  const token = getToken();
+  if (!token || token === "local-token") return [];
+  
+  try {
+    const response = await fetch(`${API_BASE}/auth/pending`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("❌ Erreur API /pending:", response.status, errorData);
+      return [];
+    }
+    
+    const users = await response.json();
+    console.log("✅ Pending users reçus:", users.length, users);
     return users.map(normalizeUser);
-  }, []);
+  } catch (error) {
+    console.error("❌ Erreur getPendingUsers:", error);
+    return [];
+  }
+}, []);
 
   const approveUser = useCallback((userId) =>
     authFetch("/auth/approve", {

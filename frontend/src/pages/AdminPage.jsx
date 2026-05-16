@@ -1,817 +1,2600 @@
-// src/pages/AdminPage.jsx - Version Ultra-Complete avec Dashboard Analytics
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+// src/pages/AdminPage.jsx - Dashboard Administrateur complet avec API réelles
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence, useScroll, useTransform, useSpring } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from "recharts";
+import { format, subDays, subMonths } from "date-fns";
+import { fr } from "date-fns/locale";
 import "./HomePage.css";
-import chestXrayImage from '../assets/chest-xray.jpg';
 
-// ═══════════════════════════════════════════════════════════════════
-// SVG ICONS PROFESSIONNELS
-// ═══════════════════════════════════════════════════════════════════
+const API_BASE = "http://localhost:8000/api/v1";
 
-const SvgIcon = ({ children, size = 20, color = "currentColor", strokeWidth = 1.8 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    {children}
+// ========== SVG ICONS ==========
+const DashboardIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="7" height="7"/>
+    <rect x="14" y="3" width="7" height="7"/>
+    <rect x="14" y="14" width="7" height="7"/>
+    <rect x="3" y="14" width="7" height="7"/>
   </svg>
 );
 
-const Icons = {
-  // Navigation
-  ArrowLeft: (p) => <SvgIcon {...p}><path d="M19 12H5M12 19l-7-7 7-7"/></SvgIcon>,
-  ArrowRight: (p) => <SvgIcon {...p}><path d="M5 12h14M12 5l7 7-7 7"/></SvgIcon>,
-  ChevronRight: (p) => <SvgIcon {...p}><polyline points="9 18 15 12 9 6"/></SvgIcon>,
-  ChevronLeft: (p) => <SvgIcon {...p}><polyline points="15 18 9 12 15 6"/></SvgIcon>,
-  ChevronDown: (p) => <SvgIcon {...p}><polyline points="6 9 12 15 18 9"/></SvgIcon>,
-  ChevronUp: (p) => <SvgIcon {...p}><polyline points="18 15 12 9 6 15"/></SvgIcon>,
-  Menu: (p) => <SvgIcon {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></SvgIcon>,
-  Folder: (p) => <SvgIcon {...p}><path d="M21.5 18.5a1.8 1.8 0 0 1-1.8 1.8H4.3a1.8 1.8 0 0 1-1.8-1.8V5.5a1.8 1.8 0 0 1 1.8-1.8h5l2 2.8h7.2a1.8 1.8 0 0 1 1.8 1.8z"/></SvgIcon>,
-  // Status
-  CheckCircle: (p) => <SvgIcon {...p} strokeWidth={2.5}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></SvgIcon>,
-  AlertCircle: (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.5" fill={p.color}/></SvgIcon>,
-  AlertTriangle: (p) => <SvgIcon {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></SvgIcon>,
-  Clock: (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></SvgIcon>,
-  UserCheck: (p) => <SvgIcon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></SvgIcon>,
-  UserX: (p) => <SvgIcon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="21" y2="12"/><line x1="21" y1="8" x2="17" y2="12"/></SvgIcon>,
-  User: (p) => <SvgIcon {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></SvgIcon>,
-  Users: (p) => <SvgIcon {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></SvgIcon>,
-  Shield: (p) => <SvgIcon {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></SvgIcon>,
-  Activity: (p) => <SvgIcon {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></SvgIcon>,
-  TrendingUp: (p) => <SvgIcon {...p}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></SvgIcon>,
-  TrendingDown: (p) => <SvgIcon {...p}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></SvgIcon>,
-  
-  // Actions
-  Trash2: (p) => <SvgIcon {...p}><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></SvgIcon>,
-  RefreshCw: (p) => <SvgIcon {...p}><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></SvgIcon>,
-  Search: (p) => <SvgIcon {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></SvgIcon>,
-  Filter: (p) => <SvgIcon {...p}><polygon points="22 3 2 3 10 13 10 21 14 18 14 13 22 3"/></SvgIcon>,
-  Download: (p) => <SvgIcon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></SvgIcon>,
-  Upload: (p) => <SvgIcon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></SvgIcon>,
-  
-  // Medical Equipment
-  Lungs: (p) => <SvgIcon {...p}><path d="M12 4.5v11M8.5 8c-1.8 0-3.5.8-3.5 3.5s1 6 4 6M15.5 8c1.8 0 3.5.8 3.5 3.5s-1 6-4 6M8.5 8c1.2 0 2.5.8 3.5 2M15.5 8c-1.2 0-2.5.8-3.5 2"/></SvgIcon>,
-  Brain: (p) => <SvgIcon {...p}><path d="M12 4a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.5V14a2 2 0 0 1-4 0v-2.5c-1.2-.7-2-2-2-3.5a4 4 0 0 1 4-4z"/><path d="M12 4v16"/><path d="M8 12.5c-1.2.7-2 2-2 3.5a4 4 0 0 0 8 0c0-1.5-.8-2.8-2-3.5"/></SvgIcon>,
-  Scan: (p) => <SvgIcon {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/><circle cx="12" cy="12" r="2"/></SvgIcon>,
-  Stethoscope: (p) => <SvgIcon {...p}><path d="M4.5 12.5a7.5 7.5 0 1 1 15 0"/><path d="M12 5v10"/><circle cx="12" cy="18" r="3"/></SvgIcon>,
-  Heart: (p) => <SvgIcon {...p}><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></SvgIcon>,
-  Activity: (p) => <SvgIcon {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></SvgIcon>,
-  
-  // UI Elements
-  LogOut: (p) => <SvgIcon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></SvgIcon>,
-  Settings: (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></SvgIcon>,
-  
-  // Animated spinner
-  Loader: (p) => <SvgIcon {...p} className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></SvgIcon>,
-};
-
-// ═══════════════════════════════════════════════════════════════════
-// CONFIGURATIONS
-// ═══════════════════════════════════════════════════════════════════
-
-const DOMAIN_CONFIG = {
-  chest: { label: "Radiologie Thoracique", icon: <Icons.Lungs size={14} />, color: "#2D5F9E", bg: "rgba(45,95,158,0.1)" },
-  brain: { label: "Neurologie", icon: <Icons.Brain size={14} />, color: "#6B4FA0", bg: "rgba(107,79,160,0.1)" },
-  lung:  { label: "Cancer Pulmonaire", icon: <Icons.Scan size={14} />, color: "#D62828", bg: "rgba(214,40,40,0.1)" },
-  retina: { label: "Ophtalmologie", icon: <Icons.Activity size={14} />, color: "#0E7490", bg: "rgba(14,116,144,0.1)" },
-};
-
-const STATUS_CONFIG = {
-  pending:  { label: "En attente", icon: Icons.Clock, color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A", priority: 1 },
-  approved: { label: "Approuvé",   icon: Icons.CheckCircle, color: "#10B981", bg: "#ECFDF5", border: "#A7F3D0", priority: 2 },
-  rejected: { label: "Refusé",     icon: Icons.AlertCircle, color: "#EF4444", bg: "#FEF2F2", border: "#FECACA", priority: 3 },
-};
-
-// ═══════════════════════════════════════════════════════════════════
-// COMPOSANTS RÉUTILISABLES
-// ═══════════════════════════════════════════════════════════════════
-
-const Reveal = ({ children, delay = 0, direction = "up" }) => {
-  const variants = {
-    up: { initial: { opacity: 0, y: 35 }, animate: { opacity: 1, y: 0 } },
-    left: { initial: { opacity: 0, x: -35 }, animate: { opacity: 1, x: 0 } },
-    right: { initial: { opacity: 0, x: 35 }, animate: { opacity: 1, x: 0 } },
-    scale: { initial: { opacity: 0, scale: 0.9 }, animate: { opacity: 1, scale: 1 } },
-  };
-  return (
-    <motion.div
-      initial={variants[direction].initial}
-      whileInView={variants[direction].animate}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 0.61, 0.36, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
-};
-
-const Particles = () => {
-  const particles = useMemo(() => Array.from({ length: 45 }, (_, i) => ({
-    id: i, left: `${Math.random() * 100}%`, width: `${Math.random() * 3 + 1}px`,
-    height: `${Math.random() * 3 + 1}px`, duration: `${Math.random() * 14 + 8}s`,
-    delay: `${Math.random() * 8}s`, bottom: `-${Math.random() * 40}px`,
-    glow: i % 4 === 0
-  })), []);
-  return (
-    <div className="pd3-hero-particles" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-      {particles.map(p => (
-        <motion.div
-          key={p.id}
-          className="pd3-particle"
-          style={{
-            left: p.left, width: p.width, height: p.height,
-            animationDuration: p.duration, animationDelay: p.delay,
-            bottom: p.bottom, boxShadow: p.glow ? '0 0 12px rgba(255,215,0,0.7)' : 'none'
-          }}
-          animate={{ opacity: [0, 0.6, 0.3, 0] }}
-          transition={{ repeat: Infinity, duration: p.duration, delay: p.delay }}
-        />
-      ))}
-    </div>
-  );
-};
-
-const PulseDot = ({ color = "#10B981" }) => (
-  <span style={{ position: "relative", display: "inline-flex" }}>
-    <span style={{ display: "flex", width: 8, height: 8, borderRadius: "50%", background: color }} />
-    <span style={{ position: "absolute", inset: -4, borderRadius: "50%", background: `${color}40`, animation: "pulse 1.5s infinite" }} />
-  </span>
+const UsersIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
 );
 
-const MiniChart = () => {
-  const bars = [35, 55, 40, 70, 45, 65, 80, 50, 75, 60, 85, 55, 70, 90, 65, 50, 75, 60, 80, 55];
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 60, marginBottom: 16 }}>
-      {bars.map((h, i) => (
-        <motion.div
-          key={i}
-          className="pd3-chart-bar"
-          style={{ height: `${h * 0.6}%`, flex: 1, background: i >= 14 ? "linear-gradient(180deg, var(--gold-bright), rgba(232,184,48,0.4))" : "linear-gradient(180deg, rgba(232,184,48,0.5), rgba(232,184,48,0.1))", borderRadius: "4px 4px 0 0" }}
-          initial={{ height: 0 }}
-          animate={{ height: `${h * 0.6}%` }}
-          transition={{ delay: 0.6 + i * 0.02, duration: 0.5 }}
-        />
-      ))}
-    </div>
-  );
-};
+const MessagesIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+);
 
-// ═══════════════════════════════════════════════════════════════════
-// COMPOSANT PRINCIPAL
-// ═══════════════════════════════════════════════════════════════════
+const AnalyticsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 12v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4v-3"/>
+    <path d="M12 2v8"/>
+    <path d="m8 6 4-4 4 4"/>
+    <path d="M2 18h20"/>
+  </svg>
+);
 
+const ExportIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+);
+
+const SettingsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
+
+const LogsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <polyline points="10 9 9 9 8 9"/>
+  </svg>
+);
+
+const WebhookIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M18 10a3 3 0 0 0-3-3h-2a3 3 0 0 0-3 3"/>
+    <path d="M18 14a3 3 0 0 0-3 3h-2a3 3 0 0 0-3-3"/>
+    <circle cx="12" cy="10" r="2"/>
+    <circle cx="12" cy="14" r="2"/>
+    <path d="M5 3a2 2 0 0 0-2 2"/>
+    <path d="M19 3a2 2 0 0 1 2 2"/>
+    <path d="M5 21a2 2 0 0 1-2-2"/>
+    <path d="M19 21a2 2 0 0 0 2-2"/>
+  </svg>
+);
+
+const BackupIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z"/>
+    <polyline points="7 11 7 7 12 2 17 7 17 11"/>
+  </svg>
+);
+
+const MailIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="2" y="4" width="20" height="16" rx="2"/>
+    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+  </svg>
+);
+
+const FilterIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polygon points="22 3 2 3 10 13 10 21 14 18 14 13 22 3"/>
+  </svg>
+);
+
+const CheckboxCheckedIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+const CheckboxUncheckedIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+  </svg>
+);
+
+const DoctorIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M5 20v-2a7 7 0 0 1 14 0v2"/>
+    <rect x="9" y="12" width="6" height="6"/>
+  </svg>
+);
+
+const PatientIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M5 20v-2a7 7 0 0 1 14 0v2"/>
+    <path d="M12 12v6"/>
+    <path d="M9 15h6"/>
+  </svg>
+);
+
+const ConsultationIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <circle cx="12" cy="15" r="1"/>
+    <circle cx="16" cy="15" r="1"/>
+    <circle cx="8" cy="15" r="1"/>
+  </svg>
+);
+
+const CalendarIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+
+const TimeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M23 4v6h-6"/>
+    <path d="M1 20v-6h6"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+    <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+);
+
+const HomeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-5v-8H7v8H5a2 2 0 0 1-2-2z"/>
+  </svg>
+);
+
+const LogoutIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+
+const BellIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+);
+
+// ========== COULEURS POUR GRAPHIQUES ==========
+const COLORS = ["#0A2647", "#1B3B6F", "#2563EB", "#3B82F6", "#60A5FA", "#FFD700", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"];
+
+// ========== COMPOSANT PRINCIPAL ==========
 export default function AdminPage() {
-  const { isAdmin, getAllUsers, approveUser, rejectUser, deleteUser, logout } = useAuth();
+  const { isAdmin, getAllUsers, getPendingUsers, approveUser, rejectUser, deleteUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [users, setUsers] = useState([]);
-  const [filter, setFilter] = useState("pending");
-  const [activeDashboardTab, setActiveDashboardTab] = useState("overview");
+  // États principaux
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [allUsers, setAllUsers] = useState([]);
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [consultations, setConsultations] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [adminLogs, setAdminLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
-  const [loadingId, setLoadingId] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [filter, setFilter] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const profileMenuRef = useRef(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  
+  // États pour recherche avancée
+  const [advancedFilters, setAdvancedFilters] = useState({
+    role: "all",
+    domain: "all",
+    status: "all"
+  });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
+  // États pour bulk actions
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+  
+  // États pour modals
+  const [showSMTPModal, setShowSMTPModal] = useState(false);
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  
+  // États pour SMTP
+  const [smtpConfig, setSmtpConfig] = useState({
+    host: "smtp.gmail.com",
+    port: "587",
+    user: "",
+    password: "",
+    from: "",
+    useTLS: true
+  });
+  const [testingSMTP, setTestingSMTP] = useState(false);
+  
+  // États pour Webhook
+  const [webhooks, setWebhooks] = useState([]);
+  const [newWebhook, setNewWebhook] = useState({ name: "", url: "", events: ["all"], active: true });
+  const [webhookLoading, setWebhookLoading] = useState(false);
+  
+  // États pour backup
+  const [backupHistory, setBackupHistory] = useState([]);
+  const [backupInProgress, setBackupInProgress] = useState(false);
 
-  const { scrollYProgress } = useScroll();
-  const heroY = useTransform(scrollYProgress, [0, 0.25], [0, -50]);
-  const sY = useSpring(heroY, { stiffness: 80, damping: 25 });
+  const token = localStorage.getItem("medai-token");
 
-  // Statistiques simulées (à remplacer par données réelles de l'API)
-  const analyticsData = {
-    criticalAlerts: 3,
-    urgentCases: 7,
-    totalConsultations: 124,
-    monthlyGrowth: 18,
-    averageResponseTime: 2.4,
-    satisfactionRate: 98.5,
-    pendingReviews: 12,
-    completedAnalyses: 89,
-    activeDoctors: 8,
-    activePatients: 156,
-  };
-
-  const recentActivities = [
-    { id: 1, type: "new_user", user: "Dr. Karim Benali", action: "a demandé un accès", time: "Il y a 5 min", status: "pending", icon: Icons.User, color: "#3B82F6" },
-    { id: 2, type: "analysis", user: "Patient Ahmed", action: "a soumis une radiographie", time: "Il y a 12 min", status: "completed", icon: Icons.Scan, color: "#10B981" },
-    { id: 3, type: "urgent", user: "Patient Fatima", action: "Nouveau cas critique", time: "Il y a 23 min", urgency: "critical", icon: Icons.AlertTriangle, color: "#EF4444" },
-    { id: 4, type: "approval", user: "Dr. Nadia Seddik", action: "a été approuvé", time: "Il y a 1 heure", status: "approved", icon: Icons.UserCheck, color: "#059669" },
-    { id: 5, type: "analysis", user: "Patient Mohamed", action: "analyse terminée", time: "Il y a 2 heures", status: "completed", icon: Icons.Activity, color: "#8B5CF6" },
-  ];
-
-  const urgentCasesList = [
-    { id: 1, patient: "Fatima Ben Ali", condition: "Pneumothorax suspect", doctor: "Dr. Sophie Martin", time: "23 min", severity: "critical", consultationId: 42 },
-    { id: 2, patient: "Mohamed Kallel", condition: "Masse pulmonaire", doctor: "Dr. Karim Benali", time: "1 heure", severity: "urgent", consultationId: 38 },
-    { id: 3, patient: "Leila Trabelsi", condition: "Cardiomégalie sévère", doctor: "Dr. Samir Ben Salah", time: "2 heures", severity: "urgent", consultationId: 35 },
-  ];
-
-  useEffect(() => {
-    if (!isAdmin) navigate("/");
-  }, [isAdmin, navigate]);
-
+  // Effet scroll
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Vérification admin
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
-        setShowProfileMenu(false);
+    if (!isAdmin) navigate("/");
+  }, [isAdmin, navigate]);
+
+  // ========== APPELS API RÉELS ==========
+
+  // Récupérer les logs système
+  const fetchSystemLogs = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/logs?limit=100`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAdminLogs(data.logs || []);
+      } else {
+        console.error("Erreur chargement logs:", response.status);
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    } catch (error) {
+      console.error("Erreur:", error);
+    }
+  };
+
+  // Récupérer les webhooks
+  const fetchWebhooks = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/webhooks`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWebhooks(data.webhooks || []);
+      }
+    } catch (error) {
+      console.error("Erreur chargement webhooks:", error);
+    }
+  };
+
+  // Créer un webhook
+  const createWebhook = async (webhookData) => {
+    setWebhookLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/admin/webhooks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: webhookData.name,
+          url: webhookData.url,
+          events: webhookData.events,
+          is_active: webhookData.active
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        showToast(data.message || "Webhook créé avec succès", "success");
+        fetchWebhooks();
+        setNewWebhook({ name: "", url: "", events: ["all"], active: true });
+      } else {
+        const error = await response.json();
+        showToast(error.detail || "Erreur lors de la création", "error");
+      }
+    } catch (error) {
+      showToast("Erreur réseau", "error");
+    } finally {
+      setWebhookLoading(false);
+    }
+  };
+
+  // Supprimer un webhook
+  const deleteWebhook = async (id, name) => {
+    if (!window.confirm(`Supprimer le webhook "${name}" ?`)) return;
+    try {
+      const response = await fetch(`${API_BASE}/admin/webhooks/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        showToast("Webhook supprimé", "success");
+        fetchWebhooks();
+      }
+    } catch (error) {
+      showToast("Erreur", "error");
+    }
+  };
+
+  // Activer/Désactiver un webhook
+  const toggleWebhook = async (id, currentStatus, name) => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/webhooks/${id}/toggle`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        showToast(`Webhook ${data.is_active ? "activé" : "désactivé"}`, "success");
+        fetchWebhooks();
+      }
+    } catch (error) {
+      showToast("Erreur", "error");
+    }
+  };
+
+  // Récupérer la configuration SMTP
+  const fetchSMTPConfig = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/smtp-config`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSmtpConfig({
+          host: data.host || "smtp.gmail.com",
+          port: data.port || 587,
+          user: data.user || "",
+          password: "",
+          from: data.from_email || "",
+          useTLS: data.use_tls !== false
+        });
+      }
+    } catch (error) {
+      console.error("Erreur chargement SMTP:", error);
+    }
+  };
+
+  // Sauvegarder la configuration SMTP
+  const saveSMTPConfig = async (config) => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/smtp-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          host: config.host,
+          port: parseInt(config.port),
+          user: config.user,
+          password: config.password,
+          from_email: config.from,
+          use_tls: config.useTLS
+        })
+      });
+      if (response.ok) {
+        showToast("Configuration SMTP sauvegardée", "success");
+        setShowSMTPModal(false);
+      } else {
+        const error = await response.json();
+        showToast(error.detail || "Erreur", "error");
+      }
+    } catch (error) {
+      showToast("Erreur réseau", "error");
+    }
+  };
+
+  // Tester la configuration SMTP
+  const testSMTPConfig = async (config) => {
+    setTestingSMTP(true);
+    try {
+      const response = await fetch(`${API_BASE}/admin/test-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          host: config.host,
+          port: parseInt(config.port),
+          user: config.user,
+          password: config.password,
+          from_email: config.from,
+          use_tls: config.useTLS
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        showToast(data.message || "Email de test envoyé !", "success");
+      } else {
+        const error = await response.json();
+        showToast(error.detail || "Erreur d'envoi", "error");
+      }
+    } catch (error) {
+      showToast("Erreur réseau", "error");
+    } finally {
+      setTestingSMTP(false);
+    }
+  };
+
+  // Générer des logs système simulés (fallback)
+  const generateSystemLogs = useCallback(() => {
+    const logs = [];
+    const actions = ["user.created", "user.approved", "user.rejected", "user.deleted", "consultation.created", "message.sent", "backup.created", "settings.updated"];
+    for (let i = 0; i < 20; i++) {
+      const date = subDays(new Date(), Math.floor(Math.random() * 30));
+      logs.push({
+        id: i,
+        action: actions[Math.floor(Math.random() * actions.length)],
+        user: "admin@medai.com",
+        details: `Action effectuée sur la plateforme`,
+        ip: "192.168.1." + Math.floor(Math.random() * 255),
+        timestamp: date,
+        status: Math.random() > 0.9 ? "error" : "success"
+      });
+    }
+    return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }, []);
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
+  // Chargement des données
+  const loadData = useCallback(async () => {
     try {
-      const usersList = await getAllUsers();
-      setUsers(usersList);
-    } catch (e) {
-      showToast("Erreur : " + e.message, "error");
+      setLoading(true);
+      
+      // Charger les utilisateurs
+      const [users, pending] = await Promise.all([
+        getAllUsers(),
+        getPendingUsers()
+      ]);
+      setAllUsers(users || []);
+      setPendingUsers(pending || []);
+
+      // Charger les messages et consultations
+      if (token && token !== "local-token") {
+        const msgRes = await fetch(`${API_BASE}/contact/admin/messages`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (msgRes.ok) {
+          const msgData = await msgRes.json();
+          setMessages(msgData.messages || []);
+        }
+
+        const consultRes = await fetch(`${API_BASE}/consultations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (consultRes.ok) {
+          const consultData = await consultRes.json();
+          setConsultations(consultData.consultations || []);
+        }
+        
+        // Charger les logs, webhooks et SMTP
+        await fetchSystemLogs();
+        await fetchWebhooks();
+        await fetchSMTPConfig();
+      }
+
+      // Notifications
+      setNotifications([
+        { id: 1, title: "Système prêt", message: "Tous les services sont opérationnels", time: new Date(), read: false, type: "system" },
+        { id: 2, title: "Base de données", message: "Connexion établie", time: new Date(), read: false, type: "db" }
+      ]);
+
+    } catch (err) {
+      console.error("Erreur chargement:", err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [getAllUsers]);
+  }, [getAllUsers, getPendingUsers, token]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    loadData();
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
+  // Helper notifications
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const handleAction = async (fn, label, user) => {
-    setLoadingId(user.id);
+  // Actions utilisateurs
+  const handleApprove = async (user) => {
+    setActionLoadingId(user.id);
     try {
-      await fn(user.id);
-      showToast(label.replace("{name}", user.full_name || user.username));
-      await loadUsers();
-    } catch (e) {
-      showToast("Erreur : " + e.message, "error");
+      await approveUser(user.id);
+      showToast(`${user.full_name || user.username} a été approuvé`);
+      await loadData();
+    } catch (err) {
+      showToast("Erreur: " + err.message, "error");
     } finally {
-      setLoadingId(null);
+      setActionLoadingId(null);
     }
   };
 
-  const onApprove = (user) => handleAction(approveUser, "✅ {name} a été approuvé", user);
-  const onReject = (user) => handleAction(rejectUser, "❌ {name} a été refusé", user);
-  const onDelete = (user) => {
-    if (window.confirm(`Supprimer définitivement ${user.full_name || user.username} ? Cette action est irréversible.`)) {
-      handleAction(deleteUser, "🗑️ {name} a été supprimé", user);
+  const handleReject = async (user) => {
+    setActionLoadingId(user.id);
+    try {
+      await rejectUser(user.id);
+      showToast(`${user.full_name || user.username} a été refusé`);
+      await loadData();
+    } catch (err) {
+      showToast("Erreur: " + err.message, "error");
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
-  const filteredUsers = users.filter(u => {
-    if (filter !== "all" && u.status !== filter) return false;
+  const handleDelete = async (user) => {
+    if (!window.confirm(`Supprimer définitivement ${user.full_name || user.username} ?`)) return;
+    setActionLoadingId(user.id);
+    try {
+      await deleteUser(user.id);
+      showToast(`${user.full_name || user.username} a été supprimé`);
+      await loadData();
+    } catch (err) {
+      showToast("Erreur: " + err.message, "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Bulk actions
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(displayUsers.map(u => u.id));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  const handleSelectUser = (userId) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleBulkApprove = async () => {
+    const usersToApprove = displayUsers.filter(u => selectedUsers.includes(u.id) && u.status === "pending");
+    if (usersToApprove.length === 0) {
+      showToast("Aucun utilisateur sélectionné en attente", "error");
+      return;
+    }
+    if (!window.confirm(`Approuver ${usersToApprove.length} utilisateur(s) ?`)) return;
+    
+    setActionLoadingId("bulk");
+    try {
+      for (const user of usersToApprove) {
+        await approveUser(user.id);
+      }
+      showToast(`${usersToApprove.length} utilisateur(s) approuvé(s)`);
+      await loadData();
+      setSelectedUsers([]);
+      setSelectAll(false);
+    } catch (err) {
+      showToast("Erreur: " + err.message, "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const usersToDelete = displayUsers.filter(u => selectedUsers.includes(u.id) && !u.is_admin);
+    if (usersToDelete.length === 0) {
+      showToast("Aucun utilisateur sélectionné ou tentative de suppression d'admin", "error");
+      return;
+    }
+    if (!window.confirm(`Supprimer définitivement ${usersToDelete.length} utilisateur(s) ?`)) return;
+    
+    setActionLoadingId("bulk");
+    try {
+      for (const user of usersToDelete) {
+        await deleteUser(user.id);
+      }
+      showToast(`${usersToDelete.length} utilisateur(s) supprimé(s)`);
+      await loadData();
+      setSelectedUsers([]);
+      setSelectAll(false);
+    } catch (err) {
+      showToast("Erreur: " + err.message, "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Export CSV
+  const exportUsersToCSV = () => {
+    const users = displayUsers;
+    const headers = ["Nom", "Email", "Username", "Rôle", "Statut", "Spécialité", "Domaines", "Date inscription"];
+    const csvData = users.map(u => [
+      `"${u.full_name || u.username}"`,
+      u.email || "",
+      u.username,
+      u.role || "Médecin",
+      u.status,
+      u.specialty || "",
+      (u.domains || []).join("; "),
+      new Date(u.created_at).toLocaleDateString("fr-FR")
+    ]);
+    
+    const csvContent = [headers, ...csvData].map(row => row.join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `utilisateurs_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("Export CSV effectué");
+  };
+
+  // Export JSON
+  const exportUsersToJSON = () => {
+    const users = displayUsers;
+    const data = JSON.stringify(users, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `utilisateurs_${format(new Date(), "yyyy-MM-dd")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("Export JSON effectué");
+  };
+
+  // Backup DB
+  const handleBackup = async (type = "full") => {
+    setBackupInProgress(true);
+    try {
+      const backupData = {
+        timestamp: new Date().toISOString(),
+        type,
+        data: {
+          users: allUsers,
+          consultations: consultations,
+          messages: messages
+        }
+      };
+      
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = `medai_backup_${type}_${format(new Date(), "yyyy-MM-dd_HH-mm")}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      const newBackup = {
+        id: Date.now(),
+        date: new Date(),
+        size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+        type,
+        status: "success"
+      };
+      setBackupHistory(prev => [newBackup, ...prev].slice(0, 20));
+      showToast(`Backup ${type} créé avec succès`);
+    } catch (err) {
+      showToast("Erreur lors du backup", "error");
+    } finally {
+      setBackupInProgress(false);
+    }
+  };
+
+  // Actions messages
+  const markMessageAsRead = async (messageId) => {
+    try {
+      await fetch(`${API_BASE}/contact/admin/messages/${messageId}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadData();
+      showToast("Message marqué comme lu");
+    } catch (error) {
+      showToast("Erreur", "error");
+    }
+  };
+
+  const deleteMessage = async (messageId) => {
+    if (!window.confirm("Supprimer ce message définitivement ?")) return;
+    try {
+      await fetch(`${API_BASE}/contact/admin/messages/${messageId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadData();
+      if (selectedMessage?.id === messageId) setSelectedMessage(null);
+      showToast("Message supprimé");
+    } catch (error) {
+      showToast("Erreur", "error");
+    }
+  };
+
+  const markNotificationAsRead = (id) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  // ========== DISPLAY USERS ==========
+  const displayUsers = useMemo(() => {
+    let usersToShow = [];
+    
+    if (filter === "pending") usersToShow = pendingUsers;
+    else if (filter === "all") usersToShow = allUsers;
+    else usersToShow = allUsers.filter(u => u.status === filter);
+    
+    // Recherche textuelle
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      return u.full_name?.toLowerCase().includes(term) ||
-             u.username?.toLowerCase().includes(term) ||
-             u.specialty?.toLowerCase().includes(term);
+      usersToShow = usersToShow.filter(u =>
+        (u.full_name || "").toLowerCase().includes(term) ||
+        (u.username || "").toLowerCase().includes(term) ||
+        (u.email || "").toLowerCase().includes(term) ||
+        (u.specialty || "").toLowerCase().includes(term)
+      );
     }
-    return true;
-  });
+    
+    // Filtres avancés
+    if (advancedFilters.role !== "all") {
+      usersToShow = usersToShow.filter(u => u.role === advancedFilters.role);
+    }
+    if (advancedFilters.domain !== "all") {
+      usersToShow = usersToShow.filter(u => u.domains?.includes(advancedFilters.domain));
+    }
+    if (advancedFilters.status !== "all") {
+      usersToShow = usersToShow.filter(u => u.status === advancedFilters.status);
+    }
+    
+    // Filtrage par date
+    if (dateRange.start) {
+      const startDate = new Date(dateRange.start);
+      usersToShow = usersToShow.filter(u => new Date(u.created_at) >= startDate);
+    }
+    if (dateRange.end) {
+      const endDate = new Date(dateRange.end);
+      endDate.setHours(23, 59, 59);
+      usersToShow = usersToShow.filter(u => new Date(u.created_at) <= endDate);
+    }
+    
+    return usersToShow;
+  }, [allUsers, pendingUsers, filter, searchTerm, advancedFilters, dateRange]);
 
-  const counts = {
-    all: users.length,
-    pending: users.filter(u => u.status === "pending").length,
-    approved: users.filter(u => u.status === "approved").length,
-    rejected: users.filter(u => u.status === "rejected").length,
+  // Sélection automatique/déselection du "Select All"
+  useEffect(() => {
+    if (selectAll && selectedUsers.length !== displayUsers.length) {
+      setSelectAll(false);
+    }
+  }, [selectedUsers, displayUsers, selectAll]);
+
+  // ========== STATISTIQUES ==========
+  const doctors = allUsers.filter(u => u.role === "Medecin" && u.status === "approved");
+  const patients = allUsers.filter(u => u.role === "Patient" && u.status === "approved");
+  const pendingCount = pendingUsers.length;
+  const unreadMessages = messages.filter(m => !m.is_read).length;
+  const unreadNotifications = notifications.filter(n => !n.read).length;
+
+  // Données pour graphiques
+  const getLast7DaysData = () => {
+    const data = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dayUsers = allUsers.filter(u => new Date(u.created_at).toDateString() === date.toDateString()).length;
+      const dayConsultations = consultations.filter(c => new Date(c.created_at).toDateString() === date.toDateString()).length;
+      data.push({
+        day: format(date, "EEE", { locale: fr }),
+        date: format(date, "dd/MM"),
+        users: dayUsers,
+        consultations: dayConsultations
+      });
+    }
+    return data;
   };
 
-  const dashboardTabs = [
-    { id: "overview", label: "Vue d'ensemble", icon: <Icons.Activity size={16} /> },
-    { id: "urgent", label: "Cas urgents", icon: <Icons.AlertTriangle size={16} />, badge: analyticsData.criticalAlerts + analyticsData.urgentCases },
-    { id: "history", label: "Historique", icon: <Icons.Clock size={16} /> },
-    { id: "users", label: "Utilisateurs", icon: <Icons.Users size={16} />, badge: counts.pending },
+  // Distribution des rôles
+  const roleDistribution = [
+    { name: "Médecins", value: doctors.length, color: "#2563EB" },
+    { name: "Patients", value: patients.length, color: "#10B981" },
+    { name: "En attente", value: pendingCount, color: "#F59E0B" },
   ];
+
+  // Distribution des domaines médicaux
+  const domainDistribution = () => {
+    const domains = { chest: 0, lung: 0, brain: 0, retina: 0 };
+    doctors.forEach(doc => {
+      if (doc.domains) {
+        doc.domains.forEach(domain => { if (domains[domain] !== undefined) domains[domain]++; });
+      }
+    });
+    return Object.entries(domains).map(([key, value]) => ({ 
+      name: key === "chest" ? "Thorax" : key === "lung" ? "Poumon" : key === "brain" ? "Cerveau" : "Rétine", 
+      value, 
+      color: COLORS[Math.floor(Math.random() * COLORS.length)] 
+    }));
+  };
+
+  // Activité récente combinée
+  const recentActivity = useMemo(() => {
+    const activities = [
+      ...allUsers.slice(0, 10).map(u => ({ type: "user", user: u, date: u.created_at, action: "inscription" })),
+      ...messages.slice(0, 5).map(m => ({ type: "message", message: m, date: m.created_at, action: "message" })),
+      ...consultations.slice(0, 5).map(c => ({ type: "consult", consultation: c, date: c.created_at, action: "consultation" }))
+    ];
+    return activities.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
+  }, [allUsers, messages, consultations]);
+
+  const counts = {
+    all: allUsers.length,
+    pending: pendingCount,
+    approved: allUsers.filter(u => u.status === "approved").length,
+    rejected: allUsers.filter(u => u.status === "rejected").length,
+    doctors: doctors.length,
+    patients: patients.length,
+    consultations: consultations.length,
+    messages: messages.length,
+    unreadMessages: unreadMessages,
+  };
 
   if (!isAdmin) return null;
 
   return (
-    <div className="hp" style={{ minHeight: "100vh", background: "var(--bg)", position: "relative", overflowX: "hidden" }}>
+    <div className="hp" style={{ minHeight: "100vh", background: "#F4F7FC" }}>
       
-      {/* ========== STYLES GLOBAUX ========== */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } }
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-        .pd3-chart-bar {
-          transition: height 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
-        }
-        .pd3-chart-bar:hover {
-          background: linear-gradient(180deg, var(--gold-bright), rgba(232,184,48,0.6)) !important;
-          transform: scaleX(1.05);
-          box-shadow: 0 0 8px rgba(232,184,48,0.5);
-        }
-      `}</style>
-
-      {/* ========== NAVIGATION PREMIUM ========== */}
-      <motion.nav className={`hp-nav ${isScrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: 0.5, type: "spring", stiffness: 100 }}>
+      {/* Navigation */}
+      <motion.nav className={`hp-nav ${isScrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }}>
         <div className="hp-nav-logo" onClick={() => navigate("/")}>
           <div className="hp-logo-icon">
-            <Icons.Lungs size={20} color="white" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <path d="M12 4.5v11M8.5 8c-1.8 0-3.5.8-3.5 3.5s1 6 4 6M15.5 8c1.8 0 3.5.8 3.5 3.5s-1 6-4 6M8.5 8c1.2 0 2.5.8 3.5 2M15.5 8c-1.2 0-2.5.8-3.5 2"/>
+            </svg>
           </div>
           <span>Med<span className="accent">AI</span></span>
         </div>
         <div className="hp-nav-links">
-          <button className="hp-nav-link active" style={{ background: "none", border: "none", cursor: "pointer" }}>Administration</button>
-          <button className="hp-nav-link" style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => navigate("/")}>Accueil</button>
+          <span className={`hp-nav-link ${activeTab === "dashboard" ? "active" : ""}`} onClick={() => setActiveTab("dashboard")} style={{ cursor: "pointer" }}><DashboardIcon /> Dashboard</span>
+          <span className={`hp-nav-link ${activeTab === "users" ? "active" : ""}`} onClick={() => setActiveTab("users")} style={{ cursor: "pointer" }}><UsersIcon /> Utilisateurs</span>
+          <span className={`hp-nav-link ${activeTab === "messages" ? "active" : ""}`} onClick={() => setActiveTab("messages")} style={{ cursor: "pointer" }}><MessagesIcon /> Messages {unreadMessages > 0 && <span className="nav-badge">{unreadMessages}</span>}</span>
+          <span className={`hp-nav-link ${activeTab === "logs" ? "active" : ""}`} onClick={() => setActiveTab("logs")} style={{ cursor: "pointer" }}><LogsIcon /> Logs système</span>
+          <span className={`hp-nav-link ${activeTab === "settings" ? "active" : ""}`} onClick={() => setActiveTab("settings")} style={{ cursor: "pointer" }}><SettingsIcon /> Configuration</span>
+          <span className="hp-nav-link" style={{ cursor: "pointer" }} onClick={() => navigate("/")}><HomeIcon /> Accueil</span>
         </div>
         <div className="hp-nav-actions">
-          <div ref={profileMenuRef} style={{ position: "relative" }}>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="hp-btn hp-btn-outline hp-btn-sm"
-              style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #2D5F9E, #6B4FA0)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "0.8rem", fontWeight: 700 }}>
-                A
-              </div>
-              <span>Administrateur</span>
-              <Icons.ChevronDown size={14} />
-            </motion.button>
-            <AnimatePresence>
-              {showProfileMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, background: "white", borderRadius: 14, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", border: "1px solid #E2E8F0", minWidth: 200, overflow: "hidden", zIndex: 100 }}
-                >
-                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #F1F5F9" }}>
-                    <div style={{ fontWeight: 700, color: "#0A2647" }}>Administrateur</div>
-                    <div style={{ fontSize: "0.7rem", color: "#64748B" }}>Accès complet à la plateforme</div>
-                  </div>
-                  <button onClick={() => { logout(); navigate("/"); }} style={{ width: "100%", padding: "10px 16px", background: "none", border: "none", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, color: "#DC2626", transition: "background 0.2s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#FEF2F2"}
-                    onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <Icons.LogOut size={14} /> Se déconnecter
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <button className="hp-btn hp-btn-outline hp-btn-sm" onClick={() => { logout(); navigate("/login"); }}>
+            <LogoutIcon /> Déconnexion
+          </button>
         </div>
       </motion.nav>
 
-      {/* ========== HERO SECTION PREMIUM ========== */}
-      <motion.section className="pd3-hero" style={{ y: sY, minHeight: "40vh", position: "relative" }}>
-        <div className="pd3-hero-grid" />
-        <div className="pd3-hero-orb pd3-hero-orb-1" />
-        <div className="pd3-hero-orb pd3-hero-orb-2" />
-        <div className="pd3-hero-orb pd3-hero-orb-3" />
-        <div className="pd3-hero-ring pd3-hero-ring-1" />
-        <div className="pd3-hero-ring pd3-hero-ring-2" />
-        <div className="pd3-hero-ring pd3-hero-ring-3" />
-        <Particles />
-
-        <div className="pd3-hero-content" style={{ padding: "80px 64px 60px" }}>
-          <div style={{ textAlign: "center", maxWidth: 800, margin: "0 auto" }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <div className="pd3-hero-status" style={{ justifyContent: "center" }}>
-                <PulseDot color="var(--gold-bright)" />
-                <span>PANEL ADMINISTRATEUR</span>
-                <span className="pd3-status-sep" />
-                <span>ANALYSE EN TEMPS RÉEL</span>
-              </div>
-            </motion.div>
-            <motion.h1 className="pd3-hero-welcome" style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-              Administration <span className="highlight">MedAI</span>
-            </motion.h1>
-            <motion.p className="pd3-hero-subtitle" style={{ margin: "0 auto", fontSize: "1rem" }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-              Gérez les comptes, suivez les analyses et supervisez les cas critiques en temps réel
-            </motion.p>
+      {/* Hero Section */}
+      <section className="hp-hero" style={{ minHeight: "20vh" }}>
+        <div className="hp-hero-grid-bg" />
+        <div className="hp-hero-glow hp-hero-glow-1" />
+        <div className="hp-hero-glow hp-hero-glow-2" />
+        <div className="hp-hero-content" style={{ padding: "60px 64px 30px" }}>
+          <div style={{ textAlign: "center" }}>
+            <div className="hp-badge" style={{ justifyContent: "center" }}>
+              <span className="hp-badge-dot" />
+              <span>PANEL ADMINISTRATEUR</span>
+            </div>
+            <h1 style={{ fontSize: "2rem", color: "white" }}>
+              Dashboard <span className="gd">MedAI</span>
+            </h1>
+            <p className="hp-hero-desc" style={{ margin: "0 auto", maxWidth: 600 }}>
+              Gérez votre plateforme en temps réel
+            </p>
           </div>
         </div>
-      </motion.section>
+      </section>
 
-      {/* ========== CONTENU PRINCIPAL ========== */}
-      <div className="pd3-body" style={{ padding: "32px 0 0 0" }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 32px" }}>
-          
-          {/* ========== STATS CARDS PREMIUM ========== */}
-          <Reveal delay={0.1}>
-            <div className="pd3-metrics-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>
-              <motion.div className="pd3-metric" whileHover={{ y: -6 }}>
-                <div className="pd3-metric-icon" style={{ background: "rgba(212,165,0,0.08)", color: "#D4A500" }}><Icons.Folder size={24} /></div>
-                <div className="pd3-metric-value" style={{ color: "#D4A500" }}>{analyticsData.totalConsultations}</div>
-                <div className="pd3-metric-label">Dossiers totaux</div>
-                <div className="pd3-metric-trend up">↑ {analyticsData.monthlyGrowth}% ce mois</div>
-              </motion.div>
-              <motion.div className="pd3-metric" whileHover={{ y: -6 }}>
-                <div className="pd3-metric-icon" style={{ background: "rgba(16,185,129,0.08)", color: "#10B981" }}><Icons.Scan size={24} /></div>
-                <div className="pd3-metric-value" style={{ color: "#10B981" }}>{analyticsData.completedAnalyses}</div>
-                <div className="pd3-metric-label">Analysés</div>
-                <div className="pd3-metric-trend up">↑ 8%</div>
-              </motion.div>
-              <motion.div className="pd3-metric" whileHover={{ y: -6 }}>
-                <div className="pd3-metric-icon" style={{ background: "rgba(59,130,246,0.08)", color: "#3B82F6" }}><Icons.Clock size={24} /></div>
-                <div className="pd3-metric-value" style={{ color: "#3B82F6" }}>{analyticsData.pendingReviews}</div>
-                <div className="pd3-metric-label">En cours / Attente</div>
-                <div className="pd3-metric-trend neutral">→ Stable</div>
-              </motion.div>
-              <motion.div className="pd3-metric" whileHover={{ y: -6 }} onClick={() => setActiveDashboardTab("urgent")} style={{ cursor: "pointer" }}>
-                <div className="pd3-metric-icon" style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444" }}><Icons.AlertTriangle size={24} /></div>
-                <div className="pd3-metric-value" style={{ color: "#EF4444" }}>{analyticsData.criticalAlerts + analyticsData.urgentCases}</div>
-                <div className="pd3-metric-label">Cas critiques / urgents</div>
-                <div className="pd3-metric-trend down">↓ 2%</div>
-              </motion.div>
-            </div>
-          </Reveal>
-
-          {/* ========== ANALYSE EN TEMPS RÉEL - CARD PREMIUM ========== */}
-          <Reveal delay={0.15}>
-            <div className="pd3-hero-card" style={{ marginBottom: 32, background: "linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(12px)" }}>
-              <div className="pd3-hero-card-header">
-                <span className="pd3-card-title">ANALYSE EN TEMPS RÉEL</span>
-                <span className="pd3-card-badge"><span className="pd3-status-pulse" /> IA Active</span>
-              </div>
-              <MiniChart />
-              <div className="pd3-mini-stats">
-                <motion.div className="pd3-mini-stat" whileHover={{ y: -2 }}>
-                  <div className="pd3-mini-stat-value">{analyticsData.totalConsultations}</div>
-                  <div className="pd3-mini-stat-label">Dossiers</div>
-                </motion.div>
-                <motion.div className="pd3-mini-stat" whileHover={{ y: -2 }}>
-                  <div className="pd3-mini-stat-value">{analyticsData.completedAnalyses}</div>
-                  <div className="pd3-mini-stat-label">Analysés</div>
-                </motion.div>
-                <motion.div className="pd3-mini-stat" whileHover={{ y: -2 }}>
-                  <div className="pd3-mini-stat-value">{analyticsData.pendingReviews}</div>
-                  <div className="pd3-mini-stat-label">En cours</div>
-                </motion.div>
-              </div>
-              <div className="pd3-progress-section">
-                <div className="pd3-progress-header"><span className="pd3-progress-label">Complétude du profil</span><span className="pd3-progress-value">85%</span></div>
-                <div className="pd3-progress-bar"><motion.div className="pd3-progress-fill" initial={{ width: 0 }} animate={{ width: "85%" }} transition={{ delay: 1.2, duration: 1 }} /></div>
-              </div>
-              <div className="pd3-live-indicator">
-                <div className="pd3-live-dot" />
-                <span className="pd3-live-text">SYSTÈME OPÉRATIONNEL</span>
-                <span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>98.5% uptime</span>
-              </div>
-            </div>
-          </Reveal>
-
-          {/* ========== CARTES FLOTTANTES STATS ========== */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
-            <motion.div className="pd3-float-card" style={{ position: "relative", background: "white", borderRadius: 20, padding: 20, boxShadow: "var(--shadow-md)" }} whileHover={{ y: -4 }}>
-              <div className="pd3-float-card-icon" style={{ background: "rgba(232,184,48,0.12)", width: 50, height: 50, borderRadius: 14 }}><Icons.Brain size={24} color="#FFD700" /></div>
-              <div><div className="pd3-float-card-value" style={{ fontSize: "1.3rem", fontWeight: 800 }}>98.5%</div><div className="pd3-float-card-label">Précision</div></div>
-            </motion.div>
-            <motion.div className="pd3-float-card" style={{ position: "relative", background: "white", borderRadius: 20, padding: 20, boxShadow: "var(--shadow-md)" }} whileHover={{ y: -4 }}>
-              <div className="pd3-float-card-icon" style={{ background: "rgba(16,185,129,0.12)", width: 50, height: 50, borderRadius: 14 }}><Icons.Clock size={24} color="#10B981" /></div>
-              <div><div className="pd3-float-card-value" style={{ fontSize: "1.3rem", fontWeight: 800 }}>&lt; 24s</div><div className="pd3-float-card-label">Analyse</div></div>
-            </motion.div>
-            <motion.div className="pd3-float-card" style={{ position: "relative", background: "white", borderRadius: 20, padding: 20, boxShadow: "var(--shadow-md)" }} whileHover={{ y: -4 }}>
-              <div className="pd3-float-card-icon" style={{ background: "rgba(139,92,246,0.12)", width: 50, height: 50, borderRadius: 14 }}><Icons.Activity size={24} color="#8B5CF6" /></div>
-              <div><div className="pd3-float-card-value" style={{ fontSize: "1.3rem", fontWeight: 800 }}>28+</div><div className="pd3-float-card-label">Pathologies</div></div>
-            </motion.div>
+      {/* Contenu principal */}
+      <div className="hp-body" style={{ maxWidth: 1400, margin: "0 auto", padding: "30px 32px" }}>
+        
+        {error && (
+          <div className="alert-error">
+            {error}
           </div>
+        )}
 
-          {/* ========== TABS DASHBOARD ========== */}
-          <Reveal delay={0.2}>
-            <div className="pd3-tabs" style={{ marginBottom: 24 }}>
-              {dashboardTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveDashboardTab(tab.id)}
-                  className={`pd3-tab ${activeDashboardTab === tab.id ? "active" : ""}`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                  {tab.badge > 0 && (
-                    <span style={{
-                      marginLeft: 6,
-                      padding: "1px 7px",
-                      borderRadius: 20,
-                      background: activeDashboardTab === tab.id ? "rgba(255,255,255,0.2)" : "#FEE2E2",
-                      color: activeDashboardTab === tab.id ? "white" : "#DC2626",
-                      fontSize: "0.7rem",
-                      fontWeight: 700
-                    }}>
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              ))}
+        {/* ========== DASHBOARD ========== */}
+        {activeTab === "dashboard" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="dashboard-stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon"><UsersIcon /></div>
+                <div className="stat-value">{counts.all}</div>
+                <div className="stat-label">Total utilisateurs</div>
+                <div className="stat-trend up">+{counts.all - 6} ce mois</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon"><DoctorIcon /></div>
+                <div className="stat-value">{counts.doctors}</div>
+                <div className="stat-label">Médecins</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon"><PatientIcon /></div>
+                <div className="stat-value">{counts.patients}</div>
+                <div className="stat-label">Patients</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon"><ConsultationIcon /></div>
+                <div className="stat-value">{counts.consultations}</div>
+                <div className="stat-label">Consultations</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon"><MessagesIcon /></div>
+                <div className="stat-value">{counts.messages}</div>
+                <div className="stat-label">Messages</div>
+                {unreadMessages > 0 && <div className="stat-trend warning">{unreadMessages} non lus</div>}
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon"><BellIcon /></div>
+                <div className="stat-value">{unreadNotifications}</div>
+                <div className="stat-label">Notifications</div>
+              </div>
             </div>
-          </Reveal>
 
-          <AnimatePresence mode="wait">
-            {/* ========== TAB: VUE D'ENSEMBLE ========== */}
-            {activeDashboardTab === "overview" && (
-              <motion.div key="overview" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <div className="pd3-bottom-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                  {/* Activités récentes */}
-                  <div>
-                    <div className="pd3-section-row"><span className="pd3-section-row-title"><Icons.Clock size={16} color="#D4A500" /> Activités récentes</span></div>
-                    <div className="pd3-consult-list">
-                      {recentActivities.map(act => (
-                        <motion.div key={act.id} className="pd3-consult-card" whileHover={{ x: 4 }}>
-                          <div className="pd3-consult-icon" style={{ background: `${act.color}15`, color: act.color, width: 44, height: 44 }}>
-                            <act.icon size={20} />
-                          </div>
-                          <div className="pd3-consult-body">
-                            <div className="pd3-consult-header">
-                              <span className="pd3-consult-id">{act.user}</span>
-                              {act.status === "pending" && <span className="pd3-badge pd3-badge-pending">En attente</span>}
-                              {act.status === "completed" && <span className="pd3-badge" style={{ background: "#D1FAE5", color: "#059669" }}>Terminé</span>}
-                              {act.status === "approved" && <span className="pd3-badge" style={{ background: "#D1FAE5", color: "#059669" }}>Approuvé</span>}
-                              {act.urgency === "critical" && <span className="pd3-badge" style={{ background: "#FEE2E2", color: "#DC2626" }}>Critique</span>}
-                            </div>
-                            <div className="pd3-consult-date">{act.action}</div>
-                            <div className="pd3-consult-doctor">{act.time}</div>
-                          </div>
-                          <Icons.ChevronRight size={18} />
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
+            <div className="charts-grid">
+              <div className="chart-card">
+                <h3>Évolution des inscriptions</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={getLast7DaysData()}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }} />
+                    <Area type="monotone" dataKey="users" stroke="#2563EB" fill="#3B82F6" fillOpacity={0.2} name="Nouveaux utilisateurs" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
 
-                  {/* Statistiques avancées */}
-                  <div>
-                    <div className="pd3-section-row"><span className="pd3-section-row-title"><Icons.Activity size={16} color="#D4A500" /> Métriques clés</span></div>
-                    <div className="pd3-health-card" style={{ background: "var(--gradient-nav)", padding: 24 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                        {[
-                          { label: "Temps réponse moyen", value: `${analyticsData.averageResponseTime}s`, trend: "down", change: "-12%" },
-                          { label: "Taux satisfaction", value: `${analyticsData.satisfactionRate}%`, trend: "up", change: "+2.3%" },
-                          { label: "Médecins actifs", value: analyticsData.activeDoctors, trend: "up", change: "+2" },
-                          { label: "Patients actifs", value: analyticsData.activePatients, trend: "up", change: "+18" },
-                        ].map((stat, i) => (
-                          <motion.div key={i} style={{ padding: "12px", background: "rgba(255,255,255,0.05)", borderRadius: 12, textAlign: "center" }} whileHover={{ scale: 1.02 }}>
-                            <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", marginBottom: 6 }}>{stat.label}</div>
-                            <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "white" }}>{stat.value}</div>
-                            <div style={{ fontSize: "0.7rem", color: stat.trend === "up" ? "#4ADE80" : "#F87171", marginTop: 4 }}>{stat.change}</div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+              <div className="chart-card">
+                <h3>Répartition des utilisateurs</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie data={roleDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                      {roleDistribution.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="charts-grid">
+              <div className="chart-card">
+                <h3>Consultations par jour</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={getLast7DaysData()}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12 }} />
+                    <Bar dataKey="consultations" fill="#FFD700" radius={[8, 8, 0, 0]} name="Consultations" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="chart-card">
+                <h3>Spécialités des médecins</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie data={domainDistribution()} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                      {domainDistribution().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="two-columns">
+              <div className="activity-card">
+                <div className="card-header">
+                  <h3>Activité récente</h3>
+                  <button onClick={loadData} className="icon-btn"><RefreshIcon /></button>
                 </div>
-              </motion.div>
-            )}
-
-            {/* ========== TAB: CAS URGENTS ========== */}
-            {activeDashboardTab === "urgent" && (
-              <motion.div key="urgent" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <div className="pd3-section-header">
-                  <div className="pd3-section-badge"><Icons.AlertTriangle size={12} color="#EF4444" /> URGENCES</div>
-                  <h2 className="pd3-section-title">Cas <span className="accent">critiques</span> en attente</h2>
-                  <p className="pd3-section-sub">{urgentCasesList.length} patient{urgentCasesList.length > 1 ? "s" : ""} nécessitant une attention immédiate</p>
-                </div>
-                <div className="pd3-consult-list">
-                  {urgentCasesList.map((case_, idx) => (
-                    <motion.div
-                      key={case_.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="pd3-consult-card"
-                      style={{ borderLeft: `4px solid ${case_.severity === "critical" ? "#DC2626" : "#F59E0B"}` }}
-                      onClick={() => navigate(`/consultation/${case_.consultationId}`)}
-                    >
-                      <div className="pd3-consult-icon" style={{ background: case_.severity === "critical" ? "#FEE2E2" : "#FFFBEB", color: case_.severity === "critical" ? "#DC2626" : "#F59E0B" }}>
-                        <Icons.AlertTriangle size={22} />
+                <div className="activity-list">
+                  {recentActivity.slice(0, 8).map((activity, idx) => (
+                    <div key={idx} className="activity-item">
+                      <div className={`activity-icon ${activity.type}`}>
+                        {activity.type === "user" ? <UsersIcon /> : activity.type === "message" ? <MessagesIcon /> : <ConsultationIcon />}
                       </div>
-                      <div className="pd3-consult-body">
-                        <div className="pd3-consult-header">
-                          <span className="pd3-consult-id">{case_.patient}</span>
-                          <span className="pd3-badge" style={{ background: case_.severity === "critical" ? "#FEE2E2" : "#FFFBEB", color: case_.severity === "critical" ? "#DC2626" : "#F59E0B" }}>
-                            {case_.severity === "critical" ? "URGENCE VITALE" : "URGENT"}
-                          </span>
+                      <div className="activity-content">
+                        <div className="activity-title">
+                          {activity.type === "user" ? `${activity.user?.full_name || activity.user?.username} s'est inscrit` :
+                           activity.type === "message" ? `Nouveau message de ${activity.message?.name}` :
+                           `Nouvelle consultation`}
                         </div>
-                        <div className="pd3-consult-date">{case_.condition}</div>
-                        <div className="pd3-consult-doctor">Médecin assigné : {case_.doctor} • {case_.time}</div>
+                        <div className="activity-meta">
+                          <CalendarIcon /> {format(new Date(activity.date), "dd/MM/yyyy")}
+                          <TimeIcon /> {format(new Date(activity.date), "HH:mm")}
+                        </div>
                       </div>
-                      <button className="pd3-appt-action" onClick={(e) => { e.stopPropagation(); navigate(`/consultation/${case_.consultationId}`); }}>Intervenir →</button>
-                    </motion.div>
+                    </div>
                   ))}
+                  {recentActivity.length === 0 && <div className="empty-state">Aucune activité récente</div>}
                 </div>
-                {urgentCasesList.length === 0 && (
-                  <div className="pd3-empty">
-                    <div className="pd3-empty-icon"><Icons.CheckCircle size={36} color="#10B981" /></div>
-                    <div className="pd3-empty-title">Aucun cas urgent</div>
-                    <div className="pd3-empty-desc">Tous les dossiers ont été traités</div>
+              </div>
+
+              <div className="activity-card">
+                <div className="card-header">
+                  <h3>Notifications</h3>
+                  <button onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))} className="icon-btn"><CheckIcon /></button>
+                </div>
+                <div className="notification-list">
+                  {notifications.map(notif => (
+                    <div key={notif.id} className={`notification-item ${!notif.read ? "unread" : ""}`} onClick={() => markNotificationAsRead(notif.id)}>
+                      <div className="notification-dot" />
+                      <div className="notification-content">
+                        <div className="notification-title">{notif.title}</div>
+                        <div className="notification-message">{notif.message}</div>
+                        <div className="notification-time">{format(notif.time, "dd/MM/yyyy HH:mm")}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {notifications.length === 0 && <div className="empty-state">Aucune notification</div>}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ========== UTILISATEURS ========== */}
+        {activeTab === "users" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="filter-stats-grid">
+              <div className="filter-stat" onClick={() => setFilter("all")}>
+                <div className="filter-stat-value">{counts.all}</div>
+                <div className="filter-stat-label">Total</div>
+              </div>
+              <div className={`filter-stat ${filter === "pending" ? "active" : ""}`} onClick={() => setFilter("pending")}>
+                <div className="filter-stat-value" style={{ color: "#F59E0B" }}>{counts.pending}</div>
+                <div className="filter-stat-label">En attente</div>
+              </div>
+              <div className="filter-stat" onClick={() => setFilter("approved")}>
+                <div className="filter-stat-value" style={{ color: "#10B981" }}>{counts.approved}</div>
+                <div className="filter-stat-label">Approuvés</div>
+              </div>
+              <div className="filter-stat" onClick={() => setFilter("rejected")}>
+                <div className="filter-stat-value" style={{ color: "#EF4444" }}>{counts.rejected}</div>
+                <div className="filter-stat-label">Refusés</div>
+              </div>
+            </div>
+
+            <div className="toolbar">
+              <div className="toolbar-left">
+                <div className="search-box">
+                  <span className="search-icon">🔍</span>
+                  <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+                <button className="btn-filter" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+                  <FilterIcon /> Filtres avancés
+                </button>
+                {selectedUsers.length > 0 && (
+                  <div className="bulk-actions">
+                    <span>{selectedUsers.length} sélectionné(s)</span>
+                    <button onClick={handleBulkApprove} className="btn-bulk-approve">Approuver</button>
+                    <button onClick={handleBulkDelete} className="btn-bulk-delete">Supprimer</button>
                   </div>
                 )}
-              </motion.div>
+              </div>
+              <div className="toolbar-right">
+                <div className="date-range">
+                  <input type="date" placeholder="Début" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} />
+                  <span>à</span>
+                  <input type="date" placeholder="Fin" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} />
+                </div>
+                <div className="export-dropdown">
+                  <button className="btn-export"><ExportIcon /> Exporter</button>
+                  <div className="export-menu">
+                    <button onClick={exportUsersToCSV}>CSV</button>
+                    <button onClick={exportUsersToJSON}>JSON</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {showAdvancedFilters && (
+              <div className="advanced-filters">
+                <select value={advancedFilters.role} onChange={e => setAdvancedFilters(prev => ({ ...prev, role: e.target.value }))}>
+                  <option value="all">Tous les rôles</option>
+                  <option value="Medecin">Médecins</option>
+                  <option value="Patient">Patients</option>
+                  <option value="Administrateur">Administrateurs</option>
+                </select>
+                <select value={advancedFilters.domain} onChange={e => setAdvancedFilters(prev => ({ ...prev, domain: e.target.value }))}>
+                  <option value="all">Tous les domaines</option>
+                  <option value="chest">Thorax</option>
+                  <option value="lung">Poumon</option>
+                  <option value="brain">Cerveau</option>
+                  <option value="retina">Rétine</option>
+                </select>
+                <select value={advancedFilters.status} onChange={e => setAdvancedFilters(prev => ({ ...prev, status: e.target.value }))}>
+                  <option value="all">Tous les statuts</option>
+                  <option value="pending">En attente</option>
+                  <option value="approved">Approuvé</option>
+                  <option value="rejected">Refusé</option>
+                </select>
+                <button onClick={() => { setAdvancedFilters({ role: "all", domain: "all", status: "all" }); setSearchTerm(""); setDateRange({ start: "", end: "" }); }} className="btn-reset">
+                  Réinitialiser
+                </button>
+              </div>
             )}
 
-            {/* ========== TAB: HISTORIQUE ========== */}
-            {activeDashboardTab === "history" && (
-              <motion.div key="history" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <div className="pd3-section-header">
-                  <div className="pd3-section-badge"><Icons.Clock size={12} /> HISTORIQUE</div>
-                  <h2 className="pd3-section-title">Dernières <span className="accent">activités</span></h2>
-                  <p className="pd3-section-sub">Suivi des actions récentes sur la plateforme</p>
-                </div>
-                <div className="pd3-consult-list">
-                  {recentActivities.map((act, idx) => (
-                    <motion.div
-                      key={act.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="pd3-consult-card"
-                      style={{ cursor: "default" }}
-                    >
-                      <div className="pd3-consult-icon" style={{ background: `${act.color}15`, color: act.color, width: 48, height: 48 }}>
-                        <act.icon size={22} />
-                      </div>
-                      <div className="pd3-consult-body">
-                        <div className="pd3-consult-header">
-                          <span className="pd3-consult-id">{act.user}</span>
-                          <span className="pd3-consult-date">{act.time}</span>
-                        </div>
-                        <div className="pd3-consult-doctor">{act.action}</div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* ========== TAB: UTILISATEURS ========== */}
-            {activeDashboardTab === "users" && (
-              <motion.div key="users" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {["all", "pending", "approved", "rejected"].map((key) => {
-                      const config = STATUS_CONFIG[key];
-                      const isActive = filter === key;
+            {loading ? (
+              <div className="loading-state"><div className="spinner" /><p>Chargement...</p></div>
+            ) : displayUsers.length === 0 ? (
+              <div className="empty-state-large"><UsersIcon /><div>Aucun utilisateur trouvé</div></div>
+            ) : (
+              <div className="users-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 40 }}>
+                        <button onClick={handleSelectAll} className="checkbox-btn">
+                          {selectAll ? <CheckboxCheckedIcon /> : <CheckboxUncheckedIcon />}
+                        </button>
+                      </th>
+                      <th>Utilisateur</th>
+                      <th>Rôle</th>
+                      <th>Statut</th>
+                      <th>Spécialité / Domaines</th>
+                      <th>Date inscription</th>
+                      <th style={{ width: 180 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayUsers.map((user) => {
+                      const isPending = user.status === "pending";
+                      const isApproved = user.status === "approved";
+                      const isLoading = actionLoadingId === user.id;
+                      const isSelected = selectedUsers.includes(user.id);
                       return (
-                        <motion.button
-                          key={key}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => setFilter(key)}
-                          className="pd3-tab"
-                          style={{
-                            background: isActive ? "var(--gradient-nav)" : "transparent",
-                            color: isActive ? "white" : "var(--txt2)",
-                            padding: "8px 20px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6
-                          }}
-                        >
-                          {key === "all" ? "Tous" : (config?.label || key)}
-                          {counts[key] > 0 && key !== "all" && (
-                            <span style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 20, background: "rgba(255,255,255,0.2)", fontSize: "0.7rem", fontWeight: 600 }}>{counts[key]}</span>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                  <div style={{ position: "relative", width: 260 }}>
-                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--txt3)" }}><Icons.Search size={14} /></span>
-                    <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: "100%", padding: "10px 12px 10px 38px", borderRadius: 12, border: "1.5px solid var(--border)", fontSize: "0.85rem", outline: "none", background: "var(--bg)" }} onFocus={e => e.target.style.borderColor = "var(--gold)"} onBlur={e => e.target.style.borderColor = "var(--border)"} />
-                  </div>
-                </div>
-
-                {loading ? (
-                  <div className="pd3-empty" style={{ padding: "60px 20px" }}>
-                    <Icons.Loader size={40} color="var(--gold-bright)" />
-                    <div className="pd3-empty-title" style={{ marginTop: 16 }}>Chargement des utilisateurs...</div>
-                  </div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="pd3-empty">
-                    <div className="pd3-empty-icon"><Icons.Users size={36} color="var(--txt3)" /></div>
-                    <div className="pd3-empty-title">Aucun utilisateur trouvé</div>
-                    <div className="pd3-empty-desc">Aucun utilisateur ne correspond aux critères sélectionnés</div>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {filteredUsers.map((user, idx) => {
-                      const statusConfig = STATUS_CONFIG[user.status] || STATUS_CONFIG.pending;
-                      const StatusIcon = statusConfig.icon;
-                      const isLoading = loadingId === user.id;
-                      const domains = user.domains || [];
-                      
-                      return (
-                        <motion.div
-                          key={user.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: Math.min(idx * 0.03, 0.3) }}
-                          className="pd3-consult-card"
-                          style={{ cursor: "default", padding: "20px 24px" }}
-                        >
-                          <div className="pd3-consult-card-accent" style={{ background: statusConfig.color, height: "70%", width: 4 }} />
-                          <div className="pd3-consult-icon" style={{ background: `linear-gradient(135deg, ${statusConfig.color}, ${statusConfig.color}cc)`, width: 52, height: 52 }}>
-                            <span style={{ fontSize: "1.3rem", fontWeight: 700, color: "white" }}>
-                              {user.full_name?.charAt(0)?.toUpperCase() || user.username?.charAt(0)?.toUpperCase() || "U"}
+                        <tr key={user.id} className={isPending ? "row-pending" : ""}>
+                          <td>
+                            {!user.is_admin && (
+                              <button onClick={() => handleSelectUser(user.id)} className="checkbox-btn">
+                                {isSelected ? <CheckboxCheckedIcon /> : <CheckboxUncheckedIcon />}
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            <div className="user-cell">
+                              <div className="user-avatar" style={{ background: `linear-gradient(135deg, ${isPending ? "#F59E0B" : isApproved ? "#10B981" : "#6B7280"}, ${isPending ? "#D97706" : isApproved ? "#059669" : "#4B5563"})` }}>
+                                {user.full_name?.charAt(0) || user.username?.charAt(0) || "U"}
+                              </div>
+                              <div>
+                                <div className="user-name">{user.full_name || user.username}</div>
+                                <div className="user-email">{user.email || "Email non renseigné"}</div>
+                                <div className="user-username">@{user.username}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="role-badge">{user.role || "Médecin"}</span>
+                            {user.is_admin && <span className="admin-badge">Admin</span>}
+                          </td>
+                          <td>
+                            <span className={`status-badge ${user.status}`}>
+                              {isPending ? "En attente" : isApproved ? "Approuvé" : "Refusé"}
                             </span>
-                          </div>
-                          <div className="pd3-consult-body">
-                            <div className="pd3-consult-header" style={{ flexWrap: "wrap", gap: 8 }}>
-                              <span className="pd3-consult-id" style={{ fontSize: "1rem" }}>{user.full_name || user.username}</span>
-                              <span className="pd3-badge" style={{ background: statusConfig.bg, color: statusConfig.color, border: `1px solid ${statusConfig.border}`, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                                <StatusIcon size={12} /> {statusConfig.label}
-                              </span>
-                              {user.is_admin && (
-                                <span className="pd3-badge" style={{ background: "#EDE9FE", color: "#6B4FA0", border: "1px solid #DDD6FE" }}><Icons.Shield size={12} /> Administrateur</span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: "0.75rem", color: "var(--txt2)", marginBottom: 8 }}>
-                              @{user.username} · {user.role || "Médecin"} {user.specialty && `· ${user.specialty}`}
-                            </div>
-                            {domains.length > 0 && (
-                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                {domains.map(domain => {
-                                  const cfg = DOMAIN_CONFIG[domain];
-                                  return cfg ? (
-                                    <span key={domain} className="pd3-badge" style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40`, fontSize: "0.65rem", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                                      {cfg.icon} {cfg.label}
-                                    </span>
-                                  ) : null;
-                                })}
+                            {!user.email_verified && user.status === "pending" && <span className="email-warning">Email non vérifié</span>}
+                          </td>
+                          <td>
+                            <div className="specialty-cell">{user.specialty || "-"}</div>
+                            {user.domains?.length > 0 && (
+                              <div className="domains-list">
+                                {user.domains.map(domain => (
+                                  <span key={domain} className="domain-badge">{domain === "chest" ? "Thorax" : domain === "lung" ? "Poumon" : domain === "brain" ? "Cerveau" : "Rétine"}</span>
+                                ))}
                               </div>
                             )}
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--txt3)", flexShrink: 0 }}>
-                            {user.created_at ? new Date(user.created_at).toLocaleDateString("fr-FR") : "—"}
-                          </div>
-                          {!user.is_admin && (
-                            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                              {user.status === "pending" && (
-                                <>
-                                  <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => onApprove(user)} disabled={isLoading} className="pd3-btn pd3-btn-gold" style={{ padding: "8px 16px", fontSize: "0.75rem" }}>
-                                    {isLoading ? <Icons.Loader size={14} /> : <><Icons.UserCheck size={14} /> Approuver</>}
-                                  </motion.button>
-                                  <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => onReject(user)} disabled={isLoading} className="pd3-btn pd3-btn-outline" style={{ padding: "8px 16px", fontSize: "0.75rem", color: "var(--danger)", borderColor: "var(--danger)" }}>
-                                    {isLoading ? <Icons.Loader size={14} /> : <><Icons.UserX size={14} /> Refuser</>}
-                                  </motion.button>
-                                </>
-                              )}
-                              {user.status === "approved" && (
-                                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => onReject(user)} disabled={isLoading} className="pd3-btn pd3-btn-outline" style={{ padding: "8px 16px", fontSize: "0.75rem" }}>
-                                  {isLoading ? <Icons.Loader size={14} /> : "Révoquer"}
-                                </motion.button>
-                              )}
-                              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => onDelete(user)} disabled={isLoading} className="pd3-btn pd3-btn-outline" style={{ padding: "8px 12px", fontSize: "0.75rem", color: "var(--danger)", borderColor: "var(--danger)" }}>
-                                {isLoading ? <Icons.Loader size={14} /> : <Icons.Trash2 size={14} />}
-                              </motion.button>
-                            </div>
-                          )}
-                        </motion.div>
+                          </td>
+                          <td>
+                            <div className="date-cell">{user.created_at ? new Date(user.created_at).toLocaleDateString("fr-FR") : "-"}</div>
+                          </td>
+                          <td>
+                            {!user.is_admin && (
+                              <div className="action-buttons">
+                                {isPending && (
+                                  <>
+                                    <button onClick={() => handleApprove(user)} disabled={isLoading} className="btn-approve">
+                                      <CheckIcon /> Approuver
+                                    </button>
+                                    <button onClick={() => handleReject(user)} disabled={isLoading} className="btn-reject">
+                                      <CloseIcon /> Refuser
+                                    </button>
+                                  </>
+                                )}
+                                {isApproved && (
+                                  <>
+                                    <button onClick={() => handleReject(user)} disabled={isLoading} className="btn-revoke">
+                                      Révoquer
+                                    </button>
+                                    <button onClick={() => handleDelete(user)} disabled={isLoading} className="btn-delete">
+                                      <TrashIcon />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
                       );
                     })}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* ========== FOOTER PREMIUM ========== */}
-        <footer className="hp-footer" style={{ marginTop: 60 }}>
-          <div className="hp-footer-inner">
-            <div className="hp-footer-grid">
-              <div className="hp-footer-brand">
-                <div className="hp-nav-logo" style={{ marginBottom: 16 }}><div className="hp-logo-icon"><Icons.Lungs size={18} color="white" /></div><span style={{ color: "#fff" }}>Med<span style={{ color: "#FFD700" }}>AI</span></span></div>
-                <p>Plateforme médicale de diagnostic assisté par IA. Administration sécurisée des accès et gestion des professionnels de santé.</p>
-                <div className="hp-footer-socials">{["LI", "TW", "GH", "YT", "IN"].map((s, i) => (<div className="hp-footer-social" key={i}>{s}</div>))}</div>
+                  </tbody>
+                </table>
               </div>
-              <div><h4>GESTION</h4>{["Utilisateurs", "Médecins", "Patients", "Logs d'accès", "Audit"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
-              <div><h4>SÉCURITÉ</h4>{["Audit de sécurité", "Certifications", "Conformité RGPD", "Chiffrement", "Sauvegardes"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
-              <div><h4>RESSOURCES</h4>{["Documentation admin", "Support technique", "Contact", "Statut du service", "API"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
-            </div>
-            <div className="hp-footer-bottom">
-              <span>© 2025 MedAI — Administration sécurisée · Tous droits réservés</span>
-              <div className="hp-footer-bottom-links">{["Confidentialité", "Conditions d'utilisation", "Sécurité", "RGPD", "Contact"].map(x => <a href="#" key={x}>{x}</a>)}</div>
-            </div>
-          </div>
-        </footer>
-      </div>
+            )}
+          </motion.div>
+        )}
 
-      {/* ========== TOAST NOTIFICATION ========== */}
-      <AnimatePresence>
+        {/* ========== MESSAGES ========== */}
+        {activeTab === "messages" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="messages-header">
+              <div><h2><MessagesIcon /> Messages de contact</h2><p>{unreadMessages} message(s) non lu(s)</p></div>
+              <button onClick={loadData} className="btn-refresh"><RefreshIcon /> Actualiser</button>
+            </div>
+            {messages.length === 0 ? (
+              <div className="empty-state-large"><MessagesIcon /><div>Aucun message</div></div>
+            ) : (
+              <div className="messages-list">
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`message-card ${!msg.is_read ? "unread" : ""}`} onClick={() => setSelectedMessage(msg)}>
+                    <div className="message-content">
+                      <div className="message-header">
+                        <div className="message-sender">
+                          <span className="sender-name">{msg.name}</span>
+                          <span className="sender-email">{msg.email}</span>
+                          {!msg.is_read && <span className="unread-badge">Nouveau</span>}
+                        </div>
+                        <div className="message-actions">
+                          {!msg.is_read && (
+                            <button onClick={(e) => { e.stopPropagation(); markMessageAsRead(msg.id); }} className="btn-mark-read">
+                              <CheckIcon /> Lu
+                            </button>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); deleteMessage(msg.id); }} className="btn-delete-message">
+                            <TrashIcon /> Supprimer
+                          </button>
+                        </div>
+                      </div>
+                      <div className="message-subject">{msg.subject}</div>
+                      <div className="message-preview">{msg.message.length > 100 ? msg.message.substring(0, 100) + "..." : msg.message}</div>
+                      <div className="message-date">
+                        <CalendarIcon /> {format(new Date(msg.created_at), "dd/MM/yyyy HH:mm")}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ========== LOGS SYSTÈME ========== */}
+        {activeTab === "logs" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="logs-header">
+              <h2><LogsIcon /> Logs système</h2>
+              <button onClick={fetchSystemLogs} className="btn-refresh"><RefreshIcon /> Rafraîchir</button>
+            </div>
+            <div className="logs-table-container">
+              <table className="logs-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Utilisateur</th>
+                    <th>Détails</th>
+                    <th>IP</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminLogs.slice(0, 50).map((log) => (
+                    <tr key={log.id} className={`log-row ${log.status}`}>
+                      <td>{log.created_at ? format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss") : "-"}</td>
+                      <td><span className="log-action">{log.action}</span></td>
+                      <td>{log.user_email || log.user || "-"}</td>
+                      <td>{log.details || "-"}</td>
+                      <td>{log.ip_address || "-"}</td>
+                      <td>
+                        <span className={`log-status ${log.status}`}>
+                          {log.status === "success" ? "Succès" : "Erreur"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {adminLogs.length === 0 && (
+                    <tr><td colSpan="6" style={{ textAlign: "center", padding: 40 }}>Aucun log système</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ========== CONFIGURATION ========== */}
+        {activeTab === "settings" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="settings-grid">
+              {/* Configuration SMTP */}
+              <div className="settings-card">
+                <div className="settings-card-header">
+                  <MailIcon />
+                  <h3>Configuration SMTP</h3>
+                </div>
+                <p>Configurez l'envoi d'emails pour les notifications</p>
+                <button onClick={() => setShowSMTPModal(true)} className="btn-settings">
+                  <SettingsIcon /> Configurer SMTP
+                </button>
+              </div>
+
+              {/* Webhooks */}
+              <div className="settings-card">
+                <div className="settings-card-header">
+                  <WebhookIcon />
+                  <h3>Webhooks</h3>
+                </div>
+                <p>Intégrations avec des services externes</p>
+                <button onClick={() => setShowWebhookModal(true)} className="btn-settings">
+                  <PlusIcon /> Gérer les webhooks ({webhooks.length})
+                </button>
+              </div>
+
+              {/* Backup DB */}
+              <div className="settings-card">
+                <div className="settings-card-header">
+                  <BackupIcon />
+                  <h3>Sauvegarde</h3>
+                </div>
+                <p>Exportez vos données</p>
+                <button onClick={() => setShowBackupModal(true)} className="btn-settings">
+                  <DownloadIcon /> Gérer les backups
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Modal Message Detail */}
+        {selectedMessage && (
+          <div className="modal-overlay" onClick={() => setSelectedMessage(null)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Détail du message</h3>
+                <button onClick={() => setSelectedMessage(null)} className="modal-close"><CloseIcon /></button>
+              </div>
+              <div className="modal-body">
+                <div className="info-row"><label>Expéditeur</label><div><strong>{selectedMessage.name}</strong><br />{selectedMessage.email}</div></div>
+                <div className="info-row"><label>Sujet</label><div>{selectedMessage.subject}</div></div>
+                <div className="info-row"><label>Message</label><div className="message-text">{selectedMessage.message}</div></div>
+              </div>
+              <div className="modal-footer">
+                {!selectedMessage.is_read && <button onClick={() => { markMessageAsRead(selectedMessage.id); setSelectedMessage(null); }} className="btn-approve">Marquer comme lu</button>}
+                <button onClick={() => { deleteMessage(selectedMessage.id); setSelectedMessage(null); }} className="btn-delete">Supprimer</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal SMTP */}
+        {showSMTPModal && (
+          <div className="modal-overlay" onClick={() => setShowSMTPModal(false)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Configuration SMTP</h3>
+                <button onClick={() => setShowSMTPModal(false)} className="modal-close"><CloseIcon /></button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group"><label>Serveur SMTP</label><input type="text" value={smtpConfig.host} onChange={e => setSmtpConfig({ ...smtpConfig, host: e.target.value })} /></div>
+                <div className="form-group"><label>Port</label><input type="text" value={smtpConfig.port} onChange={e => setSmtpConfig({ ...smtpConfig, port: e.target.value })} /></div>
+                <div className="form-group"><label>Utilisateur</label><input type="text" value={smtpConfig.user} onChange={e => setSmtpConfig({ ...smtpConfig, user: e.target.value })} /></div>
+                <div className="form-group"><label>Mot de passe</label><input type="password" value={smtpConfig.password} onChange={e => setSmtpConfig({ ...smtpConfig, password: e.target.value })} /></div>
+                <div className="form-group"><label>Email expéditeur</label><input type="email" value={smtpConfig.from} onChange={e => setSmtpConfig({ ...smtpConfig, from: e.target.value })} /></div>
+                <label className="checkbox-label"><input type="checkbox" checked={smtpConfig.useTLS} onChange={e => setSmtpConfig({ ...smtpConfig, useTLS: e.target.checked })} /> Utiliser TLS</label>
+              </div>
+              <div className="modal-footer">
+                <div style={{ display: "flex", gap: 12, flex: 1 }}>
+                  <button onClick={() => testSMTPConfig(smtpConfig)} disabled={testingSMTP} className="btn-test">
+                    {testingSMTP ? "Test en cours..." : "Tester"}
+                  </button>
+                  <button onClick={() => setShowSMTPModal(false)} className="btn-outline">Annuler</button>
+                  <button onClick={() => saveSMTPConfig(smtpConfig)} className="btn-approve">Sauvegarder</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal Webhook */}
+        {showWebhookModal && (
+          <div className="modal-overlay" onClick={() => setShowWebhookModal(false)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="modal-content large" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Gestion des webhooks</h3>
+                <button onClick={() => setShowWebhookModal(false)} className="modal-close"><CloseIcon /></button>
+              </div>
+              <div className="modal-body">
+                <div className="webhooks-list">
+                  {webhooks.length === 0 ? (
+                    <div className="empty-state">Aucun webhook configuré</div>
+                  ) : (
+                    webhooks.map(wh => (
+                      <div key={wh.id} className="webhook-item">
+                        <div className="webhook-info">
+                          <strong>{wh.name}</strong>
+                          <span className="webhook-url">{wh.url}</span>
+                          <div className="webhook-events">{wh.events?.join(", ") || "all"}</div>
+                        </div>
+                        <div className="webhook-actions">
+                          <button className={`webhook-toggle ${wh.is_active ? "active" : ""}`} onClick={() => toggleWebhook(wh.id, wh.is_active, wh.name)}>
+                            {wh.is_active ? "Actif" : "Inactif"}
+                          </button>
+                          <button className="webhook-delete" onClick={() => deleteWebhook(wh.id, wh.name)}>
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="webhook-add">
+                  <h4>Ajouter un webhook</h4>
+                  <input type="text" placeholder="Nom" value={newWebhook.name} onChange={e => setNewWebhook({ ...newWebhook, name: e.target.value })} />
+                  <input type="text" placeholder="URL" value={newWebhook.url} onChange={e => setNewWebhook({ ...newWebhook, url: e.target.value })} />
+                  <select value={newWebhook.events[0]} onChange={e => setNewWebhook({ ...newWebhook, events: [e.target.value] })}>
+                    <option value="all">Tous les événements</option>
+                    <option value="user.created">Création utilisateur</option>
+                    <option value="consultation.created">Nouvelle consultation</option>
+                  </select>
+                  <button onClick={() => createWebhook(newWebhook)} disabled={webhookLoading} className="btn-add">
+                    {webhookLoading ? "Création..." : "Ajouter"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal Backup */}
+        {showBackupModal && (
+          <div className="modal-overlay" onClick={() => setShowBackupModal(false)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Sauvegarde des données</h3>
+                <button onClick={() => setShowBackupModal(false)} className="modal-close"><CloseIcon /></button>
+              </div>
+              <div className="modal-body">
+                <div className="backup-actions">
+                  <button onClick={() => handleBackup("full")} disabled={backupInProgress} className="btn-backup">
+                    <BackupIcon /> Backup complet
+                  </button>
+                  <button onClick={() => handleBackup("users")} disabled={backupInProgress} className="btn-backup">
+                    <UsersIcon /> Backup utilisateurs
+                  </button>
+                  <button onClick={() => handleBackup("consultations")} disabled={backupInProgress} className="btn-backup">
+                    <ConsultationIcon /> Backup consultations
+                  </button>
+                </div>
+                <div className="backup-history">
+                  <h4>Historique des backups</h4>
+                  {backupHistory.length === 0 ? (
+                    <div className="empty-state">Aucun backup effectué</div>
+                  ) : (
+                    backupHistory.map(backup => (
+                      <div key={backup.id} className="backup-item">
+                        <span>{format(backup.date, "dd/MM/yyyy HH:mm")}</span>
+                        <span>{backup.type}</span>
+                        <span>{backup.size}</span>
+                        <span className={`backup-status ${backup.status}`}>{backup.status === "success" ? "Succès" : "Erreur"}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Toast notification */}
         {toast && (
-          <motion.div
-            initial={{ opacity: 0, x: 50, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 50, scale: 0.9 }}
-            style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, padding: "12px 20px", borderRadius: 12, fontWeight: 500, background: toast.type === "error" ? "#FEF2F2" : "#DCFCE7", color: toast.type === "error" ? "#DC2626" : "#166534", border: `1px solid ${toast.type === "error" ? "#FECACA" : "#A7F3D0"}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 8 }}
-          >
-            {toast.type === "error" ? <Icons.AlertCircle size={16} /> : <Icons.CheckCircle size={16} />}
+          <motion.div initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className={`toast ${toast.type}`}>
             {toast.msg}
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
+
+      <style jsx="true">{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .nav-badge {
+          background: #EF4444;
+          color: white;
+          border-radius: 50%;
+          padding: 2px 6px;
+          font-size: 10px;
+          margin-left: 5px;
+        }
+        
+        .alert-error {
+          padding: 12px 20px;
+          background: #FEE2E2;
+          border: 1px solid #FECACA;
+          border-radius: 12px;
+          color: #DC2626;
+          margin-bottom: 24px;
+        }
+        
+        .dashboard-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 16px;
+          margin-bottom: 32px;
+        }
+        
+        .stat-card {
+          background: white;
+          border-radius: 20px;
+          padding: 20px;
+          text-align: center;
+          border: 1px solid #E2E8F0;
+          transition: all 0.2s;
+          cursor: pointer;
+        }
+        
+        .stat-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+        }
+        
+        .stat-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
+          background: #F1F5F9;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 12px;
+          color: #0A2647;
+        }
+        
+        .stat-value {
+          font-size: 2rem;
+          font-weight: 800;
+          color: #0A2647;
+        }
+        
+        .stat-label {
+          font-size: 0.78rem;
+          color: #64748B;
+          margin-top: 4px;
+        }
+        
+        .stat-trend {
+          font-size: 0.68rem;
+          font-weight: 600;
+          margin-top: 6px;
+        }
+        
+        .stat-trend.up { color: #10B981; }
+        .stat-trend.warning { color: #F59E0B; }
+        
+        .charts-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 24px;
+          margin-bottom: 32px;
+        }
+        
+        .chart-card {
+          background: white;
+          border-radius: 20px;
+          padding: 20px;
+          border: 1px solid #E2E8F0;
+        }
+        
+        .chart-card h3 {
+          font-size: 1rem;
+          margin-bottom: 20px;
+          color: #0A2647;
+        }
+        
+        .two-columns {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 24px;
+        }
+        
+        .activity-card {
+          background: white;
+          border-radius: 20px;
+          border: 1px solid #E2E8F0;
+          overflow: hidden;
+        }
+        
+        .card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px 20px;
+          border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .card-header h3 {
+          font-size: 0.9rem;
+          color: #0A2647;
+        }
+        
+        .icon-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #64748B;
+          display: flex;
+          align-items: center;
+          padding: 4px;
+          border-radius: 6px;
+        }
+        
+        .icon-btn:hover { background: #F1F5F9; }
+        
+        .activity-list { padding: 0 20px; }
+        
+        .activity-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 0;
+          border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .activity-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .activity-icon.user { background: #E0E7FF; color: #2563EB; }
+        .activity-icon.message { background: #FEF3C7; color: #F59E0B; }
+        .activity-icon.consult { background: #D1FAE5; color: #10B981; }
+        
+        .activity-content { flex: 1; }
+        
+        .activity-title {
+          font-weight: 500;
+          font-size: 0.85rem;
+          color: #0A2647;
+        }
+        
+        .activity-meta {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 0.65rem;
+          color: #94A3B8;
+          margin-top: 4px;
+        }
+        
+        .notification-list { padding: 0 20px; }
+        
+        .notification-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 12px 0;
+          border-bottom: 1px solid #F1F5F9;
+          cursor: pointer;
+        }
+        
+        .notification-item.unread { background: #FEF3C7; margin: 0 -20px; padding: 12px 20px; }
+        
+        .notification-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #F59E0B;
+          margin-top: 6px;
+        }
+        
+        .notification-item.unread .notification-dot { background: #D97706; }
+        
+        .notification-content { flex: 1; }
+        
+        .notification-title {
+          font-weight: 600;
+          font-size: 0.85rem;
+          color: #0A2647;
+        }
+        
+        .notification-message {
+          font-size: 0.75rem;
+          color: #64748B;
+          margin-top: 2px;
+        }
+        
+        .notification-time {
+          font-size: 0.65rem;
+          color: #94A3B8;
+          margin-top: 4px;
+        }
+        
+        .filter-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+        
+        .filter-stat {
+          background: white;
+          border-radius: 16px;
+          padding: 16px;
+          text-align: center;
+          cursor: pointer;
+          border: 1px solid #E2E8F0;
+          transition: all 0.2s;
+        }
+        
+        .filter-stat.active {
+          background: linear-gradient(135deg, #0A2647, #1B3B6F);
+          color: white;
+        }
+        
+        .filter-stat.active .filter-stat-value,
+        .filter-stat.active .filter-stat-label { color: white; }
+        
+        .filter-stat-value { font-size: 1.8rem; font-weight: 800; }
+        .filter-stat-label { font-size: 0.8rem; margin-top: 4px; }
+        
+        .toolbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+        
+        .toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        
+        .search-box {
+          position: relative;
+        }
+        
+        .search-box input {
+          padding: 10px 16px 10px 36px;
+          border-radius: 12px;
+          border: 1.5px solid #E2E8F0;
+          width: 250px;
+          font-size: 0.85rem;
+          outline: none;
+        }
+        
+        .search-icon {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #94A3B8;
+        }
+        
+        .btn-filter {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          background: white;
+          cursor: pointer;
+          font-size: 0.8rem;
+        }
+        
+        .bulk-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: #E0E7FF;
+          border-radius: 12px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #2563EB;
+        }
+        
+        .bulk-actions button {
+          padding: 4px 12px;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          font-size: 0.75rem;
+          font-weight: 600;
+        }
+        
+        .btn-bulk-approve { background: #10B981; color: white; }
+        .btn-bulk-delete { background: #EF4444; color: white; }
+        
+        .toolbar-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .date-range {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .date-range input {
+          padding: 8px 12px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          font-size: 0.8rem;
+        }
+        
+        .export-dropdown {
+          position: relative;
+        }
+        
+        .btn-export {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 10px;
+          background: #0A2647;
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-size: 0.8rem;
+        }
+        
+        .export-menu {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #E2E8F0;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+          display: none;
+          z-index: 10;
+        }
+        
+        .export-dropdown:hover .export-menu { display: block; }
+        
+        .export-menu button {
+          display: block;
+          width: 100%;
+          padding: 10px 20px;
+          border: none;
+          background: none;
+          cursor: pointer;
+          text-align: left;
+        }
+        
+        .export-menu button:hover { background: #F1F5F9; }
+        
+        .advanced-filters {
+          display: flex;
+          gap: 12px;
+          padding: 16px;
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #E2E8F0;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+        }
+        
+        .advanced-filters select {
+          padding: 8px 16px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          font-size: 0.8rem;
+        }
+        
+        .btn-reset {
+          padding: 8px 16px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          background: white;
+          cursor: pointer;
+        }
+        
+        .users-table {
+          background: white;
+          border-radius: 20px;
+          border: 1px solid #E2E8F0;
+          overflow-x: auto;
+        }
+        
+        .users-table table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        
+        .users-table th {
+          text-align: left;
+          padding: 16px 20px;
+          background: #F8FAFC;
+          font-weight: 600;
+          font-size: 0.8rem;
+          color: #64748B;
+          border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .users-table td {
+          padding: 16px 20px;
+          border-bottom: 1px solid #F1F5F9;
+          font-size: 0.85rem;
+        }
+        
+        .row-pending { background: #FEF3C7; }
+        
+        .checkbox-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          padding: 0;
+        }
+        
+        .user-cell {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .user-avatar {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: bold;
+          font-size: 1.1rem;
+        }
+        
+        .user-name { font-weight: 700; color: #0A2647; }
+        .user-email { font-size: 0.7rem; color: #64748B; }
+        .user-username { font-size: 0.65rem; color: #94A3B8; }
+        
+        .role-badge {
+          padding: 4px 10px;
+          border-radius: 20px;
+          background: #E0E7FF;
+          color: #2563EB;
+          font-size: 0.7rem;
+          font-weight: 600;
+        }
+        
+        .admin-badge {
+          padding: 2px 8px;
+          border-radius: 12px;
+          background: #EDE9FE;
+          color: #6B4FA0;
+          font-size: 0.6rem;
+          margin-left: 6px;
+        }
+        
+        .status-badge {
+          padding: 4px 10px;
+          border-radius: 20px;
+          font-size: 0.7rem;
+          font-weight: 600;
+        }
+        
+        .status-badge.pending { background: #FEF3C7; color: #D97706; }
+        .status-badge.approved { background: #D1FAE5; color: #059669; }
+        .status-badge.rejected { background: #FEE2E2; color: #DC2626; }
+        
+        .email-warning {
+          display: inline-block;
+          margin-left: 8px;
+          padding: 2px 8px;
+          border-radius: 12px;
+          background: #FEF3C7;
+          color: #D97706;
+          font-size: 0.6rem;
+        }
+        
+        .specialty-cell { font-size: 0.8rem; color: #475569; margin-bottom: 4px; }
+        
+        .domains-list {
+          display: flex;
+          gap: 4px;
+          flex-wrap: wrap;
+        }
+        
+        .domain-badge {
+          padding: 2px 8px;
+          border-radius: 12px;
+          background: #F1F5F9;
+          color: #475569;
+          font-size: 0.65rem;
+        }
+        
+        .date-cell { font-size: 0.75rem; color: #64748B; }
+        
+        .action-buttons {
+          display: flex;
+          gap: 8px;
+        }
+        
+        .btn-approve, .btn-reject, .btn-revoke, .btn-delete {
+          padding: 6px 12px;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          font-size: 0.7rem;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        
+        .btn-approve { background: #10B981; color: white; }
+        .btn-reject { background: #EF4444; color: white; }
+        .btn-revoke { background: #FEF3C7; color: #D97706; }
+        .btn-delete { background: #FEE2E2; color: #DC2626; }
+        
+        .messages-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+        }
+        
+        .messages-header h2 {
+          font-size: 1.3rem;
+          color: #0A2647;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        
+        .btn-refresh {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          background: white;
+          cursor: pointer;
+        }
+        
+        .messages-list {
+          display: grid;
+          gap: 16px;
+        }
+        
+        .message-card {
+          background: white;
+          border-radius: 16px;
+          padding: 20px;
+          border: 1px solid #E2E8F0;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .message-card.unread { background: #FEF3C7; border-color: #FDE68A; }
+        .message-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        
+        .message-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        
+        .message-sender {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        
+        .sender-name { font-weight: 700; color: #0A2647; }
+        .sender-email { font-size: 0.7rem; color: #64748B; }
+        .unread-badge {
+          background: #F59E0B;
+          color: white;
+          padding: 2px 8px;
+          border-radius: 20px;
+          font-size: 0.65rem;
+        }
+        
+        .message-subject { font-weight: 600; margin-bottom: 8px; color: #1B3B6F; }
+        .message-preview { font-size: 0.85rem; color: #475569; margin-bottom: 12px; }
+        .message-date {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.65rem;
+          color: #94A3B8;
+        }
+        
+        .logs-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+        }
+        
+        .logs-header h2 {
+          font-size: 1.3rem;
+          color: #0A2647;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        
+        .logs-table-container {
+          background: white;
+          border-radius: 20px;
+          border: 1px solid #E2E8F0;
+          overflow-x: auto;
+        }
+        
+        .logs-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        
+        .logs-table th {
+          text-align: left;
+          padding: 14px 16px;
+          background: #F8FAFC;
+          font-weight: 600;
+          font-size: 0.75rem;
+          color: #64748B;
+          border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .logs-table td {
+          padding: 12px 16px;
+          border-bottom: 1px solid #F1F5F9;
+          font-size: 0.8rem;
+        }
+        
+        .log-row.error { background: #FEF2F2; }
+        
+        .log-action {
+          font-family: monospace;
+          font-size: 0.75rem;
+          background: #F1F5F9;
+          padding: 2px 8px;
+          border-radius: 6px;
+        }
+        
+        .log-status {
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 0.7rem;
+          font-weight: 600;
+        }
+        
+        .log-status.success { background: #D1FAE5; color: #059669; }
+        .log-status.error { background: #FEE2E2; color: #DC2626; }
+        
+        .settings-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 24px;
+        }
+        
+        .settings-card {
+          background: white;
+          border-radius: 20px;
+          padding: 24px;
+          border: 1px solid #E2E8F0;
+          text-align: center;
+        }
+        
+        .settings-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        
+        .settings-card-header svg { color: #FFD700; }
+        .settings-card-header h3 { font-size: 1rem; color: #0A2647; margin: 0; }
+        .settings-card p { font-size: 0.8rem; color: #64748B; margin-bottom: 20px; }
+        
+        .btn-settings {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          border-radius: 12px;
+          background: #F1F5F9;
+          border: none;
+          cursor: pointer;
+          font-size: 0.8rem;
+          font-weight: 600;
+        }
+        
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+        
+        .modal-content {
+          background: white;
+          border-radius: 24px;
+          max-width: 600px;
+          width: 90%;
+          max-height: 85vh;
+          overflow: auto;
+        }
+        
+        .modal-content.large { max-width: 700px; }
+        
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px 24px;
+          border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .modal-header h3 { font-size: 1.1rem; color: #0A2647; margin: 0; }
+        
+        .modal-close {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #64748B;
+        }
+        
+        .modal-body { padding: 24px; }
+        
+        .modal-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          padding: 16px 24px;
+          border-top: 1px solid #E2E8F0;
+        }
+        
+        .form-group {
+          margin-bottom: 16px;
+        }
+        
+        .form-group label {
+          display: block;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #475569;
+          margin-bottom: 6px;
+        }
+        
+        .form-group input {
+          width: 100%;
+          padding: 10px 14px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          font-size: 0.9rem;
+        }
+        
+        .checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.8rem;
+          margin-top: 12px;
+        }
+        
+        .btn-outline {
+          padding: 8px 20px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          background: white;
+          cursor: pointer;
+        }
+        
+        .btn-test {
+          padding: 8px 20px;
+          border-radius: 10px;
+          background: #8B5CF6;
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        
+        .webhooks-list { margin-bottom: 24px; }
+        
+        .webhook-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px;
+          background: #F8FAFC;
+          border-radius: 12px;
+          margin-bottom: 8px;
+        }
+        
+        .webhook-url {
+          font-size: 0.7rem;
+          color: #64748B;
+          display: block;
+        }
+        
+        .webhook-events {
+          font-size: 0.65rem;
+          color: #94A3B8;
+          margin-top: 4px;
+        }
+        
+        .webhook-actions {
+          display: flex;
+          gap: 6px;
+        }
+        
+        .webhook-toggle {
+          padding: 4px 12px;
+          border-radius: 20px;
+          border: none;
+          cursor: pointer;
+          font-size: 0.7rem;
+          font-weight: 600;
+        }
+        
+        .webhook-toggle.active { background: #D1FAE5; color: #059669; }
+        .webhook-toggle:not(.active) { background: #FEE2E2; color: #DC2626; }
+        
+        .webhook-delete {
+          padding: 4px 8px;
+          border-radius: 6px;
+          border: none;
+          cursor: pointer;
+          background: white;
+        }
+        
+        .webhook-add {
+          padding-top: 16px;
+          border-top: 1px solid #E2E8F0;
+        }
+        
+        .webhook-add input, .webhook-add select {
+          width: 100%;
+          padding: 10px 14px;
+          border-radius: 10px;
+          border: 1.5px solid #E2E8F0;
+          margin-bottom: 12px;
+        }
+        
+        .btn-add {
+          width: 100%;
+          padding: 10px;
+          border-radius: 10px;
+          background: #10B981;
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        
+        .backup-actions {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+        }
+        
+        .btn-backup {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          border-radius: 10px;
+          background: #0A2647;
+          color: white;
+          border: none;
+          cursor: pointer;
+        }
+        
+        .backup-history h4 {
+          font-size: 0.9rem;
+          margin-bottom: 12px;
+          color: #0A2647;
+        }
+        
+        .backup-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid #F1F5F9;
+          font-size: 0.8rem;
+        }
+        
+        .backup-status {
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 0.7rem;
+          font-weight: 600;
+        }
+        
+        .backup-status.success { background: #D1FAE5; color: #059669; }
+        
+        .loading-state {
+          text-align: center;
+          padding: 60px;
+        }
+        
+        .spinner {
+          width: 48px;
+          height: 48px;
+          border: 3px solid #E2E8F0;
+          border-top-color: #FFD700;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin: 0 auto 16px;
+        }
+        
+        .empty-state {
+          text-align: center;
+          padding: 40px;
+          color: #94A3B8;
+        }
+        
+        .empty-state-large {
+          text-align: center;
+          padding: 60px;
+          background: white;
+          border-radius: 24px;
+          border: 1px solid #E2E8F0;
+        }
+        
+        .empty-state-large svg {
+          width: 64px;
+          height: 64px;
+          color: #94A3B8;
+          margin-bottom: 16px;
+        }
+        
+        .toast {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          padding: 12px 24px;
+          border-radius: 12px;
+          color: white;
+          font-size: 0.85rem;
+          z-index: 1100;
+        }
+        
+        .toast.success { background: #10B981; }
+        .toast.error { background: #EF4444; }
+        
+        @media (max-width: 1200px) {
+          .dashboard-stats-grid { grid-template-columns: repeat(3, 1fr); }
+          .charts-grid { grid-template-columns: 1fr; }
+          .two-columns { grid-template-columns: 1fr; }
+          .settings-grid { grid-template-columns: 1fr; }
+          .filter-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        
+        @media (max-width: 768px) {
+          .dashboard-stats-grid { grid-template-columns: repeat(2, 1fr); }
+          .toolbar { flex-direction: column; align-items: stretch; }
+          .toolbar-left, .toolbar-right { justify-content: center; }
+          .users-table { font-size: 0.7rem; }
+          .users-table th, .users-table td { padding: 12px 8px; }
+          .action-buttons { flex-direction: column; gap: 4px; }
+        }
+        
+        @media (max-width: 640px) {
+          .dashboard-stats-grid { grid-template-columns: 1fr; }
+          .filter-stats-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   );
 }

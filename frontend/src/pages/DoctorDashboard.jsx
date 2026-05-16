@@ -213,11 +213,12 @@ const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, o
      <div className="pd3-health-card" style={{ 
       display: "flex", 
       flexDirection: "column", 
-      height: "auto",  // CHANGÉ: plus de hauteur fixe
-      minHeight: "500px"  // Réduit
+      height: "650px",
+      minHeight: "650px",
+      overflow: "hidden",
     }}>
       <div className="pd3-health-bg-pattern"/><div className="pd3-health-glow-1"/><div className="pd3-health-glow-2"/>
-      <div className="pd3-health-content" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="pd3-health-content" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
         
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexShrink: 0 }}>
@@ -230,7 +231,7 @@ const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, o
         </div>
 
         {/* Contenu scrollable */}
-        <div style={{ flex: 1, overflowY: "auto", paddingRight: "8px" }}>
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: "8px", minHeight: 0 }}>
           {analysisLoading ? (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}>
@@ -396,7 +397,12 @@ const AnalysisSection = ({ analysis, analysisLoading, explainText, explaining, o
 // ChatSection - Version avec cadre agrandi
 const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend, canMessage, onClose, model, loading }) => {
   const messagesEndRef = useRef(null);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  const messagesContainerRef = useRef(null);
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   if (!consultationData) {
     return (
@@ -423,8 +429,9 @@ const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend
     <div className="pd3-health-card" style={{ 
       display: "flex", 
       flexDirection: "column", 
-      height: "auto",
-      minHeight: "650px",  // Agrandi de 550px à 650px
+      height: "650px",
+      minHeight: "650px",
+      overflow: "hidden",
     }}>
       {/* Header */}
       <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(232,184,48,0.1)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
@@ -453,7 +460,7 @@ const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend
       </div>
 
       {/* Messages - ZONE AGRANDIE */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", minHeight: "480px", maxHeight: "480px" }}>
+      <div ref={messagesContainerRef} style={{ flex: 1, overflowY: "auto", padding: "28px 32px", minHeight: "480px", maxHeight: "480px" }}>
         {messages.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", color: "rgba(255,255,255,0.3)" }}>
             <I.Message size={56} style={{ marginBottom: 20 }}/>
@@ -463,7 +470,6 @@ const ChatSection = ({ consultationData, messages, msgInput, setMsgInput, onSend
         ) : (
           messages.map(m => <MessageBubble key={m.id} message={m} isDoctor={true}/>)
         )}
-        <div ref={messagesEndRef}/>
       </div>
 
       {/* Input - Plus grand */}

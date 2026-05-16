@@ -17,6 +17,10 @@ import VideoConsultation from "./pages/VideoConsultation";
 import DoctorQueue from "./pages/DoctorQueue";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
+import VerifyEmail from "./pages/VerifyEmail";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Contact from "./pages/Contact";
 import "./styles/globals.css";
 
 // Composant de redirection selon le rôle
@@ -122,6 +126,15 @@ function AppRoutes() {
 
       {/* 404 - Rediriger vers la page d'accueil */}
       <Route path="*" element={<Navigate to="/" replace />} />
+
+      <Route path="/verify-email" element={<VerifyEmail />} />
+
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/features" element={<Contact />} />  
+      <Route path="/process" element={<Contact />} />    
+      <Route path="/testimonials" element={<Contact />} /> 
 
 
 

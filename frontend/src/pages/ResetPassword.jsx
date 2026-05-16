@@ -1,20 +1,23 @@
-// src/pages/LoginPage.jsx
+// frontend/src/pages/ResetPassword.jsx
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import "./HomePage.css";
 import chestXrayImage from '../assets/chest-xray.jpg';
 
-export default function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
+const API_BASE = "http://localhost:8000/api/v1";
 
-  const [identifier, setIdentifier] = useState("");
+export default function ResetPassword() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const token = searchParams.get("token");
+
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -23,43 +26,65 @@ export default function LoginPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (!token) {
+      setError("Lien de réinitialisation invalide");
+    }
+  }, [token]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!identifier || !password) {
-      setError("Veuillez remplir tous les champs.");
+
+    if (!password || !confirmPassword) {
+      setError("Veuillez remplir tous les champs");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères");
       return;
     }
 
     setLoading(true);
     setError("");
+    setMessage("");
 
     try {
-      const user = await login(identifier.trim(), password);
+      const response = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, new_password: password }),
+      });
 
-      if (user.is_admin || user.role === "Administrateur") {
-        navigate("/admin");
-      } else if (user.role === "Patient") {
-        navigate("/patient");
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage("Mot de passe réinitialisé avec succès !");
+        setTimeout(() => navigate("/login"), 3000);
       } else {
-        navigate("/home");
+        setError(data.detail || "Une erreur est survenue");
       }
     } catch (err) {
-      setError(err.message || "Identifiants incorrects");
+      setError("Impossible de contacter le serveur");
     } finally {
       setLoading(false);
     }
   };
 
-  const fillDemo = (username, password) => {
-    setIdentifier(username);
-    setPassword(password);
-    setError("");
-  };
-
   return (
     <div className="hp">
       {/* Navigation premium */}
-      <motion.nav className={`hp-nav ${scrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: 0.5, type: "spring", stiffness: 100 }}>
+      <motion.nav 
+        className={`hp-nav ${scrolled ? "scrolled" : ""}`} 
+        initial={{ y: -80 }} 
+        animate={{ y: 0 }} 
+        transition={{ duration: 0.5, type: "spring", stiffness: 100 }}
+      >
         <div className="hp-nav-logo" onClick={() => navigate("/")}>
           <div className="hp-logo-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
@@ -68,13 +93,12 @@ export default function LoginPage() {
           </div>
           <span>Med<span className="accent">AI</span></span>
         </div>
-       
         <div className="hp-nav-actions">
-          <Link to="/register" className="hp-btn hp-btn-outline hp-btn-sm">S'inscrire</Link>
+          <Link to="/login" className="hp-btn hp-btn-outline hp-btn-sm">Connexion</Link>
         </div>
       </motion.nav>
 
-      {/* Hero Section avec image médicale */}
+      {/* Hero Section */}
       <section className="hp-hero" style={{ minHeight: "100vh", position: "relative" }}>
         <div className="hp-hero-grid-bg" />
         <div className="hp-hero-glow hp-hero-glow-1" />
@@ -103,197 +127,143 @@ export default function LoginPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <div className="hp-badge" style={{ marginBottom: 24 }}>
                 <span className="hp-badge-dot" />
-                <span>ACCÈS SÉCURISÉ</span>
+                <span>RÉINITIALISATION</span>
                 <span className="hp-badge-sep">•</span>
-                <span>SSL/TLS</span>
+                <span>NOUVEAU MOT DE PASSE</span>
               </div>
             </motion.div>
 
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-              Accédez à votre<br />
-              <span className="gd">espace médical</span>
+              Nouveau<br />
+              <span className="gd">mot de passe</span>
             </motion.h1>
 
             <motion.p className="hp-hero-desc" style={{ maxWidth: 480 }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-            Plateforme de diagnostic assisté par IA. Connectez-vous pour accéder à vos outils médicaux.
+              Créez un nouveau mot de passe pour votre compte MedAI.
             </motion.p>
 
-           {/* Formulaire de connexion */}
-<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
-  <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>
-    <div style={{ marginBottom: 20 }}>
-      <input
-        type="text"
-        value={identifier}
-        onChange={(e) => setIdentifier(e.target.value)}
-        placeholder="Identifiant médical ou email"
-        style={{
-          width: "100%",
-          padding: "14px 18px",
-          background: "rgba(255,255,255,0.08)",
-          border: "1.5px solid rgba(255,255,255,0.2)",
-          borderRadius: 14,
-          fontSize: "0.95rem",
-          color: "white",
-          outline: "none",
-          transition: "all 0.2s",
-        }}
-        onFocus={e => e.target.style.borderColor = "#FFD700"}
-        onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
-      />
-    </div>
-
-    <div style={{ position: "relative", marginBottom: 20 }}>
-      <input
-        type={showPassword ? "text" : "password"}
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Mot de passe"
-        style={{
-          width: "100%",
-          padding: "14px 18px",
-          background: "rgba(255,255,255,0.08)",
-          border: "1.5px solid rgba(255,255,255,0.2)",
-          borderRadius: 14,
-          fontSize: "0.95rem",
-          color: "white",
-          outline: "none",
-          transition: "all 0.2s",
-        }}
-        onFocus={e => e.target.style.borderColor = "#FFD700"}
-        onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
-      />
-      <button
-        type="button"
-        onClick={() => setShowPassword(!showPassword)}
-        style={{
-          position: "absolute",
-          right: 16,
-          top: "50%",
-          transform: "translateY(-50%)",
-          background: "none",
-          border: "none",
-          color: "rgba(255,255,255,0.6)",
-          cursor: "pointer",
-          fontSize: "1rem"
-        }}
-      >
-        {showPassword ? "🙈" : "👁️"}
-      </button>
-    </div>
-
-    {error && (
-      <div style={{
-        padding: "12px 16px",
-        background: "rgba(239,68,68,0.15)",
-        border: "1px solid rgba(239,68,68,0.3)",
-        borderRadius: 12,
-        color: "#FEE2E2",
-        fontSize: "0.85rem",
-        marginBottom: 20,
-        display: "flex",
-        alignItems: "center",
-        gap: 10
-      }}>
-        <span>⚠️</span> {error}
-      </div>
-    )}
-
-    <button
-      type="submit"
-      disabled={loading}
-      className="hp-btn hp-btn-gold"
-      style={{ width: "100%", padding: "14px", fontSize: "0.95rem", justifyContent: "center" }}
-    >
-      {loading ? (
-        <><span className="hp-pulse" style={{ marginRight: 8 }} /> Connexion en cours...</>
-      ) : (
-        <>Accéder à MedAI →</>
-      )}
-    </button>
-
-    {/* ========== LIEN MOT DE PASSE OUBLIÉ ========== */}
-    <div style={{ textAlign: "center", marginTop: 16 }}>
-      <Link 
-        to="/forgot-password" 
-        style={{ 
-          color: "rgba(255,255,255,0.5)", 
-          fontSize: "0.75rem", 
-          textDecoration: "none",
-          transition: "color 0.2s",
-          display: "inline-block"
-        }}
-        onMouseEnter={e => e.target.style.color = "#FFD700"}
-        onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.5)"}
-      >
-        Mot de passe oublié ?
-      </Link>
-    </div>
-    {/* =========================================== */}
-  </form>
-</motion.div>
-
-            {/* Comptes de démonstration */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} style={{ marginTop: 32 }}>
-              <div style={{
-                borderTop: "1px solid rgba(255,255,255,0.1)",
-                paddingTop: 24,
-                textAlign: "center"
-              }}>
-                <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: 16, letterSpacing: "1px" }}>
-                  COMPTES DE DÉMONSTRATION
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-                  {[
-                    { user: "dr.martin", pass: "chest123", label: "Dr. Martin", role: "Radiologue", icon: "🫁", color: "#2D5F9E" },
-                    { user: "dr.lambert", pass: "neuro123", label: "Dr. Lambert", role: "Neurologue", icon: "🧠", color: "#6B4FA0" },
-                    { user: "dr.benali", pass: "lung123", label: "Dr. Benali", role: "Oncologue", icon: "🔬", color: "#DC2626" },
-                    { user: "dr.seddik", pass: "retina123", label: "Dr. Seddik", role: "Ophtalmologue", icon: "👁️", color: "#0E7490" },
-                    { user: "patient", pass: "patient123", label: "Patient", role: "Espace patient", icon: "👤", color: "#0EA5E9" }
-                  ].map((demo, idx) => (
-                    <motion.button
-                      key={idx}
-                      onClick={() => fillDemo(demo.user, demo.pass)}
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
+            {/* Formulaire */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+              <form onSubmit={handleSubmit} style={{ marginTop: 32 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Nouveau mot de passe"
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 14px",
-                        background: `rgba(${parseInt(demo.color.slice(1,3),16)}, ${parseInt(demo.color.slice(3,5),16)}, ${parseInt(demo.color.slice(5,7),16)}, 0.1)`,
-                        border: `1px solid ${demo.color}40`,
-                        borderRadius: 12,
+                        width: "100%",
+                        padding: "14px 18px",
+                        background: "rgba(255,255,255,0.08)",
+                        border: "1.5px solid rgba(255,255,255,0.2)",
+                        borderRadius: 14,
+                        fontSize: "0.95rem",
+                        color: "white",
+                        outline: "none",
+                        transition: "all 0.2s",
+                      }}
+                      onFocus={e => e.target.style.borderColor = "#FFD700"}
+                      onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: "absolute",
+                        right: 16,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        color: "rgba(255,255,255,0.6)",
                         cursor: "pointer",
-                        textAlign: "left"
+                        fontSize: "1rem"
                       }}
                     >
-                      <div style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        background: `${demo.color}20`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "1.2rem"
-                      }}>
-                        {demo.icon}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "white" }}>{demo.label}</div>
-                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.5)" }}>{demo.role}</div>
-                      </div>
-                    </motion.button>
-                  ))}
+                      {showPassword ? "🙈" : "👁️"}
+                    </button>
+                  </div>
                 </div>
-              </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirmer le mot de passe"
+                    style={{
+                      width: "100%",
+                      padding: "14px 18px",
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1.5px solid rgba(255,255,255,0.2)",
+                      borderRadius: 14,
+                      fontSize: "0.95rem",
+                      color: "white",
+                      outline: "none",
+                      transition: "all 0.2s",
+                    }}
+                    onFocus={e => e.target.style.borderColor = "#FFD700"}
+                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
+                  />
+                </div>
+
+                {error && (
+                  <div style={{
+                    padding: "12px 16px",
+                    background: "rgba(239,68,68,0.15)",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    borderRadius: 12,
+                    color: "#FEE2E2",
+                    fontSize: "0.85rem",
+                    marginBottom: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10
+                  }}>
+                    <span>⚠️</span> {error}
+                  </div>
+                )}
+
+                {message && (
+                  <div style={{
+                    padding: "12px 16px",
+                    background: "rgba(16,185,129,0.15)",
+                    border: "1px solid rgba(16,185,129,0.3)",
+                    borderRadius: 12,
+                    color: "#D1FAE5",
+                    fontSize: "0.85rem",
+                    marginBottom: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10
+                  }}>
+                    <span>✓</span> {message}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || !token}
+                  className="hp-btn hp-btn-gold"
+                  style={{ width: "100%", padding: "14px", fontSize: "0.95rem", justifyContent: "center" }}
+                >
+                  {loading ? (
+                    <><span className="hp-pulse" style={{ marginRight: 8 }} /> Réinitialisation...</>
+                  ) : (
+                    <>Réinitialiser le mot de passe →</>
+                  )}
+                </button>
+              </form>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} style={{ marginTop: 24, textAlign: "center" }}>
+              <Link to="/login" style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.75rem", textDecoration: "none" }}>
+                ← Retour à la connexion
+              </Link>
             </motion.div>
 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} style={{ marginTop: 24, textAlign: "center" }}>
-              <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
-                Nouveau praticien ? <Link to="/register" style={{ color: "#FFD700", textDecoration: "none" }}>Demander un accès professionnel</Link>
-              </p>
               <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -312,7 +282,7 @@ export default function LoginPage() {
             </motion.div>
           </div>
 
-          {/* Image médicale à droite - effet visuel */}
+          {/* Image médicale à droite */}
           <motion.div
             className="hp-hero-visual"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -367,14 +337,6 @@ export default function LoginPage() {
             </motion.div>
           </motion.div>
         </div>
-
-        {/* Scroll indicator */}
-        <div className="hp-hero-scroll">
-          <span>Scroll to explore</span>
-          <div className="hp-scroll-mouse">
-            <div className="hp-scroll-wheel" />
-          </div>
-        </div>
       </section>
 
       {/* Footer premium */}
@@ -418,18 +380,6 @@ export default function LoginPage() {
           </div>
         </div>
       </footer>
-
-      <style>{`
-        .hp-nav-logo span { color: white; }
-        .hp-nav-links a { color: rgba(255,255,255,0.7); }
-        .hp-nav-links a:hover { color: white; }
-        .hp-nav-actions .hp-btn-outline { border-color: rgba(255,255,255,0.3); color: white; }
-        .hp-nav-actions .hp-btn-outline:hover { background: white; color: var(--navy); border-color: white; }
-        .hp-nav.scrolled .hp-nav-links a { color: var(--txt2); }
-        .hp-nav.scrolled .hp-nav-links a:hover { color: var(--navy); }
-        .hp-nav.scrolled .hp-nav-actions .hp-btn-outline { border-color: var(--navy); color: var(--navy); }
-        .hp-nav.scrolled .hp-nav-actions .hp-btn-outline:hover { background: var(--navy); color: white; }
-      `}</style>
     </div>
   );
 }

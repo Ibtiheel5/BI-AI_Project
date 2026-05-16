@@ -1,9 +1,10 @@
 # backend/main.py — version corrigée
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from app.api.contact import router as contact_router
 
 # ── App ────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -15,11 +16,19 @@ app = FastAPI(
 # ── CORS corrigé ────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
 # ── Servir les images uploadées ────────────────────────────────────
 uploads_dir = Path("uploads")
 uploads_dir.mkdir(exist_ok=True)
@@ -70,6 +79,22 @@ try:
 except Exception as e:
     print(f"⚠️ CIM11 router error: {e}")
 
+try:
+    from app.api.contact import router as contact_router
+    app.include_router(contact_router, prefix="/api/v1")
+    print("✅ Contact router loaded")
+except Exception as e:
+    print(f"❌ Contact router error: {e}")
+
+# ========== AJOUTER LE ROUTER ADMIN ICI ==========
+try:
+    from app.api.admin import router as admin_router, init_admin_tables  # ← CORRIGÉ: plus de "backend."
+    app.include_router(admin_router, prefix="/api/v1")
+    print("✅ Admin router loaded (logs, webhooks, settings)")
+except Exception as e:
+    print(f"❌ Admin router error: {e}")
+# ===============================================
+
 print("✅ Router loading complete")
 
 # ── Startup ────────────────────────────────────────────────────────
@@ -87,6 +112,14 @@ async def startup():
         print("✅ Tables consultations OK")
     except Exception as e:
         print(f"⚠️ DB consultations échouée: {e}")
+    
+    # ========== AJOUTER CET APPEL ==========
+    try:
+        init_admin_tables()
+        print("✅ Tables admin (logs, webhooks, settings) OK")
+    except Exception as e:
+        print(f"⚠️ DB admin échouée: {e}")
+    # =====================================
 
 # ── Health ─────────────────────────────────────────────────────────
 @app.get("/health")

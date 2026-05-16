@@ -291,17 +291,23 @@ export default function HomePage() {
             </motion.p>
             
             <motion.div className="hp-hero-btns" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .3 }}>
-              <button className="hp-btn hp-btn-gold hp-btn-lg" onClick={handleGetStarted}>
+              <button 
+    className="hp-btn hp-btn-gold hp-btn-lg" 
+    onClick={() => navigate("/login")}
+              >
                 <UploadIco size={18} color="#0F1B2D" />
                 Start Free Trial
                 <span className="hp-btn-badge">No credit card</span>
               </button>
-              <button className="hp-btn hp-btn-outline hp-btn-lg" onClick={handleGetStartedClassification} style={{ color: "#fff", borderColor: "rgba(255,255,255,.25)" }}>
+              <button className="hp-btn hp-btn-outline hp-btn-lg" onClick={() => navigate("/case-studies")} style={{ color: "#fff", borderColor: "rgba(255,255,255,.25)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polygon points="10 8 16 12 10 16 10 8"/>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
                 </svg>
-                Try Demo
+                Case Studies
               </button>
             </motion.div>
             
@@ -515,35 +521,32 @@ export default function HomePage() {
       </section>
 
       {/* TESTIMONIALS */}
-      <section id="testimonials" className="hp-testi">
-        <R>
-          <div className="hp-stitle">
-            <div className="hp-sbadge">TESTIMONIALS</div>
-            <h2>Trusted by <span className="gd">medical experts</span> worldwide</h2>
-            <p>Join over 500 healthcare institutions using MedAI for clinical decision support.</p>
-          </div>
-        </R>
-        <div className="hp-tgrid">
-          {testi.map((t, i) => (
-            <R key={i} delay={i * .09}>
-              <motion.div className="hp-tcard" whileHover={{ y: -8 }}>
-                <div className="hp-tcard-hdr">
-                  <img className="hp-tcard-av" src={t.img} alt={t.nm} />
-                  <div>
-                    <div className="hp-tcard-nm">{t.nm}</div>
-                    <div className="hp-tcard-rl">{t.rl}</div>
-                  </div>
-                  <div className="hp-tcard-quote">"</div>
-                </div>
-                <div className="hp-tcard-stars">
-                  {[...Array(5)].map((_, j) => <StarIco key={j} fill={j < t.r ? "#D4A500" : "none"} size={14} />)}
-                </div>
-                <p className="hp-tcard-txt">"{t.tx}"</p>
-              </motion.div>
-            </R>
-          ))}
-        </div>
-      </section>
+<section id="testimonials" className="hp-testi">
+  <R>
+    <div className="hp-stitle">
+      <div className="hp-sbadge">TESTIMONIALS</div>
+      <h2>Trusted by <span className="gd">medical experts</span> worldwide</h2>
+      <p>Join over 500 healthcare institutions using MedAI for clinical decision support.</p>
+    </div>
+  </R>
+  <div className="hp-tgrid">
+    {testi.map((t, i) => (
+      <R key={i} delay={i * .09}>
+        <motion.div className="hp-tcard" whileHover={{ y: -8 }}>
+          {/* ... contenu existant ... */}
+        </motion.div>
+      </R>
+    ))}
+  </div>
+  
+  {/* AJOUTEZ CE LIEN CONTACT SOUS LES TÉMOIGNAGES */}
+  <div style={{ textAlign: "center", marginTop: 40 }}>
+    <a href="/contact" onClick={(e) => { e.preventDefault(); navigate("/contact"); }} style={{ color: "#D4A500", textDecoration: "none", fontSize: "14px", fontWeight: 500 }}>
+      📧 Vous avez des questions ? Contactez-nous
+    </a>
+  </div>
+</section>
+
 
       {/* CTA SECTION */}
       <section className="hp-cta">

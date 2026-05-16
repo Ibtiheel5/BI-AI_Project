@@ -41,16 +41,16 @@ const Icons = {
       <circle cx="12" cy="7" r="4"/>
     </SvgIcon>
   ),
-  Lock: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color}>
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </SvgIcon>
-  ),
   Mail: ({ size = 24, color = "currentColor" }) => (
     <SvgIcon size={size} color={color}>
       <rect x="2" y="4" width="20" height="16" rx="2"/>
       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </SvgIcon>
+  ),
+  Lock: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color}>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
     </SvgIcon>
   ),
   UserCheck: ({ size = 24, color = "currentColor" }) => (
@@ -129,7 +129,6 @@ const Icons = {
       <circle cx="12" cy="12" r="2"/>
     </SvgIcon>
   ),
-  // Icône pour la rétine / œil
   EyeMedical: ({ size = 24, color = "currentColor" }) => (
     <SvgIcon size={size} color={color}>
       <path d="M12 4C7 4 2 7 2 12s5 8 10 8 10-3 10-8-5-8-10-8z"/>
@@ -159,6 +158,8 @@ export default function RegisterPage() {
   const [scrolled, setScrolled] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [registerSuccess, setRegisterSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -171,7 +172,6 @@ export default function RegisterPage() {
   };
 
   const toggleDomain = (key) => {
-    // ✅ MAINTENANT "retina" est autorisé !
     const VALID_BACKEND_DOMAINS = ["chest", "lung", "brain", "retina"];
     if (!VALID_BACKEND_DOMAINS.includes(key)) return;
     setFormData(prev => ({
@@ -183,7 +183,11 @@ export default function RegisterPage() {
   };
 
   const validateStep1 = () => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    
     if (!formData.fullName.trim()) return "Veuillez entrer votre nom complet";
+    if (!formData.email.trim()) return "Veuillez entrer votre adresse email";
+    if (!emailRegex.test(formData.email)) return "Adresse email invalide";
     if (!formData.username.match(/^[a-zA-Z0-9._-]{3,50}$/))
       return "Identifiant invalide (3-50 caractères, lettres/chiffres/points/tirets)";
     if (formData.password.length < 6)
@@ -203,14 +207,18 @@ export default function RegisterPage() {
     setError("");
 
     try {
-      await register({
+      const response = await register({
         username: formData.username,
+        email: formData.email,
         password: formData.password,
         fullName: formData.fullName,
         domains: role === "Patient" ? [] : formData.domains,
         specialty: formData.specialty || "",
         role: role,
       });
+      
+      setSuccessMessage(response.message || "Un email de vérification a été envoyé à votre adresse.");
+      setRegisterSuccess(true);
       setStep(3);
     } catch (err) {
       setError(err.message || "Une erreur est survenue");
@@ -219,7 +227,6 @@ export default function RegisterPage() {
     }
   };
 
-  // ✅ DOMAINES AVEC RETINA AJOUTÉ
   const DOMAIN_OPTIONS = [
     {
       key: "chest",
@@ -430,10 +437,34 @@ export default function RegisterPage() {
                       type="text"
                       value={formData.fullName}
                       onChange={(e) => updateForm("fullName", e.target.value)}
-                      placeholder="Nom complet"
+                      placeholder="Nom complet *"
                       style={{
                         width: "100%",
                         padding: "14px 18px",
+                        background: "rgba(255,255,255,0.08)",
+                        border: "1.5px solid rgba(255,255,255,0.2)",
+                        borderRadius: 14,
+                        fontSize: "0.95rem",
+                        color: "white",
+                        outline: "none",
+                      }}
+                      onFocus={e => e.target.style.borderColor = "#FFD700"}
+                      onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.2)"}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16, position: "relative" }}>
+                    <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.4)" }}>
+                      <Icons.Mail size={16} />
+                    </div>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => updateForm("email", e.target.value)}
+                      placeholder="Adresse email *"
+                      style={{
+                        width: "100%",
+                        padding: "14px 18px 14px 45px",
                         background: "rgba(255,255,255,0.08)",
                         border: "1.5px solid rgba(255,255,255,0.2)",
                         borderRadius: 14,
@@ -451,7 +482,7 @@ export default function RegisterPage() {
                       type="text"
                       value={formData.username}
                       onChange={(e) => updateForm("username", e.target.value.toLowerCase())}
-                      placeholder="Identifiant"
+                      placeholder="Identifiant *"
                       style={{
                         width: "100%",
                         padding: "14px 18px",
@@ -491,14 +522,17 @@ export default function RegisterPage() {
                   )}
 
                   <div style={{ marginBottom: 16, position: "relative" }}>
+                    <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.4)" }}>
+                      <Icons.Lock size={16} />
+                    </div>
                     <input
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => updateForm("password", e.target.value)}
-                      placeholder="Mot de passe (6 caractères min.)"
+                      placeholder="Mot de passe (6 caractères min.) *"
                       style={{
                         width: "100%",
-                        padding: "14px 18px",
+                        padding: "14px 18px 14px 45px",
                         background: "rgba(255,255,255,0.08)",
                         border: "1.5px solid rgba(255,255,255,0.2)",
                         borderRadius: 14,
@@ -529,14 +563,17 @@ export default function RegisterPage() {
                   </div>
 
                   <div style={{ marginBottom: 20, position: "relative" }}>
+                    <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.4)" }}>
+                      <Icons.Lock size={16} />
+                    </div>
                     <input
                       type={showConfirmPassword ? "text" : "password"}
                       value={formData.confirmPassword}
                       onChange={(e) => updateForm("confirmPassword", e.target.value)}
-                      placeholder="Confirmer le mot de passe"
+                      placeholder="Confirmer le mot de passe *"
                       style={{
                         width: "100%",
-                        padding: "14px 18px",
+                        padding: "14px 18px 14px 45px",
                         background: "rgba(255,255,255,0.08)",
                         border: "1.5px solid rgba(255,255,255,0.2)",
                         borderRadius: 14,
@@ -606,7 +643,7 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
-            {/* ÉTAPE 2 - Domaines (médecins) avec RETINA */}
+            {/* ÉTAPE 2 - Domaines (médecins) */}
             {step === 2 && role === "Medecin" && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} style={{ marginTop: 32 }}>
                 <button
@@ -750,7 +787,7 @@ export default function RegisterPage() {
             )}
 
             {/* ÉTAPE 3 - Succès */}
-            {step === 3 && (
+            {step === 3 && registerSuccess && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -768,18 +805,32 @@ export default function RegisterPage() {
                   justifyContent: "center",
                   margin: "0 auto 24px"
                 }}>
-                  <Icons.Check size={40} color="#10B981" />
+                  <Icons.Mail size={40} color="#10B981" />
                 </div>
                 <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "white", marginBottom: 12 }}>
-                  {role === "Medecin" ? "Demande envoyée !" : "Compte créé !"}
+                  Vérifiez votre email !
                 </h2>
-                <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.7)", marginBottom: 28 }}>
-                  {role === "Medecin"
-                    ? "Votre demande a été transmise à l'administrateur. Votre compte sera validé sous peu."
-                    : "Votre compte patient a été créé avec succès. Vous pouvez vous connecter dès maintenant."}
+                <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.7)", marginBottom: 28, lineHeight: 1.6 }}>
+                  {successMessage}
                 </p>
+                <div style={{
+                  padding: "16px",
+                  background: "rgba(255,255,255,0.05)",
+                  borderRadius: 12,
+                  marginBottom: 24,
+                  border: "1px solid rgba(255,215,0,0.2)"
+                }}>
+                  <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
+                    <strong>📧 Email envoyé à :</strong><br />
+                    {formData.email}
+                  </p>
+                  <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", marginTop: 8 }}>
+                    ⏱️ Le lien expire dans 24 heures.<br />
+                    {role === "Medecin" && "✅ Après vérification, votre compte sera soumis à l'approbation de l'administrateur."}
+                  </p>
+                </div>
                 <button onClick={() => navigate("/login")} className="hp-btn hp-btn-gold" style={{ padding: "12px 28px" }}>
-                  Se connecter <Icons.ArrowRight size={16} />
+                  Aller à la connexion <Icons.ArrowRight size={16} />
                 </button>
               </motion.div>
             )}

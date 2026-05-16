@@ -266,12 +266,14 @@ export default function CIM11Chatbot({ doctor, height = "600px", style = {} }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
   const token = localStorage.getItem("medai-token");
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages, loading]);
 
   const send = async (text) => {
@@ -399,13 +401,14 @@ export default function CIM11Chatbot({ doctor, height = "600px", style = {} }) {
           </div>
         </div>
 
-        {/* Messages - ZONE TRÈS AGRANDIE */}
-        <div style={{ 
+        {/* Messages */}
+        <div ref={messagesContainerRef} style={{ 
           flex: 1, 
           overflowY: "auto", 
           padding: "24px 28px",
           background: "#f8fafc",
-          minHeight: "400px",
+          minHeight: 0,
+          height: 0,
         }}>
           {messages.map((msg, i) => (
             <MessageBubble 
@@ -415,7 +418,6 @@ export default function CIM11Chatbot({ doctor, height = "600px", style = {} }) {
             />
           ))}
           {loading && <TypingIndicator />}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Suggestions */}
