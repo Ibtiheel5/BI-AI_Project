@@ -1,163 +1,396 @@
 """
-Service d'inférence pour le modèle de classification
-Supporte dynamiquement N classes selon le checkpoint
-+ Grad-CAM intégré
+app/services/inference.py
+
+Service d'inférence multi-modèles — chest / lung / brain / retina
+
+RETINA — PIPELINE DRNet (EfficientNetV2-S + Swin-T) :
+=======================================================
+Remplace l'ancien pipeline APTOS (EfficientNet-B3, AptosModel).
+Le nouveau checkpoint best_retina_model.pth contient :
+
+  model_state_dict : poids DRNet (EfficientNetV2-S + Swin-T + tête fusion)
+  metadata         : {
+      'classes'      : ['Mild','Moderate','No_DR','Proliferate_DR','Severe'],
+      'num_classes'  : 5,
+      'img_size'     : 224,
+      'mean'         : [0.485, 0.456, 0.406],
+      'std'          : [0.229, 0.224, 0.225],
+      'normalization': 'imagenet',
+      'backbone'     : 'efficientnetv2_s+swin_t',
+  }
+  epoch            : epoch du meilleur val_f1
+  val_f1           : meilleur F1 macro validation
+  val_acc          : accuracy validation
+  test_acc         : accuracy test
+  test_f1          : F1 macro test
+
+CHANGEMENTS vs ancien AptosModel :
+  - Architecture : DRNet (2 branches CNN + Transformer) au lieu de EfficientNet-B3
+  - Fichier      : best_retina_model.pth  (était final_aptos_model.pth)
+  - Classes      : ordre ALPHABÉTIQUE ['Mild','Moderate','No_DR','Proliferate_DR','Severe']
+                   ≠ ordre APTOS ['No_DR','Mild','Moderate','Severe','Proliferate_DR']
+  - Métadonnées  : sous clé 'metadata' (pas 'model_info')
+  - GradCAM      : cible 'cnn_backbone' (branche CNN de DRNet)
+  - Preprocessing: Ben Graham ajouté dans preprocessing.py (sigma=10)
+
+NORMALISATION : ImageNet mean/std (inchangé vs AptosModel)
 """
-import io
+
 import torch
 import torch.nn.functional as F
-import numpy as np
-from PIL import Image
-from typing import Dict, Optional
+import torch.nn as nn
+import torchvision.models as tvm
+from pathlib import Path
+from typing import Dict
 
 from app.core.config import settings
 from app.services.preprocessing import preprocess_image
 
 
-# Classes NIH par défaut (fallback si le checkpoint ne les contient pas)
-NIH_DEFAULT_CLASSES = [
-    'Atelectasis', 'COVID', 'Cardiomegaly', 'Consolidation',
-    'Edema', 'Effusion', 'Emphysema', 'Fibrosis', 'Hernia',
-    'Infiltration', 'Lung_Opacity', 'Mass', 'No Finding',
-    'Nodule', 'Normal', 'Pleural_Thickening', 'Pneumonia',
-    'Pneumothorax', 'Viral Pneumonia'
-]
+# ── Classes par défaut ────────────────────────────────────────────────────────
 
+CLASSES_CHEST  = [
+    'COVID', 'Lung_Opacity', 'Viral Pneumonia', 'Cardiomegaly',
+    'Pneumothorax', 'Pneumonia', 'Edema', 'Emphysema', 'Nodule', 'Mass'
+]
+CLASSES_LUNG   = ['Benign', 'Malignant', 'Normal']
+CLASSES_BRAIN  = ['glioma', 'meningioma', 'notumor', 'pituitary']
+
+# ⚠️  CHANGEMENT : ordre ALPHABÉTIQUE (dataset folder-based du notebook DRNet)
+#    Mild=0, Moderate=1, No_DR=2, Proliferate_DR=3, Severe=4
+#    (différent de l'ordre APTOS : No_DR=0, Mild=1, Moderate=2, Severe=3, Proliferate_DR=4)
+CLASSES_RETINA = ['Mild', 'Moderate', 'No_DR', 'Proliferate_DR', 'Severe']
+
+MODEL_FILES = {
+    "chest":  "final_model_10classes.pth",
+    "lung":   "final_lung_cancer_model.pth",
+    "brain":  "final_brain_tumor_model.pth",
+    "retina": "best_retina_model.pth",          # ← MODIFIÉ : était final_aptos_model.pth
+}
+MODEL_DEFAULT_CLASSES = {
+    "chest":  CLASSES_CHEST,
+    "lung":   CLASSES_LUNG,
+    "brain":  CLASSES_BRAIN,
+    "retina": CLASSES_RETINA,
+}
+MODEL_IMG_SIZES = {
+    "chest":  224,
+    "lung":   260,
+    "brain":  224,
+    "retina": 224,   # inchangé
+}
+
+
+# ── Architecture chest : ResNet50 ────────────────────────────────────────────
+
+class ChestXrayClassifier(nn.Module):
+    def __init__(self, num_classes, dropout=0.0):
+        super().__init__()
+        self.backbone = tvm.resnet50(weights=None)
+        in_f = self.backbone.fc.in_features
+        self.backbone.fc = nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(in_f, num_classes)
+        )
+
+    def forward(self, x):
+        return self.backbone(x)
+
+
+# ── Architecture lung : EfficientNet-B2 ──────────────────────────────────────
+
+class LungCancerModel(nn.Module):
+    def __init__(self, num_classes=3):
+        super().__init__()
+        import timm
+        from collections import OrderedDict
+        self.backbone = timm.create_model(
+            'efficientnet_b2', pretrained=False, num_classes=0
+        )
+        in_f = self.backbone.num_features
+        self.classifier = nn.Sequential(OrderedDict([
+            ('0', nn.BatchNorm1d(in_f)),
+            ('1', nn.ReLU()),
+            ('2', nn.Linear(in_f, 256)),
+            ('3', nn.ReLU()),
+            ('4', nn.Dropout(p=0.5)),
+            ('5', nn.Linear(256, num_classes)),
+        ]))
+
+    def forward(self, x):
+        return self.classifier(self.backbone(x))
+
+
+# ── Architecture brain : EfficientNet-B3 ─────────────────────────────────────
+
+class BrainTumorModel(nn.Module):
+    def __init__(self, num_classes=4):
+        super().__init__()
+        import timm
+        self.backbone = timm.create_model(
+            'efficientnet_b3', pretrained=False, num_classes=0, global_pool=''
+        )
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.BatchNorm1d(1536),
+            nn.ReLU(),
+            nn.Linear(1536, 512),
+            nn.ReLU(),
+            nn.BatchNorm1d(512),
+            nn.Dropout(p=0.4),
+            nn.Linear(512, num_classes),
+        )
+
+    def forward(self, x):
+        return self.classifier(self.backbone(x))
+
+
+# ── Architecture retina : DRNet (NOUVEAU) ────────────────────────────────────
+#
+# Remplace AptosModel (EfficientNet-B3).
+# Fusion de deux branches :
+#   EfficientNetV2-S (CNN)      → [B, 1280]  ─┐
+#                                               ├→ concat [B,2048] → head → [B,5]
+#   Swin Transformer-T (ViT)   → [B,  768]  ─┘
+#
+# Input  : [B, 3, 224, 224] — normalisé ImageNet, preprocessé Ben Graham
+# Output : [B, 5] logits
+#
+# ⚠️  Ordre des classes (alphabétique) :
+#   0=Mild, 1=Moderate, 2=No_DR, 3=Proliferate_DR, 4=Severe
+
+class DRNet(nn.Module):
+    """
+    Fusion EfficientNetV2-S + Swin Transformer-T.
+    Architecture identique au notebook DRNet (cellule 7).
+    """
+    CNN_DIM = 1280
+    TR_DIM  = 768
+    FUSED   = CNN_DIM + TR_DIM   # 2048
+
+    def __init__(self, num_classes: int = 5, dropout: float = 0.35):
+        super().__init__()
+
+        # CNN branch : EfficientNetV2-S (sans classifier)
+        eff = tvm.efficientnet_v2_s(weights=None)
+        self.cnn_backbone = nn.Sequential(*list(eff.children())[:-1])
+        # → [B, 1280, 1, 1]
+
+        # Transformer branch : Swin-T (sans tête)
+        swin = tvm.swin_t(weights=None)
+        swin.head = nn.Identity()
+        self.transformer = swin
+        # → [B, 768]
+
+        # Tête de fusion
+        self.head = nn.Sequential(
+            nn.LayerNorm(self.FUSED),
+            nn.Linear(self.FUSED, 512),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.GELU(),
+            nn.Dropout(dropout / 2),
+            nn.Linear(256, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        c = self.cnn_backbone(x).flatten(1)        # [B, 1280]
+        t = self.transformer(x)                    # [B, 768]
+        return self.head(torch.cat([c, t], dim=1)) # [B, num_classes]
+
+
+# ── Construction des modèles ──────────────────────────────────────────────────
+
+def _build_model(model_key: str, num_classes: int, checkpoint: dict) -> nn.Module:
+    if model_key == 'chest':
+        dropout = 0.0
+        cfg = checkpoint.get('config', {})
+        if isinstance(cfg, dict):
+            dropout = cfg.get('dropout', 0.0)
+        return ChestXrayClassifier(num_classes=num_classes, dropout=dropout)
+
+    if model_key == 'lung':
+        return LungCancerModel(num_classes=num_classes)
+
+    if model_key == 'brain':
+        return BrainTumorModel(num_classes=num_classes)
+
+    if model_key == 'retina':
+        return _build_drnet(num_classes, checkpoint)
+
+    raise ValueError(f"Modèle inconnu : '{model_key}'")
+
+
+def _build_drnet(num_classes: int, checkpoint: dict) -> nn.Module:
+    """
+    Instancie DRNet et charge les poids depuis best_retina_model.pth.
+
+    Lecture des métadonnées :
+      checkpoint['metadata']['dropout']  → dropout (défaut 0.35)
+      checkpoint['val_f1']               → meilleur F1 validation
+      checkpoint['val_acc']              → accuracy validation
+      checkpoint['test_acc']             → accuracy test
+    """
+    meta    = checkpoint.get('metadata', {})
+    dropout = float(meta.get('dropout', 0.35))
+
+    model = DRNet(num_classes=num_classes, dropout=dropout)
+
+    state_dict = checkpoint.get('model_state_dict', checkpoint)
+    if not isinstance(state_dict, dict):
+        raise RuntimeError(
+            "[DRNet] 'model_state_dict' absent ou invalide dans le checkpoint. "
+            "Vérifiez que best_retina_model.pth est bien généré par le notebook DRNet."
+        )
+
+    try:
+        model.load_state_dict(state_dict, strict=True)
+        print(f"[DRNet] ✅ Chargement strict OK — {len(state_dict)} clés")
+    except RuntimeError as e:
+        print(f"[DRNet] strict=True échoué → tentative strict=False")
+        print(f"[DRNet] Erreur : {e}")
+        missing, unexpected = model.load_state_dict(state_dict, strict=False)
+        if missing:
+            print(f"[DRNet] ⚠️  Clés manquantes ({len(missing)}) : {missing[:5]}")
+        if unexpected:
+            print(f"[DRNet] ⚠️  Clés inattendues ({len(unexpected)}) : {unexpected[:5]}")
+
+    # Log des métriques d'entraînement
+    val_acc  = checkpoint.get('val_acc',  0.0)
+    val_f1   = checkpoint.get('val_f1',   0.0)
+    test_acc = checkpoint.get('test_acc', 0.0)
+    test_f1  = checkpoint.get('test_f1',  0.0)
+    epoch    = checkpoint.get('epoch',    '?')
+    backbone = meta.get('backbone', 'efficientnetv2_s+swin_t')
+
+    print(f"[DRNet] Backbone : {backbone}")
+    print(f"[DRNet] Epoch    : {epoch}")
+    print(f"[DRNet] Val  Acc={val_acc:.4f}  F1={val_f1:.4f}")
+    print(f"[DRNet] Test Acc={test_acc:.4f}  F1={test_f1:.4f}")
+
+    return model
+
+
+# ── Service d'inférence ───────────────────────────────────────────────────────
 
 class InferenceService:
-    """
-    Service d'inférence — chargement paresseux, N classes dynamiques.
-    Pattern : instance module-level créée une seule fois via get_inference_service().
-    """
-
-    def __init__(self):
+    def __init__(self, model_path: str, model_key: str):
         self._model       = None
-        self._class_names = NIH_DEFAULT_CLASSES
-        self._num_classes = len(NIH_DEFAULT_CLASSES)
+        self._model_key   = model_key
+        self._model_path  = model_path
+        self._class_names = MODEL_DEFAULT_CLASSES.get(model_key, [])
+        self._num_classes = len(self._class_names)
+        self._img_size    = MODEL_IMG_SIZES.get(model_key, 224)
         self._load_model()
 
-    # ------------------------------------------------------------------
-    # Chargement du modèle
-    # ------------------------------------------------------------------
     def _load_model(self):
-        """Charger le checkpoint PyTorch et reconstruire le modèle."""
         try:
-            print(f"⏳ Chargement du modèle : {settings.MODEL_PATH}")
+            print(f"\n⏳ [{self._model_key}] Chargement depuis : {self._model_path}")
 
             checkpoint = torch.load(
-                settings.MODEL_PATH,
+                self._model_path,
                 map_location=settings.DEVICE,
-                weights_only=False
+                weights_only=False,
             )
 
-            # ── Métadonnées depuis le checkpoint ──────────────────────
-            self._class_names = checkpoint.get('class_names', NIH_DEFAULT_CLASSES)
-            self._num_classes  = checkpoint.get('num_classes', len(self._class_names))
+            # ── Lire les métadonnées du checkpoint ──────────────────────────
+            if isinstance(checkpoint, dict):
 
-            # Sécurité : cohérence
-            if self._num_classes != len(self._class_names):
-                print(f"⚠️  Incohérence num_classes={self._num_classes} "
-                      f"vs len(class_names)={len(self._class_names)} "
-                      f"→ on utilise len(class_names)")
+                # Format DRNet : métadonnées sous 'metadata'
+                meta = checkpoint.get('metadata', {})
+                if isinstance(meta, dict):
+                    if 'classes' in meta:
+                        self._class_names = meta['classes']
+                    if 'num_classes' in meta:
+                        self._num_classes = int(meta['num_classes'])
+                    if 'img_size' in meta:
+                        self._img_size = int(meta['img_size'])
+
+                # Format ancien (chest/lung/brain) : clés à la racine ou sous 'metadata'
+                # Priorité à 'metadata' déjà lue ci-dessus
+                # Fallback sur clés racine si metadata vide
+                if not meta:
+                    if 'class_names' in checkpoint:
+                        self._class_names = checkpoint['class_names']
+                    if 'num_classes' in checkpoint:
+                        self._num_classes = int(checkpoint['num_classes'])
+                    if 'img_size' in checkpoint:
+                        self._img_size = int(checkpoint['img_size'])
+
+            # Cohérence
+            if self._class_names and self._num_classes != len(self._class_names):
                 self._num_classes = len(self._class_names)
 
-            # ── Détecter l'architecture depuis le checkpoint ──────────
-            architecture = checkpoint.get('architecture', 'resnet50')
+            # ── Construire et charger le modèle ─────────────────────────────
+            self._model = _build_model(
+                self._model_key, self._num_classes, checkpoint
+            )
 
-            if 'efficientnet' in str(architecture).lower():
+            # Pour chest/lung/brain : chargement standard
+            # Pour retina (DRNet) : géré dans _build_drnet()
+            if self._model_key != 'retina':
+                state_dict = checkpoint.get('model_state_dict', checkpoint)
+                if not isinstance(state_dict, dict):
+                    state_dict = checkpoint
                 try:
-                    import timm
-                    self._model = timm.create_model(
-                        architecture,
-                        pretrained=False,
-                        num_classes=self._num_classes,
-                        drop_rate=0.0
+                    self._model.load_state_dict(state_dict, strict=True)
+                    print(f"[{self._model_key}] ✅ Chargement strict OK")
+                except RuntimeError as e:
+                    print(f"[{self._model_key}] strict=True échoué → strict=False")
+                    missing, unexpected = self._model.load_state_dict(
+                        state_dict, strict=False
                     )
-                    print(f"   Architecture : {architecture} (timm)")
-                except ImportError:
-                    raise RuntimeError(
-                        "timm requis pour EfficientNet. "
-                        "Installe-le : pip install timm"
+                    print(
+                        f"[{self._model_key}] "
+                        f"missing={len(missing)} unexpected={len(unexpected)}"
                     )
-            else:
-                # ResNet50 (défaut)
-                import torchvision.models as _models
-                import torch.nn as _nn
 
-                class ChestXrayClassifier(_nn.Module):
-                    def __init__(self, num_classes, pretrained=False, dropout=0.0):
-                        super().__init__()
-                        self.backbone = _models.resnet50(weights=None)
-                        in_f = self.backbone.fc.in_features
-                        self.backbone.fc = _nn.Sequential(
-                            _nn.Dropout(p=dropout),
-                            _nn.Linear(in_f, num_classes)
-                        )
-                    def forward(self, x):
-                        return self.backbone(x)
-
-                self._model = ChestXrayClassifier(
-                    num_classes=self._num_classes,
-                    pretrained=False,
-                    dropout=0.0
-                )
-                print(f"   Architecture : ResNet50 (ChestXrayClassifier)")
-
-            self._model.load_state_dict(checkpoint['model_state_dict'])
             self._model.to(settings.DEVICE)
             self._model.eval()
 
-            print(f"✅ Modèle chargé avec succès")
-            print(f"   Nombre de classes : {self._num_classes}")
-            print(f"   Classes           : {self._class_names}")
-            print(f"   Device            : {settings.DEVICE}")
+            print(
+                f"✅ [{self._model_key}] prêt — "
+                f"{self._num_classes} classes — {self._img_size}px"
+            )
+            print(f"   Classes : {self._class_names}")
+            print(f"   Device  : {settings.DEVICE}\n")
 
-        except FileNotFoundError:
-            print(f"❌ Fichier modèle introuvable : {settings.MODEL_PATH}")
+        except FileNotFoundError as e:
+            print(f"❌ [{self._model_key}] Fichier introuvable : {e}")
             self._model = None
-
         except Exception as e:
-            print(f"❌ Erreur chargement modèle : {e}")
+            print(f"❌ [{self._model_key}] Erreur : {e}")
+            import traceback; traceback.print_exc()
             self._model = None
 
-    # ------------------------------------------------------------------
-    # Propriétés publiques
-    # ------------------------------------------------------------------
     @property
-    def class_names(self):
-        return self._class_names
+    def class_names(self): return self._class_names
 
     @property
-    def num_classes(self):
-        return self._num_classes
+    def num_classes(self): return self._num_classes
 
     @property
-    def is_loaded(self):
-        return self._model is not None
+    def img_size(self): return self._img_size
 
-    # ------------------------------------------------------------------
-    # Inférence
-    # ------------------------------------------------------------------
+    @property
+    def is_loaded(self): return self._model is not None
+
     def predict(self, image_bytes: bytes, with_gradcam: bool = False) -> Dict:
-        """
-        Prédire la pathologie sur une image.
-
-        Args:
-            image_bytes  : image en bytes
-            with_gradcam : si True, génère et retourne la heatmap Grad-CAM
-
-        Returns
-        -------
-        dict avec prediction, confidence, probabilities, class_index, num_classes
-        + gradcam_image (base64) si with_gradcam=True
-        """
         if self._model is None:
             raise RuntimeError(
-                f"Modèle non chargé. "
-                f"Vérifiez que le fichier existe : {settings.MODEL_PATH}"
+                f"Modèle [{self._model_key}] non chargé. "
+                f"Vérifiez que '{MODEL_FILES[self._model_key]}' "
+                f"existe dans saved_models/"
             )
 
-        tensor = preprocess_image(image_bytes).to(settings.DEVICE)
+        # preprocessing.py applique Ben Graham pour model_key='retina'
+        tensor = preprocess_image(
+            image_bytes,
+            img_size=self._img_size,
+            model_key=self._model_key,
+        ).to(settings.DEVICE)
 
         with torch.no_grad():
             logits        = self._model(tensor)
@@ -166,74 +399,111 @@ class InferenceService:
 
         pred_idx   = predicted.item()
         pred_class = self._class_names[pred_idx]
-
-        probs     = probabilities[0].cpu().numpy()
-        prob_dict = {
-            cls: round(float(prob), 6)
-            for cls, prob in zip(self._class_names, probs)
+        probs      = probabilities[0].cpu().numpy()
+        prob_dict  = {
+            cls: round(float(p), 6)
+            for cls, p in zip(self._class_names, probs)
         }
 
         result = {
-            "prediction"   : pred_class,
-            "confidence"   : round(float(confidence.item()), 6),
+            "prediction":    pred_class,
+            "confidence":    round(float(confidence.item()), 6),
             "probabilities": prob_dict,
-            "class_index"  : pred_idx,
-            "num_classes"  : self._num_classes,
+            "class_index":   pred_idx,
+            "num_classes":   self._num_classes,
             "gradcam_image": None,
         }
 
-        # ── Grad-CAM (optionnel) ──────────────────────────────────────
         if with_gradcam:
-            try:
-                from app.services.gradcam import generate_gradcam_overlay
-                # Recréer le tensor avec grad (torch.no_grad() désactivé)
-                tensor_grad = preprocess_image(image_bytes).to(settings.DEVICE)
-                gradcam_b64 = generate_gradcam_overlay(
-                    image_bytes=image_bytes,
-                    model=self._model,
-                    tensor=tensor_grad,
-                    class_idx=pred_idx,
-                    device=settings.DEVICE,
-                )
-                result["gradcam_image"] = gradcam_b64
-                print(f"✅ Grad-CAM généré pour la classe '{pred_class}'")
-            except Exception as e:
-                print(f"⚠️  Grad-CAM échoué (inférence OK) : {e}")
-                result["gradcam_image"] = None
+            result["gradcam_image"] = self._generate_gradcam(
+                image_bytes, pred_idx
+            )
 
         return result
 
-    # ------------------------------------------------------------------
-    # Top-K utilitaire
-    # ------------------------------------------------------------------
+    def _generate_gradcam(self, image_bytes: bytes, pred_idx: int):
+        try:
+            from app.services.gradcam import generate_gradcam_overlay
+            tensor_grad = preprocess_image(
+                image_bytes,
+                img_size=self._img_size,
+                model_key=self._model_key,
+            ).to(settings.DEVICE)
+
+            # ⚠️  CHANGEMENT pour retina :
+            # DRNet a 2 branches. On cible la branche CNN (EfficientNetV2-S)
+            # car elle capture les textures locales (microanévrysmes, exsudats)
+            # plus interprétables visuellement que le Transformer.
+            # 'cnn_backbone' (pas 'backbone.blocks' de l'ancien AptosModel)
+            target = {
+                "chest":  "backbone.layer4",
+                "lung":   "backbone.blocks",
+                "brain":  "backbone.blocks",
+                "retina": "cnn_backbone",     # ← MODIFIÉ : branche CNN de DRNet
+            }.get(self._model_key, "backbone.layer4")
+
+            return generate_gradcam_overlay(
+                image_bytes=image_bytes,
+                model=self._model,
+                tensor=tensor_grad,
+                class_idx=pred_idx,
+                device=settings.DEVICE,
+                target_layer_name=target,
+            )
+        except Exception as e:
+            print(f"⚠️  Grad-CAM [{self._model_key}] : {e}")
+            return None
+
     def predict_topk(self, image_bytes: bytes, k: int = 3) -> Dict:
-        """Retourne les k classes les plus probables."""
         result = self.predict(image_bytes)
         sorted_probs = sorted(
             result["probabilities"].items(),
-            key=lambda x: x[1],
-            reverse=True
+            key=lambda x: x[1], reverse=True
         )
         result["top_k"] = [
-            {"class": cls, "probability": prob}
-            for cls, prob in sorted_probs[:k]
+            {"class": c, "probability": p} for c, p in sorted_probs[:k]
         ]
         return result
 
 
-# ---------------------------------------------------------------------------
-# Singleton module-level
-# ---------------------------------------------------------------------------
-_service_instance: InferenceService = None
+# ── Cache global ──────────────────────────────────────────────────────────────
+
+_services: Dict[str, InferenceService] = {}
 
 
-def get_inference_service() -> InferenceService:
-    global _service_instance
-    if _service_instance is None:
-        _service_instance = InferenceService()
-    return _service_instance
+def _load_single_model(model_key: str) -> InferenceService:
+    models_dir = Path(settings.MODEL_PATH).resolve().parent
+    filename   = MODEL_FILES.get(model_key)
+    if not filename:
+        raise ValueError(f"Modèle inconnu : '{model_key}'")
+    model_path = models_dir / filename
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"Fichier introuvable : {model_path}\n"
+            f"Placez '{filename}' dans saved_models/"
+        )
+    return InferenceService(model_path=str(model_path), model_key=model_key)
 
 
-def run_inference(image_bytes: bytes, with_gradcam: bool = False) -> Dict:
-    """Point d'entrée principal utilisé par routes.py."""
-    return get_inference_service().predict(image_bytes, with_gradcam=with_gradcam)
+def get_inference_service(model_key: str = "chest") -> InferenceService:
+    global _services
+    if model_key not in _services:
+        print(f"[InferenceCache] Chargement de '{model_key}'...")
+        _services[model_key] = _load_single_model(model_key)
+    return _services[model_key]
+
+
+def run_inference(image_bytes: bytes, with_gradcam: bool = False,
+                  model_key: str = "chest") -> Dict:
+    return get_inference_service(model_key).predict(
+        image_bytes, with_gradcam=with_gradcam
+    )
+
+
+def preload_all_models():
+    print("[Preload] Chargement de tous les modèles...")
+    for key in MODEL_FILES:
+        try:
+            get_inference_service(key)
+        except Exception as e:
+            print(f"⚠️  Préchargement [{key}] échoué : {e}")
