@@ -1,162 +1,129 @@
-// App.jsx — COMPLET ET CORRIGÉ
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+// frontend/src/App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
-
-// Pages
-import LoginPage           from "./pages/LoginPage";
-import RegisterPage        from "./pages/RegisterPage";
-import LandingPage         from "./pages/LandingPage";
-import MedecinDashboard    from "./pages/MedecinDashboard";
-import Classification      from "./pages/Classification";
-import Pathologies         from "./pages/Pathologies";
-import DoctorQueue         from "./pages/DoctorQueue";
-import PatientDashboard    from "./pages/PatientDashboard";
+import HomePage from "./pages/HomePage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import PatientDashboard from "./pages/patient/PatientDashboard";
+import DoctorDashboard from "./pages/DoctorDashboard";
+import AdminPage from "./pages/AdminPage";
+import Classification from "./pages/Classification";
+import Pathologies from "./pages/Pathologies";
 import ConsultationRequest from "./pages/ConsultationRequest";
-import ConsultationRoom    from "./pages/ConsultationRoom";
-import AdminPage           from "./pages/AdminPage";
-import CIM11ChatbotPage    from "./pages/CIM11ChatbotPage";
-import Header              from "./components/Header";
+import ConsultationRoom from "./pages/ConsultationRoom";
+import VideoConsultation from "./pages/VideoConsultation";
+import DoctorQueue from "./pages/DoctorQueue";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
+import "./styles/globals.css";
 
-import "./styles/index.css";
-
-// ── Helpers ────────────────────────────────────────────────────────
-function getDefaultRoute(user) {
-  if (!user) return "/";
-  if (user.is_admin || user.role === "Administrateur") return "/admin";
-  if (user.role === "Patient") return "/patient";
-  return "/home";
-}
-
-// ✅ FIX 1 : Comparaison insensible à la casse + trim pour éviter les bugs
-// de type "Médecin" (avec accent) vs "Medecin" selon le backend
-function ProtectedRoute({ children, roles }) {
-  const { user } = useAuth();
+// Composant de redirection selon le rôle
+function DashboardRedirect() {
+  const { user, isAdmin, isPatient } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-
-  if (roles && !user.is_admin) {
-    const userRole = (user.role || "").trim().toLowerCase();
-    const hasRole  = roles.some(r => r.trim().toLowerCase() === userRole);
-    if (!hasRole) return <Navigate to={getDefaultRoute(user)} replace />;
-  }
-
-  return children;
+  if (isAdmin) return <Navigate to="/admin" replace />;
+  if (isPatient) return <Navigate to="/patient" replace />;
+  return <Navigate to="/home" replace />;
 }
 
-function RoleRedirect() {
-  const { user } = useAuth();
-  return <Navigate to={getDefaultRoute(user)} replace />;
-}
-
-function WithHeader({ children }) {
-  return <><Header /><main>{children}</main></>;
-}
-
-// ── Routes ─────────────────────────────────────────────────────────
 function AppRoutes() {
-  const { user } = useAuth();
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ 
+        minHeight: "100vh", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center",
+        background: "#F4F7FC"
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            border: "3px solid #E2E8F0",
+            borderTopColor: "#2D5F9E",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+            margin: "0 auto 16px",
+          }} />
+          <p style={{ color: "#64748B" }}>Chargement de MedAI...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
-
-      {/* ── Page d'accueil publique ── */}
-      <Route path="/" element={
-        user ? <RoleRedirect /> : <><Header /><LandingPage /></>
-      } />
-
-      {/* ── Auth ── */}
-      <Route path="/login" element={
-        user ? <RoleRedirect /> : <LoginPage />
-      } />
-
-      <Route path="/register" element={
-        user ? <RoleRedirect /> : <RegisterPage />
-      } />
-
-      {/* ── Médecin ── */}
-      <Route path="/home" element={
-        <ProtectedRoute roles={["Medecin", "Médecin"]}>
-          <WithHeader>
-            <MedecinDashboard />
-          </WithHeader>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/classification" element={
-        <ProtectedRoute roles={["Medecin", "Médecin"]}>
-          <WithHeader>
-            <Classification />
-          </WithHeader>
-        </ProtectedRoute>
-      } />
-
-      {/* ✅ FIX 2 : /pathologies accessible Médecin ET Administrateur
-          (Header l'affiche pour les deux rôles) */}
-      <Route path="/pathologies" element={
-        <ProtectedRoute roles={["Medecin", "Médecin", "Administrateur"]}>
-          <WithHeader>
-            <Pathologies />
-          </WithHeader>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/doctor/queue" element={
-        <ProtectedRoute roles={["Medecin", "Médecin"]}>
-          <WithHeader>
-            <DoctorQueue />
-          </WithHeader>
-        </ProtectedRoute>
-      } />
-
-      {/* ✅ FIX 3 : /cim11 accessible Médecin ET Administrateur
-          (Header l'affiche pour les deux rôles, backend autorise les deux) */}
-      <Route path="/cim11" element={
-        <ProtectedRoute roles={["Medecin", "Médecin", "Administrateur"]}>
-          <WithHeader>
-            <CIM11ChatbotPage />
-          </WithHeader>
-        </ProtectedRoute>
-      } />
-
-      {/* ── Patient ── */}
+      {/* Pages publiques */}
+      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/classification" element={<Classification />} />
+      <Route path="/pathologies" element={<Pathologies />} />
+      
+      {/* Redirection automatique */}
+      <Route path="/dashboard" element={<DashboardRedirect />} />
+      
+      {/* Espace Patient */}
       <Route path="/patient" element={
-        <ProtectedRoute roles={["Patient"]}>
-          <WithHeader>
-            <PatientDashboard />
-          </WithHeader>
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <PatientDashboard />
         </ProtectedRoute>
       } />
-
+      <Route path="/patient/dossiers" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <PatientDashboard initialTab="dossiers" />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/messages" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <PatientDashboard initialTab="messages" />
+        </ProtectedRoute>
+      } />
       <Route path="/patient/consultation/new" element={
-        <ProtectedRoute roles={["Patient"]}>
-          <WithHeader>
-            <ConsultationRequest />
-          </WithHeader>
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <ConsultationRequest />
         </ProtectedRoute>
       } />
-
-      {/* ── Salle partagée (patient + médecin) ── */}
-      <Route path="/consultation/:id" element={
-        <ProtectedRoute>
-          <WithHeader>
-            <ConsultationRoom />
-          </WithHeader>
+      <Route path="/patient/consultation/:id" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <ConsultationRoom />
         </ProtectedRoute>
       } />
-
-      {/* ── Admin ── */}
+      <Route path="/consultation/:id" element={<ConsultationRoom />} />
+      <Route path="/video/:id" element={<VideoConsultation />} />
+      
+      {/* Espace Médecin */}
+      <Route path="/home" element={
+        <ProtectedRoute allowedRoles={["Medecin"]}>
+          <DoctorDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/doctor/queue" element={
+        <ProtectedRoute allowedRoles={["Medecin"]}>
+          <DoctorQueue />
+        </ProtectedRoute>
+      } />
+      
+      {/* Administration */}
       <Route path="/admin" element={
-        <ProtectedRoute roles={["Administrateur"]}>
-          <WithHeader>
-            <AdminPage />
-          </WithHeader>
+        <ProtectedRoute allowedRoles={["Administrateur"]}>
+          <AdminPage />
         </ProtectedRoute>
       } />
+      
+      <Route path="/video-consultation/:id" element={<VideoConsultation />} />
 
-      {/* ── Fallback ── */}
-      <Route path="*" element={
-        <Navigate to="/" replace />
-      } />
+
+      {/* 404 - Rediriger vers la page d'accueil */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+
+
 
     </Routes>
   );
@@ -164,12 +131,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
+    <Router>
+      <AuthProvider>
+        <ThemeProvider>
           <AppRoutes />
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+        </ThemeProvider>
+      </AuthProvider>
+    </Router>
   );
 }

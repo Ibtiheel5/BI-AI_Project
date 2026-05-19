@@ -140,7 +140,7 @@ export default function CIM11ChatbotPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
   const token = localStorage.getItem("medai-token");
   
@@ -148,7 +148,9 @@ export default function CIM11ChatbotPage() {
   const [lastRequestTime, setLastRequestTime] = useState(0);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages, loading]);
 
   const send = async (text) => {
@@ -315,9 +317,10 @@ export default function CIM11ChatbotPage() {
         }}>
           
           {/* Messages */}
-          <div style={{ 
+          <div ref={messagesContainerRef} style={{ 
             height: "500px", 
-            overflowY: "auto", 
+            overflowY: "auto",
+            minHeight: 0,
             padding: "24px",
             background: "#fafcff"
           }}>
@@ -327,7 +330,7 @@ export default function CIM11ChatbotPage() {
               </div>
             ))}
             {loading && <TypingIndicator />}
-            <div ref={messagesEndRef} />
+
           </div>
 
           {/* Suggestions */}

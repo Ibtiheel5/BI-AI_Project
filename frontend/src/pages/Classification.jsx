@@ -727,18 +727,7 @@ const MODELS = ALL_MODELS.filter(m => allowedKeys.includes(m.key));
                   boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                 }}
               />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.8rem', color: '#64748B', marginBottom: 4 }}>
-                  RADIOLOGUE DE GARDE
-                </div>
-                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0A2647' }}>
-                  Dr. Emma Laurent
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#00A86B', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00A86B' }} />
-                  Disponible pour consultation
-                </div>
-              </div>
+              
               <button style={{
                 padding: '8px 16px',
                 background: '#0A2647',
