@@ -471,6 +471,15 @@ const getPendingUsers = useCallback(async () => {
     authFetch(`/auth/users/${userId}`, { method: "DELETE" }),
   []);
 
+  const updateUser = useCallback((updatedUser) => {
+  const token = getToken();
+  if (token) {
+    saveSession(token, updatedUser);
+    setUser(normalizeUser(updatedUser));
+  }
+}, []);
+
+
   // ── Données dérivées ───────────────────────────────────────────
   const userDomains = user?.domains?.map(key => DOMAINS[key]).filter(Boolean) || [];
   const currentDomain = userDomains.length === 1 ? userDomains[0] : null;
@@ -498,6 +507,7 @@ const getPendingUsers = useCallback(async () => {
       login,
       logout,
       register,
+      updateUser,
       getPendingUsers,
       getAllUsers,
       approveUser,

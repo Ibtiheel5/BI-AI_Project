@@ -114,12 +114,22 @@ def _decode_b64_image(b64_str: Optional[str]) -> Optional[io.BytesIO]:
         data = base64.b64decode(raw, validate=False)
         if not data:
             return None
+            
+        # Vérification magic bytes (JPEG/PNG)
+        if len(data) > 4:
+            # JPEG: FF D8 FF, PNG: 89 50 4E 47
+            is_jpeg = data[:3] == b'\xff\xd8\xff'
+            is_png = data[:4] == b'\x89PNG'
+            if not (is_jpeg or is_png):
+                print(f"[Report] Warning: données non-image détectées (magic bytes: {data[:4].hex()})")
+                return None
+                
         buf = io.BytesIO(data)
         buf.seek(0)
         return buf
-    except Exception:
+    except Exception as e:
+        print(f"[Report] Erreur décodage image: {e}")
         return None
-
 
 def _normalize_probabilities(probabilities: object) -> Dict[str, float]:
     if not isinstance(probabilities, dict):
@@ -248,7 +258,6 @@ def _confidence_bar(confidence: float, color) -> Table:
     table.setStyle(TableStyle(commands))
     return table
 
-
 def _image_cell(image_b64: Optional[str], label: str, filename: str = ""):
     styles = _styles()
     buf = _decode_b64_image(image_b64)
@@ -256,9 +265,17 @@ def _image_cell(image_b64: Optional[str], label: str, filename: str = ""):
         return [
             Paragraph(_clean_text(label), styles["prob_bold"]),
             Spacer(1, 3 * mm),
-            Paragraph("Image non disponible.", styles["small"]),
+            Paragraph(
+                "Image non disponible. Vérifiez que le fichier a été correctement uploadé.", 
+                styles["small"]
+            ),
         ]
     try:
+        # Vérifier que c'est une image valide avant de passer à RLImage
+        from PIL import Image as PILImage
+        PILImage.open(buf).verify()
+        buf.seek(0)  # Reset après verify
+        
         image = RLImage(buf, width=78 * mm, height=70 * mm, kind="proportional")
         return [
             Paragraph(_clean_text(label), styles["prob_bold"]),
@@ -266,11 +283,15 @@ def _image_cell(image_b64: Optional[str], label: str, filename: str = ""):
             Spacer(1, 2 * mm),
             image,
         ]
-    except Exception:
+    except Exception as e:
+        print(f"[Report] Erreur chargement image: {e}")
         return [
             Paragraph(_clean_text(label), styles["prob_bold"]),
             Spacer(1, 3 * mm),
-            Paragraph("Image illisible dans ce rapport.", styles["small"]),
+            Paragraph(
+                f"Image illisible ou corrompue. Format supporté: JPEG/PNG.", 
+                styles["small"]
+            ),
         ]
 
 

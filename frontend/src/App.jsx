@@ -21,7 +21,23 @@ import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Contact from "./pages/Contact";
+import DoctorRemindersPage from "./pages/doctor/DoctorRemindersPage";
+
 import "./styles/globals.css";
+
+// NOUVELLES IMPORTS - PAGES PATIENT
+// Dans App.jsx, assurez-vous d'importer correctement les pages
+import MedicalHistoryPage from "./pages/patient/MedicalHistoryPage";
+import ProfilePage from "./pages/patient/ProfilePage";
+import ResultsPage from "./pages/patient/ResultsPage";
+import ResultDetailPage from "./pages/patient/ResultDetailPage";
+import HealthEvolutionPage from "./pages/patient/HealthEvolutionPage";
+import DocumentsPage from "./pages/patient/DocumentsPage";
+import PreferencesPage from "./pages/patient/PreferencesPage";
+import PrescriptionsPage from "./pages/patient/PrescriptionsPage";
+import RemindersPage from "./pages/patient/RemindersPage";
+import UpcomingCallsPage from "./pages/patient/UpcomingCallsPage";
+import CallHistoryPage from "./pages/patient/CallHistoryPage";
 
 // Composant de redirection selon le rôle
 function DashboardRedirect() {
@@ -63,17 +79,25 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Pages publiques */}
+      {/* ========== PAGES PUBLIQUES ========== */}
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/classification" element={<Classification />} />
       <Route path="/pathologies" element={<Pathologies />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/features" element={<Contact />} />  
+      <Route path="/process" element={<Contact />} />    
+      <Route path="/testimonials" element={<Contact />} /> 
       
       {/* Redirection automatique */}
       <Route path="/dashboard" element={<DashboardRedirect />} />
       
-      {/* Espace Patient */}
+      {/* ========== ESPACE PATIENT ========== */}
+      {/* Dashboard principal */}
       <Route path="/patient" element={
         <ProtectedRoute allowedRoles={["Patient"]}>
           <PatientDashboard />
@@ -89,6 +113,8 @@ function AppRoutes() {
           <PatientDashboard initialTab="messages" />
         </ProtectedRoute>
       } />
+      
+      {/* Consultations */}
       <Route path="/patient/consultation/new" element={
         <ProtectedRoute allowedRoles={["Patient"]}>
           <ConsultationRequest />
@@ -101,8 +127,74 @@ function AppRoutes() {
       } />
       <Route path="/consultation/:id" element={<ConsultationRoom />} />
       <Route path="/video/:id" element={<VideoConsultation />} />
+      <Route path="/video-consultation/:id" element={<VideoConsultation />} />
+
+      {/* RÉSULTATS - NOUVEAU */}
+      <Route path="/patient/resultats" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <ResultsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/resultats/:id" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <ResultDetailPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/resultats/evolution" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <HealthEvolutionPage />
+        </ProtectedRoute>
+      } />
+
+      {/* PROFIL - NOUVEAU */}
+      <Route path="/patient/profil" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <ProfilePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/profil/medical" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <MedicalHistoryPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/profil/documents" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <DocumentsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/profil/preferences" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <PreferencesPage />
+        </ProtectedRoute>
+      } />
+
+      {/* PRESCRIPTIONS - NOUVEAU */}
+      <Route path="/patient/prescriptions" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <PrescriptionsPage />
+        </ProtectedRoute>
+      } />
+
+      {/* RAPPELS - NOUVEAU */}
+      <Route path="/patient/rappels" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <RemindersPage />
+        </ProtectedRoute>
+      } />
+
+      {/* TÉLÉCONSULTATIONS - NOUVEAU */}
+      <Route path="/patient/teleconsultation/upcoming" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <UpcomingCallsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/patient/teleconsultation/history" element={
+        <ProtectedRoute allowedRoles={["Patient"]}>
+          <CallHistoryPage />
+        </ProtectedRoute>
+      } />
       
-      {/* Espace Médecin */}
+      {/* ========== ESPACE MÉDECIN ========== */}
       <Route path="/home" element={
         <ProtectedRoute allowedRoles={["Medecin"]}>
           <DoctorDashboard />
@@ -113,32 +205,20 @@ function AppRoutes() {
           <DoctorQueue />
         </ProtectedRoute>
       } />
+
+      <Route path="/doctor/reminders" element={<DoctorRemindersPage />} />
       
-      {/* Administration */}
+      {/* ========== ADMINISTRATION ========== */}
       <Route path="/admin" element={
         <ProtectedRoute allowedRoles={["Administrateur"]}>
           <AdminPage />
         </ProtectedRoute>
       } />
-      
-      <Route path="/video-consultation/:id" element={<VideoConsultation />} />
-
 
       {/* 404 - Rediriger vers la page d'accueil */}
       <Route path="*" element={<Navigate to="/" replace />} />
-
-      <Route path="/verify-email" element={<VerifyEmail />} />
-
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/contact" element={<Contact />} />
-      <Route path="/features" element={<Contact />} />  
-      <Route path="/process" element={<Contact />} />    
-      <Route path="/testimonials" element={<Contact />} /> 
-
-
-
     </Routes>
+    
   );
 }
 

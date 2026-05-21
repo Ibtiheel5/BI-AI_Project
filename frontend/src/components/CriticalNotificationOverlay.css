@@ -1,0 +1,208 @@
+/* CriticalNotificationOverlay.css */
+/* Styles CSS pour les animations SVG des notifications critiques */
+
+/* ═══════════════════════════════════════ */
+/* ANIMATIONS PULSE CRITIQUE              */
+/* ═══════════════════════════════════════ */
+
+@keyframes critical-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes critical-glow {
+  0%, 100% {
+    opacity: 0.5;
+    filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.6));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.9));
+  }
+}
+
+@keyframes ring-expand {
+  0% {
+    r: 20;
+    opacity: 1;
+    stroke-width: 3;
+  }
+  100% {
+    r: 60;
+    opacity: 0;
+    stroke-width: 0;
+  }
+}
+
+@keyframes urgent-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+@keyframes badge-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes slide-down-bounce {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(10%);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(-5%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-scale {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.15); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.15); }
+  70% { transform: scale(1); }
+}
+
+/* ═══════════════════════════════════════ */
+/* CLASSES UTILITAIRES                    */
+/* ═══════════════════════════════════════ */
+
+.critical-pulse-animation {
+  animation: critical-pulse 2s ease-in-out infinite;
+}
+
+.critical-glow-animation {
+  animation: critical-glow 2s ease-in-out infinite;
+}
+
+.urgent-shake-animation {
+  animation: urgent-shake 0.5s ease-in-out;
+}
+
+.badge-bounce-animation {
+  animation: badge-bounce 0.3s ease-in-out;
+}
+
+.heartbeat-animation {
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════ */
+/* STYLES DE LA BARRE DE NOTIFICATION      */
+/* ═══════════════════════════════════════ */
+
+.critical-notification-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 50%, #7f1d1d 100%);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  animation: slide-down-bounce 0.6s ease-out;
+  border-bottom: 2px solid #ef4444;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+}
+
+.critical-notification-bar-text {
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.critical-notification-bar-action {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.critical-notification-bar-action:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ═══════════════════════════════════════ */
+/* STYLES DU BADGE DE NOTIFICATION         */
+/* ═══════════════════════════════════════ */
+
+.notification-badge-critical {
+  position: relative;
+}
+
+.notification-badge-critical::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  animation: critical-pulse 2s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════ */
+/* STYLES RESPONSIVE                       */
+/* ═══════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  .critical-notification-bar {
+    padding: 10px 16px;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .critical-notification-bar-text {
+    font-size: 0.78rem;
+  }
+}
+
+/* ═══════════════════════════════════════ */
+/* STYLES D'ACCESSIBILITÉ                   */
+/* ═══════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .critical-pulse-animation,
+  .critical-glow-animation,
+  .urgent-shake-animation,
+  .badge-bounce-animation,
+  .heartbeat-animation {
+    animation: none;
+  }
+
+  .critical-notification-bar {
+    animation: none;
+  }
+}

@@ -1,0 +1,520 @@
+/* ResultDetailPage.css — Styles compagnons pour ResultDetailPage
+   Utilise les variables CSS et classes de HomePage.css */
+
+/* ========== PAGE WRAPPER ========== */
+.rdp-page {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--txt);
+  min-height: 100vh;
+}
+
+/* ========== LOADING STATE ========== */
+.rdp-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.rdp-loading-inner {
+  text-align: center;
+}
+
+.rdp-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 215, 0, 0.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: rdp-spin 0.8s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes rdp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rdp-loading-text {
+  color: var(--txt2);
+  font-size: 0.9rem;
+}
+
+/* ========== ERROR / EMPTY STATE ========== */
+.rdp-empty {
+  text-align: center;
+  padding: 80px 24px;
+  background: var(--card);
+  border-radius: 28px;
+  border: 1px solid var(--border);
+  max-width: 600px;
+  margin: 40px auto;
+}
+
+.rdp-empty-icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.rdp-empty-title {
+  color: var(--navy);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.rdp-empty-desc {
+  color: var(--txt2);
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+/* ========== MODEL BADGE ========== */
+.rdp-model-badge {
+  margin-bottom: 24px;
+}
+
+.rdp-model-badge .hp-badge {
+  margin-bottom: 0;
+}
+
+/* ========== GRID LAYOUT ========== */
+.rdp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+
+@media (max-width: 1024px) {
+  .rdp-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========== CARDS ========== */
+.rdp-card {
+  background: var(--card);
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  margin-bottom: 20px;
+}
+
+.rdp-card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, var(--navy), var(--navy-light));
+}
+
+.rdp-card-header-title {
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.rdp-card-body {
+  padding: 20px;
+}
+
+.rdp-card-body-dark {
+  padding: 20px;
+  background: #0A1628;
+  text-align: center;
+}
+
+.rdp-card-footer {
+  padding: 16px 20px;
+  background: rgba(239, 68, 68, 0.05);
+  border-top: 1px solid var(--border);
+}
+
+/* ========== IMAGE DISPLAY ========== */
+.rdp-image {
+  max-width: 100%;
+  max-height: 380px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+/* ========== GRAD-CAM TOGGLE ========== */
+.rdp-gradcam-toggle {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rdp-gradcam-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.rdp-gradcam-toggle.active {
+  border-color: #EF4444;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* ========== GRAD-CAM LEGEND ========== */
+.rdp-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rdp-legend-bar {
+  height: 10px;
+  width: 140px;
+  background: linear-gradient(90deg, #0000FF, #00FFFF, #00FF00, #FFFF00, #FF0000);
+  border-radius: 5px;
+}
+
+.rdp-legend-label {
+  font-size: 0.7rem;
+  color: var(--txt2);
+}
+
+.rdp-legend-label-strong {
+  font-size: 0.7rem;
+  color: var(--txt2);
+  font-weight: 600;
+}
+
+.rdp-legend-desc {
+  font-size: 0.75rem;
+  color: var(--txt2);
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+.rdp-legend-highlight {
+  color: #EF4444;
+  font-weight: 700;
+}
+
+/* ========== DOCTOR CARD ========== */
+.rdp-doctor-card {
+  background: var(--card);
+  border-radius: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.rdp-doctor-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rdp-doctor-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--navy), var(--navy-light));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.rdp-doctor-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rdp-doctor-name {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 0.95rem;
+}
+
+.rdp-doctor-spec {
+  font-size: 0.75rem;
+  color: var(--txt2);
+}
+
+/* ========== DIAGNOSIS HEADER ========== */
+.rdp-diagnosis {
+  border-radius: 24px;
+  padding: 28px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.rdp-diagnosis-critical {
+  background: linear-gradient(135deg, #FEE2E2, var(--card));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.rdp-diagnosis-urgent {
+  background: linear-gradient(135deg, #FEF3C7, var(--card));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.rdp-diagnosis-normal {
+  background: linear-gradient(135deg, #D1FAE5, var(--card));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.rdp-diagnosis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.rdp-diagnosis-label {
+  font-size: 0.7rem;
+  color: var(--txt2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.rdp-diagnosis-prediction {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--navy);
+  text-transform: capitalize;
+  line-height: 1.2;
+}
+
+.rdp-diagnosis-confidence {
+  text-align: right;
+}
+
+.rdp-diagnosis-confidence-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+.rdp-diagnosis-confidence-label {
+  font-size: 0.7rem;
+  color: var(--txt2);
+  margin-top: 4px;
+}
+
+/* ========== CONFIDENCE BAR ========== */
+.rdp-confidence-track {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.rdp-confidence-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s ease;
+}
+
+/* ========== SEVERITY BADGE ========== */
+.rdp-severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rdp-severity-critical {
+  background: #FEE2E2;
+  color: #EF4444;
+}
+
+.rdp-severity-urgent {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.rdp-severity-normal {
+  background: #D1FAE5;
+  color: #10B981;
+}
+
+/* ========== PROBABILITY SECTION ========== */
+.rdp-probabilities {
+  background: var(--card);
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.rdp-section-header {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+}
+
+.rdp-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--gold-lt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rdp-prob-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rdp-prob-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rdp-prob-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rdp-prob-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.rdp-prob-name-top {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.rdp-prob-value {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rdp-prob-value-top {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.rdp-prob-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rdp-prob-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s ease;
+}
+
+.rdp-prob-fill-top {
+  opacity: 1;
+}
+
+.rdp-prob-fill-other {
+  opacity: 0.4;
+  background: var(--txt3);
+}
+
+/* ========== EXPLANATION SECTION ========== */
+.rdp-explanation {
+  background: var(--card);
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.rdp-explain-content {
+  font-size: 0.85rem;
+  color: var(--txt2);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.rdp-explain-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.rdp-explain-paragraph {
+  margin: 0 0 10px;
+}
+
+/* ========== ACTIONS BAR ========== */
+.rdp-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ========== DOWNLOAD BUTTON SPINNER ========== */
+.rdp-btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--navy);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: rdp-spin 0.6s linear infinite;
+  display: inline-block;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+  .rdp-diagnosis-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .rdp-diagnosis-confidence {
+    text-align: left;
+  }
+
+  .rdp-actions {
+    flex-direction: column;
+  }
+
+  .rdp-actions .hp-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

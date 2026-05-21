@@ -1,5 +1,5 @@
 // src/pages/VideoConsultation.jsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -124,16 +124,22 @@ export default function VideoConsultation() {
   const roomName = searchParams.get("room") || `medai-consult-${id}`;
   const isDoctor = user?.role === "Medecin" || user?.is_admin;
 
+  // Extraire les valeurs primitives pour éviter les changements de référence
+  const userRole = user?.role;
+  const userName = user?.full_name || user?.name;
+  const userUsername = user?.username;
+  const isAdmin = user?.is_admin;
+
   useEffect(() => {
     const timer = setInterval(() => setDuration(d => d + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (seconds) => {
+  const formatTime = useCallback((seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("medai-token");
@@ -168,8 +174,8 @@ export default function VideoConsultation() {
       if (!window.JitsiMeetExternalAPI || apiRef.current) return;
 
       const displayName = isDoctor
-        ? `Dr. ${user?.full_name || user?.name || "Medecin"}`
-        : user?.full_name || user?.name || "Patient";
+        ? `Dr. ${userName || "Medecin"}`
+        : userName || "Patient";
 
       try {
         const domain = "meet.jit.si";
@@ -180,7 +186,7 @@ export default function VideoConsultation() {
           height: "100%",
           userInfo: {
             displayName: displayName,
-            email: `${user?.username || "user"}@medai.app`
+            email: `${userUsername || "user"}@medai.app`
           },
           configOverwrite: {
             startWithAudioMuted: false,
@@ -237,17 +243,17 @@ export default function VideoConsultation() {
         apiRef.current = null;
       }
     };
-  }, [loading, roomName, isDoctor, user, id, navigate, error]);
+  }, [loading, roomName, isDoctor, userName, userUsername, id, navigate, error]);
 
-  const toggleAudio = () => apiRef.current?.executeCommand("toggleAudio");
-  const toggleVideo = () => apiRef.current?.executeCommand("toggleVideo");
-  const shareScreen = () => apiRef.current?.executeCommand("toggleShareScreen");
-  const hangUp = () => {
+  const toggleAudio = useCallback(() => apiRef.current?.executeCommand("toggleAudio"), []);
+  const toggleVideo = useCallback(() => apiRef.current?.executeCommand("toggleVideo"), []);
+  const shareScreen = useCallback(() => apiRef.current?.executeCommand("toggleShareScreen"), []);
+  const hangUp = useCallback(() => {
     if (window.confirm("Terminer la consultation vidéo ?")) {
       apiRef.current?.executeCommand("hangup");
       navigate(`/consultation/${id}`);
     }
-  };
+  }, [navigate, id]);
 
   if (loading) {
     return (
@@ -377,7 +383,7 @@ export default function VideoConsultation() {
             <div style={{ width: 24, height: 24, borderRadius: "50%", background: isDoctor ? "linear-gradient(135deg,#0A2647,#2D5F9E)" : "linear-gradient(135deg,#059669,#10B981)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem" }}>
               {isDoctor ? "M" : "P"}
             </div>
-            <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)" }}>{user?.full_name || user?.name}</span>
+            <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)" }}>{userName}</span>
             <span style={{ padding: "1px 8px", background: isDoctor ? "rgba(45,95,158,0.4)" : "rgba(5,150,105,0.4)", borderRadius: 10, fontSize: "0.6rem", fontWeight: 700, color: isDoctor ? "#93C5FD" : "#6EE7B7" }}>
               {isDoctor ? "MEDECIN" : "PATIENT"}
             </span>

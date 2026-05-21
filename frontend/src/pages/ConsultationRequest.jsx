@@ -1,22 +1,118 @@
-// pages/ConsultationRequest.jsx
-// Patient soumet une demande de consultation avec image médicale
-// Version avec API fonctionnelle
-
+// frontend/src/pages/ConsultationRequest.jsx
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import "./patient/PatientDashboard.css";
 
-// API URL - Assurez-vous que le backend tourne sur le bon port
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
 const API_URL = `${API_BASE}/api/v1`;
 
-// Configuration médicale détaillée par spécialité (4 modèles)
+// ========== SVG ICONS (comme dans PatientDashboard) ==========
+const SvgIcon = ({ children, size = 24, color = "currentColor", strokeWidth = 1.8 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+
+const Icons = {
+  Upload: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <path d="M20.5 14.5v3.8a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8v-3.8"/>
+      <polyline points="16.5 8 12 3.5 7.5 8"/>
+      <line x1="12" y1="3.5" x2="12" y2="14.5"/>
+    </SvgIcon>
+  ),
+  Folder: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <path d="M21.5 18.5a1.8 1.8 0 0 1-1.8 1.8H4.3a1.8 1.8 0 0 1-1.8-1.8V5.5a1.8 1.8 0 0 1 1.8-1.8h5l2 2.8h7.2a1.8 1.8 0 0 1 1.8 1.8z"/>
+    </SvgIcon>
+  ),
+  Check: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={2.5}>
+      <polyline points="20 6 9 17 4 12"/>
+    </SvgIcon>
+  ),
+  ArrowRight: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={2}>
+      <polyline points="9 18 15 12 9 6"/>
+    </SvgIcon>
+  ),
+  ArrowLeft: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={2}>
+      <polyline points="15 18 9 12 15 6"/>
+    </SvgIcon>
+  ),
+  AlertCircle: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <circle cx="12" cy="12" r="9.5"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <circle cx="12" cy="16" r="0.5" fill={color}/>
+    </SvgIcon>
+  ),
+  Sparkles: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.5}>
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"/>
+    </SvgIcon>
+  ),
+  Activity: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.5}>
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </SvgIcon>
+  ),
+  User: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <path d="M19.5 20.5v-1.8a3.6 3.6 0 0 0-3.6-3.6H8.1a3.6 3.6 0 0 0-3.6 3.6v1.8"/>
+      <circle cx="12" cy="7.5" r="3.6"/>
+    </SvgIcon>
+  ),
+  Lungs: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <path d="M12 4.5v11M8.5 8c-1.8 0-3.5.8-3.5 3.5S7 16 8.5 16M15.5 8c1.8 0 3.5.8 3.5 3.5S17 16 15.5 16M8.5 8c1.2 0 2.5.8 3.5 2M15.5 8c-1.2 0-2.5.8-3.5 2"/>
+    </SvgIcon>
+  ),
+  Shield: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.5}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </SvgIcon>
+  ),
+  Heart: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.5}>
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+    </SvgIcon>
+  ),
+  Brain: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <path d="M12 5a3.5 3.5 0 0 1 3.5 3.5c0 1.4-.8 2.5-1.8 3.2v2.3a1.8 1.8 0 0 1-3.4 0v-2.3c-1-.7-1.8-1.8-1.8-3.2A3.5 3.5 0 0 1 12 5zM12 5v14"/>
+    </SvgIcon>
+  ),
+  Eye: ({ size = 24, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.8}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </SvgIcon>
+  ),
+  Calendar: ({ size = 16, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={1.6}>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </SvgIcon>
+  ),
+  X: ({ size = 16, color = "currentColor" }) => (
+    <SvgIcon size={size} color={color} strokeWidth={2}>
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </SvgIcon>
+  ),
+};
+
+// Configuration des modèles (sans emojis)
 const MODEL_OPTIONS = [
   {
     key: "chest",
-    icon: "🫁",
+    icon: <Icons.Lungs size={28} />,
     label: "Radiographie thoracique",
     fullName: "Radiographie Pulmonaire Standard",
     desc: "10 pathologies — COVID, pneumonie, cardiomégalie, atélectasie…",
@@ -32,7 +128,7 @@ const MODEL_OPTIONS = [
   },
   {
     key: "brain",
-    icon: "🧠",
+    icon: <Icons.Brain size={28} />,
     label: "IRM cérébrale",
     fullName: "Imagerie par Résonance Magnétique Cérébrale",
     desc: "Tumeurs cérébrales — gliome, méningiome, tumeur hypophysaire",
@@ -48,7 +144,7 @@ const MODEL_OPTIONS = [
   },
   {
     key: "lung",
-    icon: "🔬",
+    icon: <Icons.Activity size={28} />,
     label: "Scanner CT pulmonaire",
     fullName: "Tomodensitométrie Thoracique",
     desc: "Cancer pulmonaire — bénin, malin, normal",
@@ -64,7 +160,7 @@ const MODEL_OPTIONS = [
   },
   {
     key: "retina",
-    icon: "👁️",
+    icon: <Icons.Eye size={28} />,
     label: "Fond d'œil — Rétinopathie",
     fullName: "Photographie du fond d'œil — Rétinopathie diabétique",
     desc: "5 stades de rétinopathie diabétique",
@@ -85,84 +181,20 @@ const LEGAL_INFO = {
   emergencyDisclaimer: "En cas d'urgence médicale, composez le 15 (SAMU) immédiatement."
 };
 
-// Icônes SVG
-const Icons = {
-  Upload: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8">
-      <path d="M20.5 14.5v3.8a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8v-3.8"/>
-      <polyline points="16.5 8 12 3.5 7.5 8"/>
-      <line x1="12" y1="3.5" x2="12" y2="14.5"/>
-    </svg>
-  ),
-  Folder: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8">
-      <path d="M21.5 18.5a1.8 1.8 0 0 1-1.8 1.8H4.3a1.8 1.8 0 0 1-1.8-1.8V5.5a1.8 1.8 0 0 1 1.8-1.8h5l2 2.8h7.2a1.8 1.8 0 0 1 1.8 1.8z"/>
-    </svg>
-  ),
-  Check: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  ),
-  ArrowRight: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-      <polyline points="9 18 15 12 9 6"/>
-    </svg>
-  ),
-  ArrowLeft: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  ),
-  AlertCircle: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8">
-      <circle cx="12" cy="12" r="9.5"/>
-      <line x1="12" y1="8" x2="12" y2="12"/>
-      <circle cx="12" cy="16" r="0.5" fill={color}/>
-    </svg>
-  ),
-  Sparkles: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
-      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"/>
-    </svg>
-  ),
-  Activity: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-    </svg>
-  ),
-  User: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8">
-      <path d="M19.5 20.5v-1.8a3.6 3.6 0 0 0-3.6-3.6H8.1a3.6 3.6 0 0 0-3.6 3.6v1.8"/>
-      <circle cx="12" cy="7.5" r="3.6"/>
-    </svg>
-  ),
-  Lungs: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8">
-      <path d="M12 4.5v11M8.5 8c-1.8 0-3.5.8-3.5 3.5S7 16 8.5 16M15.5 8c1.8 0 3.5.8 3.5 3.5S17 16 15.5 16M8.5 8c1.2 0 2.5.8 3.5 2M15.5 8c-1.2 0-2.5.8-3.5 2"/>
-    </svg>
-  ),
-  Shield: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </svg>
-  ),
-  Heart: ({ size = 24, color = "currentColor" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
-      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-    </svg>
-  )
-};
-
+// ========== PARTICLES COMPONENT ==========
 const Particles = () => {
   const particles = useMemo(() => Array.from({ length: 35 }, (_, i) => ({
-    id: i, left: `${Math.random() * 100}%`, width: `${Math.random() * 3 + 1}px`,
-    height: `${Math.random() * 3 + 1}px`, duration: `${Math.random() * 14 + 8}s`,
-    delay: `${Math.random() * 8}s`, bottom: `-${Math.random() * 40}px`,
+    id: i,
+    left: `${Math.random() * 100}%`,
+    width: `${Math.random() * 3 + 1}px`,
+    height: `${Math.random() * 3 + 1}px`,
+    duration: `${Math.random() * 14 + 8}s`,
+    delay: `${Math.random() * 8}s`,
+    bottom: `-${Math.random() * 40}px`,
     glow: i % 5 === 0
   })), []);
   return (
-    <div className="pd3-hero-particles" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+    <div className="pd3-hero-particles">
       {particles.map(p => (
         <div key={p.id} className="pd3-particle" style={{
           left: p.left, width: p.width, height: p.height,
@@ -209,6 +241,7 @@ export default function ConsultationRequest() {
   const [imageQuality, setImageQuality] = useState(null);
 
   const fileRef = useRef(null);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Vérifier l'authentification
   useEffect(() => {
@@ -220,6 +253,22 @@ export default function ConsultationRequest() {
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
   }, [preview]);
+
+  // Scroll listener
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setIsScrolled(window.scrollY > 40);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const analyzeImageQuality = useCallback((imgElement) => {
     const quality = {
@@ -274,21 +323,20 @@ export default function ConsultationRequest() {
   }, [analyzeImageQuality]);
 
   const validateMedicalForm = () => {
-  if (!symptoms.trim()) {
-    setError("Veuillez décrire vos symptômes principaux");
-    return false;
-  }
-  // Réduire la longueur minimale à 3 caractères au lieu de 10
-  if (symptoms.length < 3) {
-    setError("La description des symptômes est trop courte (minimum 3 caractères)");
-    return false;
-  }
-  if (!consentAccepted) {
-    setError("Vous devez accepter les conditions de traitement des données médicales");
-    return false;
-  }
-  return true;
-};
+    if (!symptoms.trim()) {
+      setError("Veuillez décrire vos symptômes principaux");
+      return false;
+    }
+    if (symptoms.length < 3) {
+      setError("La description des symptômes est trop courte (minimum 3 caractères)");
+      return false;
+    }
+    if (!consentAccepted) {
+      setError("Vous devez accepter les conditions de traitement des données médicales");
+      return false;
+    }
+    return true;
+  };
 
   const buildMedicalNotes = () => {
     const sections = [];
@@ -314,7 +362,6 @@ export default function ConsultationRequest() {
 
     try {
       const token = localStorage.getItem("medai-token");
-      console.log("Token:", token ? "Présent" : "Absent");
       
       if (!token) {
         throw new Error("Session expirée. Veuillez vous reconnecter.");
@@ -324,10 +371,6 @@ export default function ConsultationRequest() {
       formData.append("file", file);
       formData.append("model_key", selectedModel.key);
       formData.append("patient_notes", buildMedicalNotes());
-
-      console.log("Envoi de la requête à:", `${API_URL}/consultations`);
-      console.log("Modèle:", selectedModel.key);
-      console.log("Fichier:", file.name, file.size, file.type);
 
       // Simulation de progression
       const progressInterval = setInterval(() => {
@@ -345,22 +388,16 @@ export default function ConsultationRequest() {
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      console.log("Response status:", response.status);
-
       if (!response.ok) {
         let errorMessage = `Erreur ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error("Erreur API:", errorData);
           errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch (e) {
-          console.error("Erreur de parsing:", e);
-        }
+        } catch (e) {}
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      console.log("Succès:", data);
       
       setResult({
         ...data,
@@ -371,7 +408,6 @@ export default function ConsultationRequest() {
       setStep(3);
       
     } catch (e) {
-      console.error("Erreur détaillée:", e);
       setError(e.message || "Une erreur est survenue. Veuillez réessayer.");
     } finally {
       setLoading(false);
@@ -399,10 +435,10 @@ export default function ConsultationRequest() {
 
   if (authLoading) {
     return (
-      <div className="pd3" style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <div className="pd3">
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", flexDirection: "column", gap: 20 }}>
           <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
-            <Icons.Sparkles size={48} color="var(--gold-bright)" />
+            <Icons.Sparkles size={48} color="#D4A500" />
           </motion.div>
           <p style={{ color: "var(--txt2)", fontWeight: 500 }}>Chargement de l'interface médicale...</p>
         </div>
@@ -412,11 +448,29 @@ export default function ConsultationRequest() {
 
   if (!user || user.role !== "Patient") return null;
 
+  const currentDate = new Date();
+  const greeting = currentDate.getHours() < 12 ? "Bonjour" : currentDate.getHours() < 18 ? "Bon après-midi" : "Bonsoir";
+
   return (
-    <div className="pd3" style={{ position: "relative", minHeight: "100vh", overflowX: "hidden" }}>
-      
-      {/* ========== HERO SECTION ========== */}
-      <section className="pd3-hero" style={{ minHeight: "40vh", position: "relative" }}>
+    <div className="pd3">
+      {/* NAVIGATION */}
+      <motion.nav className={`pd3-nav ${isScrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: 0.5, type: "spring", stiffness: 100 }}>
+        <div className="pd3-nav-brand" onClick={() => navigate("/patient")}>
+          <div className="pd3-nav-logo"><div className="pd3-nav-logo-inner"><Icons.Lungs size={22} color="#0A1628" /></div></div>
+          <span className="pd3-nav-name">Med<span className="accent">AI</span></span>
+        </div>
+        <div className="pd3-nav-links">
+          <button className="pd3-nav-link active" style={{ background: "none", border: "none", cursor: "pointer" }}>Nouvelle consultation</button>
+        </div>
+        <div className="pd3-nav-actions">
+          <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={() => navigate("/patient")}>
+            <Icons.User size={15} /> Tableau de bord
+          </button>
+        </div>
+      </motion.nav>
+
+      {/* HERO SECTION */}
+      <motion.section className="pd3-hero" style={{ minHeight: "40vh", position: "relative" }}>
         <div className="pd3-hero-grid" />
         <div className="pd3-hero-orb pd3-hero-orb-1" />
         <div className="pd3-hero-orb pd3-hero-orb-2" />
@@ -426,68 +480,58 @@ export default function ConsultationRequest() {
         <div className="pd3-hero-ring pd3-hero-ring-3" />
         <Particles />
         
-        <div className="pd3-hero-content" style={{ padding: "100px 64px 60px" }}>
-          <div style={{ textAlign: "center", maxWidth: 800, margin: "0 auto" }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <div className="pd3-hero-status" style={{ justifyContent: "center" }}>
-                <span className="pd3-status-pulse" />
-                <span>NOUVELLE CONSULTATION</span>
-                <span className="pd3-status-sep" />
-                <span>CERTIFIÉ CE MÉDICAL</span>
-              </div>
+        <div className="pd3-hero-content" style={{ padding: "100px 64px 60px", minHeight: "40vh" }}>
+          <div>
+            <motion.div initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="pd3-hero-status"><span className="pd3-status-pulse" /><span>NOUVELLE CONSULTATION</span><span className="pd3-status-sep" /><span>CERTIFIÉ CE MÉDICAL</span></div>
             </motion.div>
-            
-            <motion.h1 
-              className="pd3-hero-welcome" 
-              style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }}
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <span className="highlight">Demande médicale</span>
+            <motion.h1 className="pd3-hero-welcome" style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              {greeting},<br /><span className="highlight">Demande médicale</span>
             </motion.h1>
-            
-            <motion.p 
-              className="pd3-hero-subtitle" 
-              style={{ margin: "0 auto" }}
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
+            <motion.div className="pd3-hero-date" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Icons.Calendar size={14} color="rgba(255,255,255,0.5)" /> {currentDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} <span style={{ margin: "0 8px", opacity: 0.3 }}>•</span> {currentDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+            </motion.div>
+            <motion.p className="pd3-hero-subtitle" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
               Remplissez ce formulaire pour soumettre votre image médicale à notre équipe de spécialistes.
             </motion.p>
+            <motion.div className="pd3-hero-actions" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+              <button className="pd3-btn pd3-btn-gold pd3-btn-lg" onClick={() => navigate("/patient")}>
+                <Icons.Folder size={18} /> Voir mes dossiers
+              </button>
+            </motion.div>
           </div>
-        </div>
-      </section>
-
-      {/* Navigation sticky */}
-      <motion.nav 
-        className="pd3-nav scrolled" 
-        style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(244, 247, 252, 0.92)", backdropFilter: "blur(24px)", borderBottom: "1px solid var(--border)" }}
-        initial={{ y: -80 }} 
-        animate={{ y: 0 }} 
-        transition={{ duration: 0.5, type: "spring", stiffness: 100 }}
-      >
-        <div className="pd3-nav-brand" onClick={() => navigate("/patient")}>
-          <div className="pd3-nav-logo">
-            <div className="pd3-nav-logo-inner">
-              <Icons.Lungs size={22} color="#0A1628" />
+          <motion.div className="pd3-hero-visual" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+            <div className="pd3-hero-card">
+              <div className="pd3-hero-card-header"><span className="pd3-card-title">ANALYSE EN TEMPS RÉEL</span><span className="pd3-card-badge"><span className="pd3-status-pulse" /> IA Active</span></div>
+              <div className="pd3-mini-chart">
+                {[35, 55, 40, 70, 45, 65, 80, 50, 75, 60, 85, 55, 70, 90, 65, 50, 75, 60, 80, 55].map((h, i) => (
+                  <motion.div key={i} className={`pd3-chart-bar ${i >= 14 ? "highlight" : ""}`} style={{ height: `${h}%` }} initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ delay: 0.6 + i * 0.04, duration: 0.5 }} />
+                ))}
+              </div>
+              <div className="pd3-mini-stats">
+                <motion.div className="pd3-mini-stat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}><div className="pd3-mini-stat-value">100%</div><div className="pd3-mini-stat-label">SÉCURITÉ</div></motion.div>
+                <motion.div className="pd3-mini-stat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}><div className="pd3-mini-stat-value">24/7</div><div className="pd3-mini-stat-label">SUPPORT</div></motion.div>
+                <motion.div className="pd3-mini-stat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }}><div className="pd3-mini-stat-value">48h</div><div className="pd3-mini-stat-label">RÉPONSE</div></motion.div>
+              </div>
+              <motion.div className="pd3-progress-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
+                <div className="pd3-progress-header"><span className="pd3-progress-label">Complétude du formulaire</span><span className="pd3-progress-value">{step === 1 ? "0%" : step === 2 ? "50%" : "100%"}</span></div>
+                <div className="pd3-progress-bar"><motion.div className="pd3-progress-fill" initial={{ width: 0 }} animate={{ width: step === 1 ? "0%" : step === 2 ? "50%" : "100%" }} transition={{ delay: 1.2, duration: 1 }} /></div>
+              </motion.div>
+              <div className="pd3-live-indicator"><div className="pd3-live-dot" /><span className="pd3-live-text">SYSTÈME OPÉRATIONNEL</span><span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>98.5% uptime</span></div>
             </div>
-          </div>
-          <span className="pd3-nav-name">Med<span className="accent">AI</span></span>
+            <motion.div className="pd3-float-card pd3-float-1" animate={{ y: [0, -14, 0] }} transition={{ repeat: Infinity, duration: 4.5 }}>
+              <div className="pd3-float-card-icon" style={{ background: "rgba(232,184,48,0.12)", color: "#FFD700" }}><Icons.Brain size={20} /></div>
+              <div><div className="pd3-float-card-value">98.5%</div><div className="pd3-float-card-label">Précision IA</div></div>
+            </motion.div>
+            <motion.div className="pd3-float-card pd3-float-2" animate={{ y: [0, -10, 0], x: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1.2 }}>
+              <div className="pd3-float-card-icon" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}><Icons.Heart size={20} /></div>
+              <div><div className="pd3-float-card-value">&lt; 30s</div><div className="pd3-float-card-label">Analyse rapide</div></div>
+            </motion.div>
+          </motion.div>
         </div>
-        <div className="pd3-nav-links">
-          <button className="pd3-nav-link active" style={{ background: "none", border: "none", cursor: "pointer" }}>Nouvelle consultation</button>
-        </div>
-        <div className="pd3-nav-actions">
-          <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={() => navigate("/patient")}>
-            <Icons.User size={15} />
-            Tableau de bord
-          </button>
-        </div>
-      </motion.nav>
+      </motion.section>
 
-      {/* Contenu principal */}
+      {/* BODY */}
       <div className="pd3-body" style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto", padding: "48px 24px" }}>
         
         {/* Progression */}
@@ -563,7 +607,7 @@ export default function ConsultationRequest() {
                   >
                     <div className="pd3-action-top" style={{ marginBottom: 0 }}>
                       <div className="pd3-action-icon" style={{ background: model.bg, color: model.color, width: 56, height: 56 }}>
-                        <span style={{ fontSize: "1.8rem" }}>{model.icon}</span>
+                        {model.icon}
                       </div>
                       <div className="pd3-action-arrow" style={{ opacity: 1, background: model.bg, color: model.color }}>
                         <Icons.ArrowRight size={14} color={model.color} />
@@ -601,7 +645,7 @@ export default function ConsultationRequest() {
               <div className="pd3-section-row" style={{ marginBottom: 24 }}>
                 <div className="pd3-section-row-title">
                   <div className="pd3-action-icon" style={{ background: selectedModel.bg, color: selectedModel.color, width: 40, height: 40 }}>
-                    <span style={{ fontSize: "1.2rem" }}>{selectedModel.icon}</span>
+                    {selectedModel.icon}
                   </div>
                   <span style={{ color: selectedModel.color }}>{selectedModel.label}</span>
                 </div>
@@ -848,10 +892,10 @@ export default function ConsultationRequest() {
 
               <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
                 <button onClick={resetForm} className="pd3-btn pd3-btn-outline" style={{ background: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.2)", color: "white", cursor: "pointer" }}>
-                  📋 Nouvelle demande
+                  Nouvelle demande
                 </button>
                 <button onClick={() => navigate("/patient")} className="pd3-btn pd3-btn-gold" style={{ cursor: "pointer" }}>
-                  🏠 Tableau de bord
+                  Tableau de bord
                 </button>
               </div>
             </div>
@@ -859,8 +903,8 @@ export default function ConsultationRequest() {
         )}
       </div>
 
-      {/* ========== FOOTER PREMIUM ========== */}
-      <footer className="hp-footer" style={{ marginTop: 0 }}>
+      {/* FOOTER */}
+      <footer className="hp-footer">
         <div className="hp-footer-inner">
           <div className="hp-footer-grid">
             <div className="hp-footer-brand">
@@ -869,33 +913,24 @@ export default function ConsultationRequest() {
                 <span style={{ color: "#fff" }}>Med<span style={{ color: "#FFD700" }}>AI</span></span>
               </div>
               <p>Plateforme médicale de diagnostic assisté par IA. Transformant la radiologie avec l'apprentissage profond depuis 2024.</p>
-              <div className="hp-footer-socials">
-                {["LI", "TW", "GH", "YT", "IN"].map((s, i) => (
-                  <div className="hp-footer-social" key={i}>{s}</div>
-                ))}
-              </div>
+              <div className="hp-footer-socials">{["LI", "TW", "GH", "YT", "IN"].map((s, i) => <div className="hp-footer-social" key={i}>{s}</div>)}</div>
             </div>
-            <div>
-              <h4>PRODUIT</h4>
-              {["Analyse IA", "Radiologues", "API Access", "Mobile App", "Tarifs"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
-            </div>
-            <div>
-              <h4>ENTREPRISE</h4>
-              {["À propos", "Carrières", "Recherche", "Blog", "Contact"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
-            </div>
-            <div>
-              <h4>RESSOURCES</h4>
-              {["Documentation", "Études de cas", "Whitepapers", "Support", "Statut"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}
-            </div>
+            <div><h4>PRODUIT</h4>{["Analyse IA", "Radiologues", "API Access", "Mobile App", "Tarifs"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
+            <div><h4>ENTREPRISE</h4>{["À propos", "Carrières", "Recherche", "Blog", "Contact"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
+            <div><h4>RESSOURCES</h4>{["Documentation", "Études de cas", "Whitepapers", "Support", "Statut"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
           </div>
           <div className="hp-footer-bottom">
             <span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span>
-            <div className="hp-footer-bottom-links">
-              {["Confidentialité", "Conditions", "Sécurité", "HIPAA", "RGPD", "Contact"].map(x => <a href="#" key={x}>{x}</a>)}
-            </div>
+            <div className="hp-footer-bottom-links">{["Confidentialité", "Conditions", "Sécurité", "HIPAA", "RGPD", "Contact"].map(x => <a href="#" key={x}>{x}</a>)}</div>
           </div>
         </div>
       </footer>
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

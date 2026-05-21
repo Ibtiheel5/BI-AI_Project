@@ -6,6 +6,24 @@ import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import "./PatientDashboard.css";
 import "leaflet/dist/leaflet.css";
+import { PatientIcons } from "../../constants/patientIcons";
+
+import { MedicalHistoryPage } from "./MedicalHistoryPage";
+import { DocumentsPage } from "./DocumentsPage";
+import { PreferencesPage } from "./PreferencesPage";
+import  PrescriptionsPage  from "./PrescriptionsPage";
+import  RemindersPage  from "./RemindersPage";
+import  UpcomingCallsPage  from "./UpcomingCallsPage";
+import { CallHistoryPage } from "./CallHistoryPage";
+import { ResultsPage } from "./ResultsPage";
+import { ResultDetailPage } from "./ResultDetailPage";
+import { HealthEvolutionPage } from "./HealthEvolutionPage";
+import { ConsultationRequest } from "../ConsultationRequest";
+import { ConsultationRoom } from "../ConsultationRoom";
+import { MessagesPage } from "./MessagesPage";
+import CriticalNotificationOverlay from "../../components/CriticalNotificationOverlay";
+import { useCriticalNotifications } from "../../hooks/useCriticalNotifications";
+import "../../components/CriticalNotificationOverlay.css";
 
 // ═══════════════════════════════════════
 // DYNAMIC LEAFLET IMPORT
@@ -59,6 +77,208 @@ const I = {
   Video: p => <Svg {...p}><rect x="2" y="5" width="14" height="14" rx="2"/><polyline points="16 9 22 5 22 19 16 15"/></Svg>,
   Camera: p => <Svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Svg>,
   CalendarCheck: p => <Svg {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="16 16 12 12 8 16"/></Svg>,
+  FileText: p => <Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Svg>,
+  LogOut: p => <Svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Svg>,
+  AlertTriangle: p => <Svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>,
+  Loader: p => <Svg {...p}><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></Svg>,
+};
+
+// ═══════════════════════════════════════
+// TOAST NOTIFICATION SYSTEM
+// ═══════════════════════════════════════
+const Toast = ({ message, type = "success", onClose, duration = 3000 }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, duration);
+    return () => clearTimeout(timer);
+  }, [duration, onClose]);
+
+  const colors = {
+    success: { bg: "#10B981", icon: <I.Check size={16} color="white" /> },
+    error: { bg: "#EF4444", icon: <I.AlertTriangle size={16} color="white" /> },
+    warning: { bg: "#F59E0B", icon: <I.Bell size={16} color="white" /> },
+    info: { bg: "#3B82F6", icon: <I.Activity size={16} color="white" /> },
+  };
+
+  const cfg = colors[type] || colors.success;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -50, x: "-50%" }}
+      animate={{ opacity: 1, y: 0, x: "-50%" }}
+      exit={{ opacity: 0, y: -50, x: "-50%" }}
+      style={{
+        position: "fixed",
+        top: 24,
+        left: "50%",
+        zIndex: 9999,
+        background: cfg.bg,
+        color: "white",
+        padding: "12px 24px",
+        borderRadius: 12,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        fontSize: "0.85rem",
+        fontWeight: 600,
+        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+        minWidth: 280,
+        justifyContent: "space-between",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {cfg.icon}
+        {message}
+      </div>
+      <button onClick={onClose} style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}>
+        <I.X size={14} />
+      </button>
+    </motion.div>
+  );
+};
+
+// ═══════════════════════════════════════
+// SKELETON LOADER COMPONENTS
+// ═══════════════════════════════════════
+const SkeletonCard = () => (
+  <div style={{
+    background: "var(--card)",
+    borderRadius: 16,
+    padding: 20,
+    border: "1px solid var(--border)",
+    animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+  }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--border)" }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ height: 16, width: "60%", background: "var(--border)", borderRadius: 6, marginBottom: 8 }} />
+        <div style={{ height: 12, width: "40%", background: "var(--border)", borderRadius: 4 }} />
+      </div>
+    </div>
+  </div>
+);
+
+const SkeletonMetric = () => (
+  <div style={{
+    background: "var(--card)",
+    borderRadius: 16,
+    padding: 24,
+    border: "1px solid var(--border)",
+    animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+  }}>
+    <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--border)", marginBottom: 12 }} />
+    <div style={{ height: 28, width: "50%", background: "var(--border)", borderRadius: 6, marginBottom: 8 }} />
+    <div style={{ height: 14, width: "70%", background: "var(--border)", borderRadius: 4 }} />
+  </div>
+);
+
+// ═══════════════════════════════════════
+// LOGOUT MODAL
+// ═══════════════════════════════════════
+const LogoutModal = ({ isOpen, onClose, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(4px)",
+          zIndex: 9998,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          style={{
+            background: "var(--card)",
+            borderRadius: 20,
+            padding: 32,
+            maxWidth: 400,
+            width: "90%",
+            boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+            border: "1px solid var(--border)",
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: "rgba(239,68,68,0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 20,
+          }}>
+            <I.LogOut size={28} color="#EF4444" />
+          </div>
+          <h3 style={{
+            fontSize: "1.25rem",
+            fontWeight: 700,
+            color: "var(--navy)",
+            marginBottom: 8,
+          }}>
+            Déconnexion
+          </h3>
+          <p style={{
+            fontSize: "0.9rem",
+            color: "var(--txt2)",
+            marginBottom: 24,
+            lineHeight: 1.5,
+          }}>
+            Êtes-vous sûr de vouloir vous déconnecter ? Vous devrez vous reconnecter pour accéder à votre espace patient.
+          </p>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: "12px 20px",
+                borderRadius: 12,
+                border: "1.5px solid var(--border)",
+                background: "transparent",
+                color: "var(--txt)",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              onClick={onConfirm}
+              style={{
+                flex: 1,
+                padding: "12px 20px",
+                borderRadius: 12,
+                border: "none",
+                background: "#EF4444",
+                color: "white",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                boxShadow: "0 4px 14px rgba(239,68,68,0.3)",
+              }}
+            >
+              Se déconnecter
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 };
 
 // ═══════════════════════════════════════
@@ -397,12 +617,6 @@ const zoomBtn = {
 };
 
 // ═══════════════════════════════════════
-// COMPOSANT BOUTON APPEL VIDÉO POUR PATIENT
-// ═══════════════════════════════════════
-// ═══════════════════════════════════════
-// COMPOSANT BOUTON APPEL VIDÉO POUR PATIENT (AVEC MINUTEUR 20 MIN)
-// ═══════════════════════════════════════
-// ═══════════════════════════════════════
 // COMPOSANT BOUTON APPEL VIDÉO POUR PATIENT (AVEC MINUTEUR 20 MIN)
 // ═══════════════════════════════════════
 const PatientVideoCallButton = ({ consultationId, consultationStatus, consultation }) => {
@@ -483,14 +697,15 @@ const PatientVideoCallButton = ({ consultationId, consultationStatus, consultati
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        alert("Rendez-vous accepté !");
+        // Toast au lieu de alert
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Rendez-vous accepté avec succès !", type: "success" } }));
         fetchAppointment();
       } else {
-        alert("Erreur lors de l'acceptation");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur lors de l'acceptation", type: "error" } }));
       }
     } catch (err) {
       console.error(err);
-      alert("Erreur réseau");
+      window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur réseau", type: "error" } }));
     } finally {
       setIsAccepting(false);
     }
@@ -505,14 +720,14 @@ const PatientVideoCallButton = ({ consultationId, consultationStatus, consultati
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        alert("Rendez-vous refusé");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Rendez-vous refusé", type: "warning" } }));
         fetchAppointment();
       } else {
-        alert("Erreur lors du refus");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur lors du refus", type: "error" } }));
       }
     } catch (err) {
       console.error(err);
-      alert("Erreur réseau");
+      window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur réseau", type: "error" } }));
     } finally {
       setIsRejecting(false);
     }
@@ -646,9 +861,14 @@ const AppointmentInfo = ({ consultationId }) => {
 
   if (loading || !appointment) return null;
 
-  const appointmentDate = new Date(appointment.scheduled_at);
-  const isUpcoming = appointmentDate > new Date();
-  const isToday = appointmentDate.toDateString() === new Date().toDateString();
+  const appointmentDate = appointment?.scheduled_at ? new Date(appointment.scheduled_at) : null;
+  const now = new Date();
+  const isAppointmentTime = appointmentDate && appointmentDate <= now;
+  // Le rendez-vous est valide pendant 30 minutes après l'heure prévue
+  const isWithinWindow = appointmentDate && (now - appointmentDate) <= 30 * 60 * 1000;
+  const isExpired = appointmentDate && (now - appointmentDate) > 30 * 60 * 1000;
+
+const canJoin = canVideoCall && isAppointmentAccepted && isAppointmentTime && isWithinWindow && !isExpired;
 
   return (
     <div style={{
@@ -682,11 +902,6 @@ const AppointmentInfo = ({ consultationId }) => {
 };
 
 // ═══════════════════════════════════════
-// COMPOSANT LISTE DES RENDEZ-VOUS - VERSION CORRIGÉE
-// ═══════════════════════════════════════
-// COMPOSANT LISTE DES RENDEZ-VOUS - VERSION CORRIGÉE
-// ═══════════════════════════════════════
-// ═══════════════════════════════════════
 // COMPOSANT LISTE DES RENDEZ-VOUS - AVEC ACCEPTATION
 // ═══════════════════════════════════════
 const AppointmentsList = ({ appointments, loading, onRefresh }) => {
@@ -702,14 +917,14 @@ const AppointmentsList = ({ appointments, loading, onRefresh }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        alert("Rendez-vous accepté !");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Rendez-vous accepté !", type: "success" } }));
         onRefresh();
       } else {
-        alert("Erreur lors de l'acceptation");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur lors de l'acceptation", type: "error" } }));
       }
     } catch (err) {
       console.error(err);
-      alert("Erreur réseau");
+      window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur réseau", type: "error" } }));
     } finally {
       setAcceptingId(null);
     }
@@ -724,14 +939,14 @@ const AppointmentsList = ({ appointments, loading, onRefresh }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        alert("Rendez-vous refusé");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Rendez-vous refusé", type: "warning" } }));
         onRefresh();
       } else {
-        alert("Erreur lors du refus");
+        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur lors du refus", type: "error" } }));
       }
     } catch (err) {
       console.error(err);
-      alert("Erreur réseau");
+      window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Erreur réseau", type: "error" } }));
     } finally {
       setRejectingId(null);
     }
@@ -739,9 +954,8 @@ const AppointmentsList = ({ appointments, loading, onRefresh }) => {
 
   if (loading) {
     return (
-      <div style={{ padding: "40px", textAlign: "center" }}>
-        <div className="pd3-api-spinner" />
-        <p style={{ marginTop: 12, color: "var(--txt3)" }}>Chargement des rendez-vous...</p>
+      <div style={{ display: "grid", gap: 12 }}>
+        {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
       </div>
     );
   }
@@ -1060,11 +1274,18 @@ const ConsultationCard = ({ consultation, onClick }) => {
   
   // Vérifier si le rendez-vous est accepté et à l'heure
   const isAppointmentAccepted = appointment?.status === "accepted";
-  const isAppointmentTime = appointment?.scheduled_at && new Date(appointment.scheduled_at) <= new Date();
-  const canJoin = canVideoCall && isAppointmentAccepted && isAppointmentTime;
-  
-  // Vérifier si le rendez-vous est en attente
   const isAppointmentPending = appointment?.status === "pending";
+  
+  // === CORRECTION : Calcul de la date et de l'expiration ===
+  const appointmentDate = appointment?.scheduled_at ? new Date(appointment.scheduled_at) : null;
+  const now = new Date();
+  const isAppointmentTime = appointmentDate && appointmentDate <= now;
+  // Le rendez-vous est valide pendant 30 minutes après l'heure prévue
+  const isWithinWindow = appointmentDate && (now - appointmentDate) <= 30 * 60 * 1000;
+  const isExpired = appointmentDate && (now - appointmentDate) > 30 * 60 * 1000;
+  // =========================================================
+  
+  const canJoin = canVideoCall && isAppointmentAccepted && isAppointmentTime && isWithinWindow && !isExpired;
   
   const joinVideoCall = (e) => {
     e.stopPropagation();
@@ -1095,7 +1316,7 @@ const ConsultationCard = ({ consultation, onClick }) => {
         <I.ChevronRight size={18} />
       </div>
       
-      {/* Bouton Rejoindre l'appel vidéo - visible quand rendez-vous accepté et heure atteinte */}
+      {/* Bouton Rejoindre - visible uniquement si rendez-vous accepté, heure atteinte, et NON expiré */}
       {canJoin && (
         <div style={{ marginTop: 12 }}>
           <button
@@ -1126,6 +1347,25 @@ const ConsultationCard = ({ consultation, onClick }) => {
         </div>
       )}
       
+      {/* Message si rendez-vous expiré */}
+      {isExpired && (
+        <div style={{
+          marginTop: 8,
+          padding: "8px 12px",
+          background: "rgba(239,68,68,0.08)",
+          borderRadius: 10,
+          border: "1px solid rgba(239,68,68,0.15)",
+        }}>
+          <div style={{ fontSize: "0.7rem", color: "#EF4444", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Rendez-vous expiré — Le créneau est passé
+          </div>
+        </div>
+      )}
+      
       {/* Afficher les infos de rendez-vous uniquement si consultation acceptée et rendez-vous existe */}
       {canVideoCall && !loadingAppointment && appointment && (
         <>
@@ -1139,7 +1379,7 @@ const ConsultationCard = ({ consultation, onClick }) => {
           )}
           
           {/* Si rendez-vous accepté - afficher les infos */}
-          {isAppointmentAccepted && (
+          {isAppointmentAccepted && !isExpired && (
             <div style={{
               marginTop: 8,
               padding: "8px 12px",
@@ -1280,10 +1520,11 @@ const NotificationItem = ({ notification, onRead }) => {
 // MAIN COMPONENT - SANS RAFRAÎCHISSEMENT AUTOMATIQUE
 // ═══════════════════════════════════════
 export default function PatientDashboard({ initialTab = "overview" }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { consultations, stats, loading: cLoading } = usePatientData();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead: markNotifRead, markAllAsRead } = useNotifications();
+  const { criticalNotifications, refetch: refetchCritical } = useCriticalNotifications("patient");
 
   const [greeting, setGreeting] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -1299,25 +1540,93 @@ export default function PatientDashboard({ initialTab = "overview" }) {
   const [mapView, setMapView] = useState("map");
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [toast, setToast] = useState(null);
   const notifRef = useRef(null);
 
   const { scrollYProgress } = useScroll();
   const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -50]);
   const sY = useSpring(heroY, { stiffness: 80, damping: 25 });
 
-  // ── Greeting (une seule fois) ──────────────────────────────────────────────
+  // Toast listener
+  useEffect(() => {
+    const handleToast = (e) => {
+      setToast(e.detail);
+    };
+    window.addEventListener('showToast', handleToast);
+    return () => window.removeEventListener('showToast', handleToast);
+  }, []);
+
+  const navigateTo = (view, id = null) => {
+    setActiveTab(view);
+    if (view === "resultats") navigate("/patient/resultats");
+    if (view === "resultat_detail") navigate(`/patient/resultats/${id || ""}`);
+    if (view === "evolution") navigate("/patient/resultats/evolution");
+    if (view === "medical_history") navigate("/patient/profil/medical");
+    if (view === "documents") navigate("/patient/profil/documents");
+    if (view === "preferences") navigate("/patient/profil/preferences");
+    if (view === "prescriptions") navigate("/patient/prescriptions");
+    if (view === "rappels") navigate("/patient/rappels");
+    if (view === "upcoming_calls") navigate("/patient/teleconsultation/upcoming");
+    if (view === "call_history") navigate("/patient/teleconsultation/history");
+  };
+
+  const navigateToPage = (page, id = null) => {
+    switch(page) {
+      case "new_consultation":
+        navigate("/patient/consultation/new");
+        break;
+      case "consultation_detail":
+        navigate(`/patient/consultation/${id}`);
+        break;
+      case "results":
+        navigate("/patient/resultats");
+        break;
+      case "result_detail":
+        navigate(`/patient/resultats/${id}`);
+        break;
+      case "evolution":
+        navigate("/patient/resultats/evolution");
+        break;
+      case "medical_history":
+        navigate("/patient/profil/medical");
+        break;
+      case "documents":
+        navigate("/patient/profil/documents");
+        break;
+      case "preferences":
+        navigate("/patient/profil/preferences");
+        break;
+      case "prescriptions":
+        navigate("/patient/prescriptions");
+        break;
+      case "reminders":
+        navigate("/patient/rappels");
+        break;
+      case "upcoming_calls":
+        navigate("/patient/teleconsultation/upcoming");
+        break;
+      case "call_history":
+        navigate("/patient/teleconsultation/history");
+        break;
+      default:
+        break;
+    }
+  };
+
+  // ── Greeting ──────────────────────────────────────────────
   useEffect(() => { 
     const h = new Date().getHours(); 
     setGreeting(h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"); 
   }, []);
   
-  // ── Horloge (rafraîchissement limité à 60 secondes au lieu de 1 seconde) ──
+  // ── Horloge ────────────────────────────────────────────────
   useEffect(() => { 
     const i = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(i); 
   }, []);
   
-  // ── Scroll listener avec throttle pour performance ────────────────────────
+  // ── Scroll listener ────────────────────────────────────────
   useEffect(() => { 
     let ticking = false;
     const handleScroll = () => {
@@ -1333,7 +1642,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     return () => window.removeEventListener("scroll", handleScroll); 
   }, []);
 
-  // ── Fetch appointments ────────────────────────────────────────────────────
+  // ── Fetch appointments ────────────────────────────────────
   const fetchAppointments = useCallback(async () => {
     const token = localStorage.getItem("medai-token");
     if (!token) {
@@ -1348,7 +1657,6 @@ export default function PatientDashboard({ initialTab = "overview" }) {
         const data = await res.json();
         setAppointments(data.appointments || []);
       } else {
-        // Fallback: essayer l'autre endpoint
         const res2 = await fetch("http://localhost:8000/api/v1/consultations/appointments", {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -1364,12 +1672,10 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     }
   }, []);
 
-  // ── Charger les rendez-vous au montage ─────────────────────────────────────
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // ── Rafraîchir toutes les 30 secondes ─────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       fetchAppointments();
@@ -1377,7 +1683,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     return () => clearInterval(interval);
   }, [fetchAppointments]);
 
-  // ── Fetch doctors (une seule fois) ────────────────────────────────────────
+  // ── Fetch doctors ────────────────────────────────────────
   useEffect(() => {
     const fetchDocs = async () => {
       try {
@@ -1412,7 +1718,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     fetchDocs();
   }, []);
 
-  // ── Geolocation (une seule fois) ──────────────────────────────────────────
+  // ── Geolocation ──────────────────────────────────────────
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -1422,7 +1728,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     );
   }, []);
 
-  // ── Computed values ───────────────────────────────────────────────────────
+  // ── Computed values ───────────────────────────────────────
   const doctorsWithDistance = useMemo(() => doctors.map(d => {
     let dist = null;
     if (userLocation && d.ville && CITY_COORDS[d.ville]) {
@@ -1465,10 +1771,73 @@ export default function PatientDashboard({ initialTab = "overview" }) {
   ];
 
   const quickActions = [
-    { icon:I.Upload, label:"Nouvelle consultation", desc:"Soumettre une imagerie", color:"#D4A500", bg:"rgba(212,165,0,0.08)", action:()=>navigate("/patient/consultation/new") },
-    { icon:I.Folder, label:"Mes dossiers", desc:"Historique complet", color:"#3B82F6", bg:"rgba(59,130,246,0.08)", action:()=>navigate("/patient/dossiers") },
-    { icon:I.Message, label:"Messages", desc:`${unreadCount} non lu${unreadCount>1?"s":""}`, color:"#10B981", bg:"rgba(16,185,129,0.08)", action:()=>navigate("/patient/messages") },
-    { icon:I.Brain, label:"Analyse IA", desc:"Tester un modèle", color:"#8B5CF6", bg:"rgba(139,92,246,0.08)", action:()=>navigate("/classification") },
+    { 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>, 
+      label: "Nouvelle consultation", 
+      desc: "Soumettre une imagerie", 
+      color: "#D4A500", 
+      bg: "rgba(212,165,0,0.08)", 
+      action: () => navigate("/patient/consultation/new") 
+    },
+    { 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>, 
+      label: "Mes dossiers", 
+      desc: "Historique complet", 
+      color: "#3B82F6", 
+      bg: "rgba(59,130,246,0.08)", 
+      action: () => navigate("/patient/dossiers") 
+    },
+    { 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, 
+      label: "Messages", 
+      desc: `${unreadCount} non lu${unreadCount > 1 ? "s" : ""}`, 
+      color: "#10B981", 
+      bg: "rgba(16,185,129,0.08)", 
+      action: () => navigate("/patient/messages") 
+    },
+    { 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>, 
+      label: "Analyse IA", 
+      desc: "Voir mes résultats", 
+      color: "#8B5CF6", 
+      bg: "rgba(139,92,246,0.08)", 
+      action: () => navigate("/patient/resultats")
+    },
+  ];
+
+  const profileLinks = [
+    { 
+      label: "Mes résultats", 
+      desc: "Tous vos diagnostics", 
+      path: "/patient/resultats", 
+      color: "#D4A500", 
+      bg: "rgba(212,165,0,0.08)", 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/><path d="M14 14l2 2 4-4"/></svg> 
+    },
+    { 
+      label: "Ordonnances", 
+      desc: "Vos prescriptions", 
+      path: "/patient/prescriptions", 
+      color: "#10B981", 
+      bg: "rgba(16,185,129,0.08)", 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> 
+    },
+    { 
+      label: "Rappels", 
+      desc: "Gérez vos alertes", 
+      path: "/patient/rappels", 
+      color: "#8B5CF6", 
+      bg: "rgba(139,92,246,0.08)", 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg> 
+    },
+    { 
+      label: "Téléconsultations", 
+      desc: "Appels à venir", 
+      path: "/patient/teleconsultation/upcoming", 
+      color: "#EF4444", 
+      bg: "rgba(239,68,68,0.08)", 
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="14" height="14" rx="2"/><polyline points="16 9 22 5 22 19 16 15"/></svg> 
+    },
   ];
 
   const recent = (consultations || []).slice(0, 4);
@@ -1485,6 +1854,16 @@ export default function PatientDashboard({ initialTab = "overview" }) {
     { icon:I.Shield, value:100, suffix:"%", label:"Données sécurisées" },
   ];
 
+  
+
+  // Handle logout
+  const handleLogout = () => {
+    logout?.();
+    localStorage.removeItem("medai-token");
+    localStorage.removeItem("medai-user");
+    navigate("/login");
+  };
+
   if (cLoading) {
     return (
       <div className="pd3">
@@ -1500,7 +1879,25 @@ export default function PatientDashboard({ initialTab = "overview" }) {
 
   return (
     <div className="pd3">
-      {/* NAVIGATION */}
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={() => setToast(null)} 
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Logout Modal */}
+      <LogoutModal 
+        isOpen={showLogoutModal} 
+        onClose={() => setShowLogoutModal(false)} 
+        onConfirm={handleLogout}
+      />
+
+      {/* NAVIGATION - AMÉLIORÉE AVEC BOUTON DÉCONNEXION */}
       <motion.nav className={`pd3-nav ${isScrolled ? "scrolled" : ""}`} initial={{y:-80}} animate={{y:0}} transition={{duration:.5,type:"spring",stiffness:100}}>
         <div className="pd3-nav-brand" onClick={()=>navigate("/")}>
           <div className="pd3-nav-logo"><div className="pd3-nav-logo-inner"><I.Lungs size={22} color="#0A1628"/></div></div>
@@ -1513,6 +1910,8 @@ export default function PatientDashboard({ initialTab = "overview" }) {
             { id:"dossiers", label:"Dossiers" },
             { id:"appointments", label:"Rendez-vous" },
             { id:"health", label:"Santé" },
+            { id:"results", label:"Résultats" },
+            { id:"messages", label:"Messages" }, 
           ].map(tab => (
             <button key={tab.id} className={`pd3-nav-link ${activeTab===tab.id ? "active" : ""}`} onClick={()=>setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
               {tab.label}
@@ -1520,7 +1919,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
           ))}
         </div>
         <div className="pd3-nav-actions">
-          <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={()=>navigate("/profile")}>
+          <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={() => navigate("/patient/profil")}>
             <I.User size={15}/> Profil
           </button>
           <div style={{position:"relative"}} ref={notifRef}>
@@ -1545,12 +1944,23 @@ export default function PatientDashboard({ initialTab = "overview" }) {
                   <div className="pd3-notif-body">
                     {notifications.length === 0 ? (
                       <div className="pd3-notif-empty"><div className="pd3-notif-empty-icon"><I.Bell size={26} color="#D4A500"/></div><div className="pd3-notif-empty-text">Aucune notification</div><div className="pd3-notif-empty-sub">Vous êtes à jour</div></div>
-                    ) : notifications.map(n => <NotificationItem key={n.id} notification={n} onRead={markAsRead}/>)}
+                    ) : notifications.map(n => <NotificationItem key={n.id} notification={n} onRead={markNotifRead}/>)}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+          {/* BOUTON DÉCONNEXION */}
+          <motion.button 
+            className="pd3-btn-icon" 
+            onClick={() => setShowLogoutModal(true)}
+            whileHover={{scale:1.05}} 
+            whileTap={{scale:.95}}
+            title="Se déconnecter"
+            style={{ marginLeft: 4 }}
+          >
+            <I.LogOut size={18} color="#EF4444"/>
+          </motion.button>
         </div>
       </motion.nav>
 
@@ -1635,10 +2045,15 @@ export default function PatientDashboard({ initialTab = "overview" }) {
           <div className="pd3-tabs">
             {[
               { id:"overview", label:"Vue d'ensemble", icon:<I.Activity size={16}/> },
-              { id:"doctors", label:"Médecins disponibles", icon:<I.Map size={16}/> },
-              { id:"dossiers", label:"Dossiers récents", icon:<I.Folder size={16}/> },
+              { id:"doctors", label:"Médecins", icon:<I.Map size={16}/> },
+              { id:"dossiers", label:"Dossiers", icon:<I.Folder size={16}/> },
               { id:"appointments", label:"Rendez-vous", icon:<I.Calendar size={16}/> },
-              { id:"health", label:"Santé & conseils", icon:<I.Heart size={16}/> },
+              { id:"health", label:"Santé", icon:<I.Heart size={16}/> },
+              { id:"results", label:"Résultats", icon:<I.Star size={16}/> },
+              { id:"prescriptions", label:"Ordonnances", icon:<I.FileText size={16}/> },
+              { id:"reminders", label:"Rappels", icon:<I.Clock size={16}/> },
+              { id:"upcoming_calls", label:"Appels", icon:<I.Video size={16}/> },
+              { id:"messages", label:"Messages", icon:<I.Message size={16}/> },
             ].map(tab=>(
               <button key={tab.id} className={`pd3-tab ${activeTab===tab.id?"active":""}`} onClick={()=>setActiveTab(tab.id)}>
                 <span className="pd3-tab-icon">{tab.icon}</span> {tab.label}
@@ -1652,23 +2067,159 @@ export default function PatientDashboard({ initialTab = "overview" }) {
           {activeTab === "overview" && (
             <motion.div key="overview" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
               <Reveal>
-                <div className="pd3-section-header">
-                  <div className="pd3-section-badge"><I.Activity size={12}/> VUE D'ENSEMBLE</div>
-                  <h2 className="pd3-section-title">Tableau de bord <span className="accent">médical</span></h2>
-                  <p className="pd3-section-sub">Suivez l'ensemble de vos consultations en temps réel</p>
+                <div className="pd3-section-header" style={{
+                  background: "linear-gradient(135deg, #0A1628 0%, #1B3B6F 50%, #0F1B2D 100%)",
+                  borderRadius: "24px",
+                  padding: "48px 40px 40px",
+                  marginBottom: "32px",
+                  position: "relative",
+                  overflow: "hidden",
+                  boxShadow: "0 20px 60px rgba(10, 22, 40, 0.3), 0 0 0 1px rgba(255, 215, 0, 0.1)",
+                }}>
+                  <div style={{
+                    position: "absolute",
+                    inset: 0,
+                    backgroundImage: `
+                      linear-gradient(rgba(255,215,0,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,215,0,0.03) 1px, transparent 1px)
+                    `,
+                    backgroundSize: "60px 60px",
+                    opacity: 0.5,
+                  }} />
+                  <div style={{
+                    position: "absolute",
+                    top: "-60px",
+                    right: "-40px",
+                    width: "200px",
+                    height: "200px",
+                    borderRadius: "50%",
+                    background: "radial-gradient(circle, rgba(255,215,0,0.12) 0%, transparent 70%)",
+                    filter: "blur(40px)",
+                  }} />
+                  <div style={{
+                    position: "absolute",
+                    bottom: "-40px",
+                    left: "10%",
+                    width: "150px",
+                    height: "150px",
+                    borderRadius: "50%",
+                    background: "radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%)",
+                    filter: "blur(30px)",
+                  }} />
+                  <div style={{ position: "relative", zIndex: 2 }}>
+                    <div style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "8px 18px",
+                      borderRadius: "100px",
+                      background: "rgba(255, 215, 0, 0.1)",
+                      border: "1px solid rgba(255, 215, 0, 0.25)",
+                      marginBottom: "20px",
+                      backdropFilter: "blur(10px)",
+                    }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                      </svg>
+                      <span style={{
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: "#FFD700",
+                        textTransform: "uppercase",
+                        letterSpacing: "2px",
+                      }}>
+                        Vue d'ensemble
+                      </span>
+                    </div>
+                    <h2 style={{
+                      fontSize: "2.4rem",
+                      fontWeight: 800,
+                      color: "#FFFFFF",
+                      margin: "0 0 12px 0",
+                      letterSpacing: "-0.03em",
+                      lineHeight: 1.2,
+                    }}>
+                      Tableau de bord <span style={{
+                        background: "linear-gradient(135deg, #FFD700, #D4A500)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        backgroundClip: "text",
+                      }}>médical</span>
+                    </h2>
+                    <p style={{
+                      fontSize: "1rem",
+                      color: "rgba(255, 255, 255, 0.55)",
+                      margin: 0,
+                      maxWidth: "500px",
+                      lineHeight: 1.6,
+                      fontWeight: 400,
+                    }}>
+                      Suivez l'ensemble de vos consultations et analyses en temps réel
+                    </p>
+                    <div style={{
+                      display: "flex",
+                      gap: "24px",
+                      marginTop: "28px",
+                      flexWrap: "wrap",
+                    }}>
+                      {[
+                        { 
+                          icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, 
+                          label: "Système opérationnel", 
+                          color: "#10B981" 
+                        },
+                        { 
+                          icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>, 
+                          label: "Données chiffrées AES-256", 
+                          color: "#3B82F6" 
+                        },
+                        { 
+                          icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, 
+                          label: "Mise à jour temps réel", 
+                          color: "#FFD700" 
+                        },
+                      ].map((item, i) => (
+                        <div key={i} style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontSize: "0.75rem",
+                          color: "rgba(255, 255, 255, 0.5)",
+                          fontWeight: 500,
+                        }}>
+                          <span style={{ 
+                            display: "flex", 
+                            alignItems: "center", 
+                            justifyContent: "center",
+                            width: "28px",
+                            height: "28px",
+                            borderRadius: "8px",
+                            background: `${item.color}15`,
+                          }}>
+                            {item.icon}
+                          </span>
+                          {item.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </Reveal>
               <div className="pd3-metrics-grid">
-                {statsData.map((s,i)=>(
-                  <Reveal key={i} delay={i*.06}>
-                    <motion.div className="pd3-metric" style={{"--metric-color":s.color}} whileHover={{y:-6}} onClick={s.label==="En attente" && s.value>0 ? ()=>navigate("/patient/dossiers") : undefined}>
-                      <div className="pd3-metric-icon" style={{background:s.bg,color:s.color}}><s.icon size={24}/></div>
-                      <div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div>
-                      <div className="pd3-metric-label">{s.label}</div>
-                      {s.trend && <div className={`pd3-metric-trend ${s.trend.d}`}>{s.trend.d==="up"?"↑":s.trend.d==="down"?"↓":"→"} {s.trend.v}%</div>}
-                    </motion.div>
-                  </Reveal>
-                ))}
+                {cLoading ? (
+                  [1, 2, 3, 4].map(i => <SkeletonMetric key={i} />)
+                ) : (
+                  statsData.map((s,i)=>(
+                    <Reveal key={i} delay={i*.06}>
+                      <motion.div className="pd3-metric" style={{"--metric-color":s.color}} whileHover={{y:-6}} onClick={s.label==="En attente" && s.value>0 ? ()=>navigate("/patient/dossiers") : undefined}>
+                        <div className="pd3-metric-icon" style={{background:s.bg,color:s.color}}><s.icon size={24}/></div>
+                        <div className="pd3-metric-value" style={{color:s.color}}>{s.value}</div>
+                        <div className="pd3-metric-label">{s.label}</div>
+                        {s.trend && <div className={`pd3-metric-trend ${s.trend.d}`}>{s.trend.d==="up"?"↑":s.trend.d==="down"?"↓":"→"} {s.trend.v}%</div>}
+                      </motion.div>
+                    </Reveal>
+                  ))
+                )}
               </div>
               <Reveal delay={.1}>
                 <div className="pd3-section-row"><span className="pd3-section-row-title"><I.Sparkles size={16} color="#D4A500"/> Actions rapides</span></div>
@@ -1677,7 +2228,18 @@ export default function PatientDashboard({ initialTab = "overview" }) {
                 {quickActions.map((a,i)=>(
                   <Reveal key={i} delay={.12+i*.06}>
                     <motion.button className="pd3-action" onClick={a.action} whileHover={{y:-5}}>
-                      <div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color}}><a.icon size={22}/></div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div>
+                      <div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color}}>{a.icon}</div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div>
+                      <div className="pd3-action-label">{a.label}</div><div className="pd3-action-desc">{a.desc}</div>
+                    </motion.button>
+                  </Reveal>
+                ))}
+              </div>
+
+              <div className="pd3-actions-grid" style={{ marginTop: 16 }}>
+                {profileLinks.map((a,i)=>(
+                  <Reveal key={i} delay={.12+i*.06}>
+                    <motion.button className="pd3-action" onClick={()=>navigate(a.path)} whileHover={{y:-5}}>
+                      <div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color, fontSize:"1.2rem"}}>{a.icon}</div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div>
                       <div className="pd3-action-label">{a.label}</div><div className="pd3-action-desc">{a.desc}</div>
                     </motion.button>
                   </Reveal>
@@ -1762,12 +2324,12 @@ export default function PatientDashboard({ initialTab = "overview" }) {
                           err => {
                             console.error("Erreur géolocalisation:", err);
                             setDoctorsLoading(false);
-                            alert("Impossible d'obtenir votre position. Vérifiez vos paramètres de localisation.");
+                            window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Impossible d'obtenir votre position", type: "error" } }));
                           },
                           { enableHighAccuracy: true, timeout: 10000 }
                         );
                       } else {
-                        alert("Géolocalisation non supportée par votre navigateur.");
+                        window.dispatchEvent(new CustomEvent('showToast', { detail: { message: "Géolocalisation non supportée", type: "warning" } }));
                       }
                     }}
                     style={{
@@ -1839,7 +2401,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
                                   borderBottom: "1px solid var(--border)",
                                   transition: "all 0.2s",
                                   background: isNearestDoctor ? "rgba(16,185,129,0.08)" : "transparent",
-                                  borderLeft: isNearestDoctor ? "3px solid #10B981" : "3px solid transparent",
+borderLeft: isNearestDoctor ? "3px solid #10B981" : "3px solid transparent",                                 borderLeft: isNearestDoctor ? "3px solid #10B981" : "3px solid transparent",
                                 }}
                               >
                                 <div className="pd3-map-sidebar-item-name" style={{fontWeight:700,color:"var(--navy)",marginBottom:4}}>
@@ -1936,7 +2498,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
             </motion.div>
           )}
 
-          {/* APPOINTMENTS TAB - VERSION CORRIGÉE */}
+          {/* APPOINTMENTS TAB */}
           {activeTab === "appointments" && (
             <motion.div key="appointments" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
               <Reveal>
@@ -2061,6 +2623,79 @@ export default function PatientDashboard({ initialTab = "overview" }) {
               </div>
             </motion.div>
           )}
+
+          {/* RESULTS TAB */}
+          {activeTab === "results" && (
+            <motion.div key="results" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
+              <Reveal>
+                <div className="pd3-section-header">
+                  <div className="pd3-section-badge"><PatientIcons.Results size={12}/> MES RÉSULTATS</div>
+                  <h2 className="pd3-section-title">Tous vos <span className="accent">diagnostics</span></h2>
+                  <p className="pd3-section-sub">Consultez l'historique complet de vos analyses</p>
+                </div>
+              </Reveal>
+              
+              <div className="pd3-section-row">
+                <span className="pd3-section-row-title"><PatientIcons.Results size={16} color="#D4A500"/> Derniers résultats</span>
+                <button className="pd3-section-link" onClick={() => navigate("/patient/resultats")}>Voir tout →</button>
+              </div>
+              
+              <div className="pd3-consult-list">
+                {(consultations || []).filter(c => c.status === "analyzed" && c.prediction).slice(0, 5).length === 0 ? (
+                  <div className="pd3-empty">
+                    <div className="pd3-empty-icon"><PatientIcons.Results size={32} color="#D4A500"/></div>
+                    <div className="pd3-empty-title">Aucun résultat</div>
+                    <div className="pd3-empty-desc">Vos résultats d'analyse apparaîtront ici</div>
+                    <button className="pd3-btn pd3-btn-gold pd3-btn-sm" onClick={() => navigate("/patient/consultation/new")}>
+                      <I.Upload size={14}/> Nouvelle consultation
+                    </button>
+                  </div>
+                ) : (
+                  (consultations || []).filter(c => c.status === "analyzed" && c.prediction).slice(0, 5).map(c => (
+                    <ConsultationCard key={c.id} consultation={c} onClick={() => navigate(`/patient/resultats/${c.id}`)}/>
+                  ))
+                )}
+              </div>
+              
+              <div style={{ marginTop: 24 }}>
+                <button
+                  onClick={() => navigate("/patient/resultats/evolution")}
+                  className="pd3-btn pd3-btn-outline"
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  <PatientIcons.Evolution size={16}/> Voir l'évolution de ma santé
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* MESSAGES TAB */}
+          {activeTab === "messages" && (
+            <motion.div key="messages" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
+              <MessagesPage user={user} consultations={consultations} notifications={notifications} onNavigate={navigateToPage} />
+            </motion.div>
+          )}
+
+          {/* PRESCRIPTIONS TAB */}
+          {activeTab === "prescriptions" && (
+            <motion.div key="prescriptions" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
+              <PrescriptionsPage />
+            </motion.div>
+          )}
+
+          {/* REMINDERS TAB */}
+          {activeTab === "reminders" && (
+            <motion.div key="reminders" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
+              <RemindersPage />
+            </motion.div>
+          )}
+
+          {/* UPCOMING CALLS TAB */}
+          {activeTab === "upcoming_calls" && (
+            <motion.div key="upcoming_calls" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.3}}>
+              <UpcomingCallsPage />
+            </motion.div>
+          )}
         </AnimatePresence>
 
         {/* PLATFORM METRICS */}
@@ -2121,6 +2756,29 @@ export default function PatientDashboard({ initialTab = "overview" }) {
           </div>
         </footer>
       </div>
+       {/* ═══════════════════════════════════════════ */}
+      {/* OVERLAY NOTIFICATIONS CRITIQUES — 100% SVG   */}
+      {/* ═══════════════════════════════════════════ */}
+      <CriticalNotificationOverlay 
+        notifications={criticalNotifications}
+        userRole="patient"
+        onDismiss={() => {
+          refetchCritical();
+        }}
+        onAction={(notification) => {
+          try {
+            const data = JSON.parse(notification.data || "{}");
+            if (data.consultation_id) {
+              navigate(`/patient/consultation/${data.consultation_id}`);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+          markNotifRead(notification.id);
+        }}
+        autoShowDelay={2000}
+        dismissAfter={null}
+      />
     </div>
   );
 }
