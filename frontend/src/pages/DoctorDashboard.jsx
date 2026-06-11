@@ -1165,7 +1165,6 @@ useEffect(() => { tokenRef.current = token; }, [token]);
             {id:"analytics",label:"Statistiques"},
             {id:"prescriptions",label:"Ordonnances"},
             {id:"reminders",label:"Rappels"},
-            {id:"upcoming_calls",label:"Appels"},
             {id:"cim11",label:"CIM-11"}
           ].map(tab=>(
             <button type="button" key={tab.id} className={`pd3-nav-link ${activeTab===tab.id?"active":""}`} onClick={(e) => { e.preventDefault(); setActiveTab(tab.id); }} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>{tab.label}</button>
@@ -1262,7 +1261,6 @@ useEffect(() => { tokenRef.current = token; }, [token]);
             {id:"analytics",label:"Statistiques",icon:<I.BarChart size={16}/>},
             {id:"prescriptions",label:"Ordonnances",icon:<I.FileText size={16}/>},
             {id:"reminders",label:"Rappels",icon:<I.Bell size={16}/>},
-            {id:"upcoming_calls",label:"Appels à venir",icon:<I.Phone size={16}/>},
             {id:"cim11",label:"Assistant CIM-11",icon:<I.Book size={16}/>}
           ].map(tab=>(
             <button type="button" key={tab.id} className={`pd3-tab ${activeTab===tab.id?"active":""}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); const currentScroll = window.scrollY; setActiveTab(tab.id); setTimeout(() => window.scrollTo(0, currentScroll), 0); }}>
@@ -1384,7 +1382,6 @@ useEffect(() => { tokenRef.current = token; }, [token]);
               {icon:I.BarChart,label:"Statistiques",desc:"Vue globale",color:"#3B82F6",bg:"rgba(59,130,246,0.08)",action:()=>setActiveTab("analytics")},
               {icon:I.FileText,label:"Ordonnances",desc:"Gérer les prescriptions",color:"#EC4899",bg:"rgba(236,72,153,0.08)",action:()=>setActiveTab("prescriptions")},
               {icon:I.Bell,label:"Rappels",desc:"Mes rappels actifs",color:"#F59E0B",bg:"rgba(245,158,11,0.08)",action:()=>setActiveTab("reminders")},
-              {icon:I.Phone,label:"Appels à venir",desc:"Consultations planifiées",color:"#06B6D4",bg:"rgba(6,182,212,0.08)",action:()=>setActiveTab("upcoming_calls")},
               {icon:I.Book,label:"Assistant CIM-11",desc:"Classification OMS",color:"#0099cc",bg:"rgba(0,153,204,0.08)",action:()=>setActiveTab("cim11")}
             ].map((a,i)=>(<Reveal key={i} delay={.12+i*.06}><motion.button type="button" className="pd3-action" onClick={a.action} whileHover={{y:-5}}><div className="pd3-action-top"><div className="pd3-action-icon" style={{background:a.bg,color:a.color}}><a.icon size={22}/></div><div className="pd3-action-arrow"><I.ChevronRight size={14}/></div></div><div className="pd3-action-label">{a.label}</div><div className="pd3-action-desc">{a.desc}</div></motion.button></Reveal>))}
           </div>

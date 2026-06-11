@@ -1,936 +1,1010 @@
-// frontend/src/pages/ConsultationRequest.jsx
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+// ConsultationRequest.jsx - Nouveau flux : chatbot -> detection modele -> choix medecin -> envoi
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import "./patient/PatientDashboard.css";
+import { useAuth } from "../context/AuthContext";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
-const API_URL = `${API_BASE}/api/v1`;
+const API = "http://localhost:8000/api/v1";
 
-// ========== SVG ICONS (comme dans PatientDashboard) ==========
-const SvgIcon = ({ children, size = 24, color = "currentColor", strokeWidth = 1.8 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    {children}
-  </svg>
-);
-
-const Icons = {
-  Upload: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <path d="M20.5 14.5v3.8a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8v-3.8"/>
-      <polyline points="16.5 8 12 3.5 7.5 8"/>
-      <line x1="12" y1="3.5" x2="12" y2="14.5"/>
-    </SvgIcon>
+// -- Icones SVG inline (PAS d'emoji - uniquement SVG) ----------------
+const Icon = {
+  Send: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
   ),
-  Folder: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <path d="M21.5 18.5a1.8 1.8 0 0 1-1.8 1.8H4.3a1.8 1.8 0 0 1-1.8-1.8V5.5a1.8 1.8 0 0 1 1.8-1.8h5l2 2.8h7.2a1.8 1.8 0 0 1 1.8 1.8z"/>
-    </SvgIcon>
+  Upload: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
   ),
-  Check: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={2.5}>
+  Bot: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/>
+    </svg>
+  ),
+  User: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    </svg>
+  ),
+  Check: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12"/>
-    </SvgIcon>
+    </svg>
   ),
-  ArrowRight: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={2}>
-      <polyline points="9 18 15 12 9 6"/>
-    </SvgIcon>
+  ArrowLeft: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+    </svg>
   ),
-  ArrowLeft: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={2}>
-      <polyline points="15 18 9 12 15 6"/>
-    </SvgIcon>
+  Loader: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
+      <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+      <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+      <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+      <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+    </svg>
   ),
-  AlertCircle: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <circle cx="12" cy="12" r="9.5"/>
-      <line x1="12" y1="8" x2="12" y2="12"/>
-      <circle cx="12" cy="16" r="0.5" fill={color}/>
-    </SvgIcon>
+  Image: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+    </svg>
   ),
-  Sparkles: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.5}>
-      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"/>
-    </SvgIcon>
+  X: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
   ),
-  Activity: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.5}>
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-    </SvgIcon>
+  Map: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+    </svg>
   ),
-  User: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <path d="M19.5 20.5v-1.8a3.6 3.6 0 0 0-3.6-3.6H8.1a3.6 3.6 0 0 0-3.6 3.6v1.8"/>
-      <circle cx="12" cy="7.5" r="3.6"/>
-    </SvgIcon>
+  Phone: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+    </svg>
   ),
-  Lungs: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <path d="M12 4.5v11M8.5 8c-1.8 0-3.5.8-3.5 3.5S7 16 8.5 16M15.5 8c1.8 0 3.5.8 3.5 3.5S17 16 15.5 16M8.5 8c1.2 0 2.5.8 3.5 2M15.5 8c-1.2 0-2.5.8-3.5 2"/>
-    </SvgIcon>
+  Stethoscope: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 0 0-.2.2"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
   ),
-  Shield: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.5}>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </SvgIcon>
+  AlertTriangle: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
   ),
-  Heart: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.5}>
-      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-    </SvgIcon>
-  ),
-  Brain: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <path d="M12 5a3.5 3.5 0 0 1 3.5 3.5c0 1.4-.8 2.5-1.8 3.2v2.3a1.8 1.8 0 0 1-3.4 0v-2.3c-1-.7-1.8-1.8-1.8-3.2A3.5 3.5 0 0 1 12 5zM12 5v14"/>
-    </SvgIcon>
-  ),
-  Eye: ({ size = 24, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.8}>
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
-    </SvgIcon>
-  ),
-  Calendar: ({ size = 16, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={1.6}>
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-      <line x1="16" y1="2" x2="16" y2="6"/>
-      <line x1="8" y1="2" x2="8" y2="6"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
-    </SvgIcon>
-  ),
-  X: ({ size = 16, color = "currentColor" }) => (
-    <SvgIcon size={size} color={color} strokeWidth={2}>
-      <line x1="18" y1="6" x2="6" y2="18"/>
-      <line x1="6" y1="6" x2="18" y2="18"/>
-    </SvgIcon>
+  Info: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+    </svg>
   ),
 };
 
-// Configuration des modèles (sans emojis)
-const MODEL_OPTIONS = [
-  {
-    key: "chest",
-    icon: <Icons.Lungs size={28} />,
-    label: "Radiographie thoracique",
-    fullName: "Radiographie Pulmonaire Standard",
-    desc: "10 pathologies — COVID, pneumonie, cardiomégalie, atélectasie…",
-    color: "#2D5F9E",
-    gradient: "linear-gradient(135deg, #2D5F9E, #0EA5E9)",
-    bg: "#EFF6FF",
-    border: "#BFDBFE",
-    specialties: ["Pneumologie", "Cardiologie", "Radiologie"],
-    pathologies: ["Pneumonie", "COVID-19", "Cardiomégalie", "Pneumothorax", "Épanchement pleural"],
-    urgencyCriteria: ["Pneumothorax", "Œdème pulmonaire aigu"],
-    preparation: "Aucune préparation nécessaire.",
-    contraindications: "Grossesse (protection plomb requise)."
-  },
-  {
-    key: "brain",
-    icon: <Icons.Brain size={28} />,
-    label: "IRM cérébrale",
-    fullName: "Imagerie par Résonance Magnétique Cérébrale",
-    desc: "Tumeurs cérébrales — gliome, méningiome, tumeur hypophysaire",
-    color: "#6B4FA0",
-    gradient: "linear-gradient(135deg, #6B4FA0, #8B5CF6)",
-    bg: "#F5F3FF",
-    border: "#DDD6FE",
-    specialties: ["Neurologie", "Neurochirurgie", "Neuroradiologie"],
-    pathologies: ["Gliome", "Méningiome", "Tumeur hypophysaire", "Métastases cérébrales"],
-    urgencyCriteria: ["Glioblastome", "Métastases cérébrales"],
-    preparation: "Retirez tout objet métallique.",
-    contraindications: "Implants métalliques, pacemaker."
-  },
-  {
-    key: "lung",
-    icon: <Icons.Activity size={28} />,
-    label: "Scanner CT pulmonaire",
-    fullName: "Tomodensitométrie Thoracique",
-    desc: "Cancer pulmonaire — bénin, malin, normal",
-    color: "#DC2626",
-    gradient: "linear-gradient(135deg, #DC2626, #EF4444)",
-    bg: "#FEF2F2",
-    border: "#FECACA",
-    specialties: ["Pneumologie", "Oncologie", "Radiologie"],
-    pathologies: ["Carcinome épidermoïde", "Adénocarcinome", "Nodule bénin", "Métastases"],
-    urgencyCriteria: ["Carcinome à petites cellules", "Masse > 3cm"],
-    preparation: "Jeûne de 4 heures recommandé.",
-    contraindications: "Insuffisance rénale, allergie à l'iode."
-  },
-  {
-    key: "retina",
-    icon: <Icons.Eye size={28} />,
-    label: "Fond d'œil — Rétinopathie",
-    fullName: "Photographie du fond d'œil — Rétinopathie diabétique",
-    desc: "5 stades de rétinopathie diabétique",
-    color: "#0E7490",
-    gradient: "linear-gradient(135deg, #0E7490, #14B8A6)",
-    bg: "#ECFEFF",
-    border: "#67E8F9",
-    specialties: ["Ophtalmologie", "Endocrinologie", "Radiologie"],
-    pathologies: ["Grade 0 — No DR", "Grade 1 — Mild DR", "Grade 2 — Moderate DR", "Grade 3 — Severe DR", "Grade 4 — Proliferate DR"],
-    urgencyCriteria: ["Proliferate_DR", "Hémorragie vitréenne"],
-    preparation: "Dilatation pupillaire recommandée.",
-    contraindications: "Glaucome aigu à angle fermé."
-  }
-];
-
-const LEGAL_INFO = {
-  dataRetention: "Vos images médicales sont conservées conformément à la réglementation RGPD pendant 10 ans.",
-  emergencyDisclaimer: "En cas d'urgence médicale, composez le 15 (SAMU) immédiatement."
+// -- Couleurs des modeles --------------------------------------------
+const MODEL_CONFIG = {
+  chest:  { color: "#3B82F6", bg: "rgba(59,130,246,0.1)",  icon: "L", label: "Radio Thorax" },
+  lung:   { color: "#EC4899", bg: "rgba(236,72,153,0.1)",  icon: "S", label: "Scanner CT" },
+  brain:  { color: "#8B5CF6", bg: "rgba(139,92,246,0.1)",  icon: "B", label: "IRM Cerebrale" },
+  retina: { color: "#06B6D4", bg: "rgba(6,182,212,0.1)",   icon: "E", label: "Fond d'oeil" },
 };
 
-// ========== PARTICLES COMPONENT ==========
-const Particles = () => {
-  const particles = useMemo(() => Array.from({ length: 35 }, (_, i) => ({
-    id: i,
-    left: `${Math.random() * 100}%`,
-    width: `${Math.random() * 3 + 1}px`,
-    height: `${Math.random() * 3 + 1}px`,
-    duration: `${Math.random() * 14 + 8}s`,
-    delay: `${Math.random() * 8}s`,
-    bottom: `-${Math.random() * 40}px`,
-    glow: i % 5 === 0
-  })), []);
+// -- Formatage markdown simple -----------------------------------------
+function formatMessage(text) {
+  if (!text) return null;
+  const lines = String(text).split("\n");
+  return lines.map((line, i) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
+      return <p key={i} style={{ fontWeight: 700, color: "#0A1628", margin: "8px 0 4px" }}>{trimmed.slice(2, -2)}</p>;
+    }
+    if (trimmed.startsWith("## ") || trimmed.startsWith("# ")) {
+      return <p key={i} style={{ fontWeight: 700, color: "#0A1628", margin: "8px 0 4px" }}>{trimmed.replace(/^#+\s/, "")}</p>;
+    }
+    if (trimmed.startsWith("---")) {
+      return <hr key={i} style={{ border: "none", borderTop: "1px solid #E5E7EB", margin: "10px 0" }} />;
+    }
+    if (trimmed.startsWith("- ") || trimmed.startsWith("- ")) {
+      return <p key={i} style={{ margin: "3px 0", paddingLeft: 12 }}>{trimmed}</p>;
+    }
+    let html = trimmed;
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+    return <p key={i} style={{ margin: "3px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
+  });
+}
+
+// -- Composant carte medecin -----------------------------------------
+function DoctorCard({ doctor, selected, onSelect }) {
+  const safeDoctor = doctor || {};
+  const isSelected = selected && selected.id === safeDoctor.id;
+  const fullName = safeDoctor.full_name || safeDoctor.name || "Medecin";
+  const specialty = safeDoctor.specialty || safeDoctor.specialite || "Specialiste";
+  const address = safeDoctor.address || "";
+  const ville = safeDoctor.ville || "";
+  const phone = safeDoctor.phone || "";
+  const distance = safeDoctor.distance_km;
+  const workload = safeDoctor.workload;
+  const initial = String(fullName).charAt(0).toUpperCase();
+
   return (
-    <div className="pd3-hero-particles">
-      {particles.map(p => (
-        <div key={p.id} className="pd3-particle" style={{
-          left: p.left, width: p.width, height: p.height,
-          animationDuration: p.duration, animationDelay: p.delay,
-          bottom: p.bottom, boxShadow: p.glow ? '0 0 10px rgba(255,215,0,0.6)' : 'none'
-        }} />
-      ))}
-    </div>
-  );
-};
-
-const Reveal = ({ children, delay = 0 }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 35 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: "-50px" }}
-    transition={{ duration: 0.6, delay, ease: [0.22, 0.61, 0.36, 1] }}
-  >
-    {children}
-  </motion.div>
-);
-
-export default function ConsultationRequest() {
-  const { user, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
-
-  const [step, setStep] = useState(1);
-  const [selectedModel, setModel] = useState(null);
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [symptoms, setSymptoms] = useState("");
-  const [duration, setDuration] = useState("");
-  const [medicalHistory, setMedicalHistory] = useState("");
-  const [currentMedications, setCurrentMedications] = useState("");
-  const [allergies, setAllergies] = useState("");
-  const [notes, setNotes] = useState("");
-  const [consentAccepted, setConsentAccepted] = useState(false);
-  
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [imageQuality, setImageQuality] = useState(null);
-
-  const fileRef = useRef(null);
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  // Vérifier l'authentification
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== "Patient")) {
-      navigate("/login", { replace: true });
-    }
-  }, [user, authLoading, navigate]);
-
-  useEffect(() => {
-    return () => { if (preview) URL.revokeObjectURL(preview); };
-  }, [preview]);
-
-  // Scroll listener
-  useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          setIsScrolled(window.scrollY > 40);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const analyzeImageQuality = useCallback((imgElement) => {
-    const quality = {
-      resolution: `${imgElement.width}x${imgElement.height}`,
-      isAdequate: imgElement.width >= 300 && imgElement.height >= 300,
-      suggestions: []
-    };
-    if (imgElement.width < 300 || imgElement.height < 300) {
-      quality.suggestions.push("Résolution faible, privilégiez une image plus grande (min 300x300px)");
-      quality.isAdequate = false;
-    }
-    setImageQuality(quality);
-    return quality;
-  }, []);
-
-  const handleFile = useCallback((f) => {
-    if (!f) return;
-
-    const allowed = ["image/jpeg", "image/jpg", "image/png"];
-    if (!allowed.includes(f.type)) {
-      setError("Format non supporté. Utilisez JPEG ou PNG uniquement.");
-      return;
-    }
-
-    if (f.size > 10 * 1024 * 1024) {
-      setError("Fichier trop volumineux. Taille maximale : 10 Mo.");
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(f);
-    const img = new Image();
-    
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      if (img.width < 100 || img.height < 100) {
-        setError("L'image est trop petite. Dimensions minimales : 100x100 pixels.");
-        return;
-      }
-      analyzeImageQuality(img);
-      setFile(f);
-      setPreview(objectUrl);
-      setError("");
-      setUploadProgress(0);
-    };
-    
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      setError("Fichier image invalide ou corrompu.");
-    };
-    
-    img.src = objectUrl;
-  }, [analyzeImageQuality]);
-
-  const validateMedicalForm = () => {
-    if (!symptoms.trim()) {
-      setError("Veuillez décrire vos symptômes principaux");
-      return false;
-    }
-    if (symptoms.length < 3) {
-      setError("La description des symptômes est trop courte (minimum 3 caractères)");
-      return false;
-    }
-    if (!consentAccepted) {
-      setError("Vous devez accepter les conditions de traitement des données médicales");
-      return false;
-    }
-    return true;
-  };
-
-  const buildMedicalNotes = () => {
-    const sections = [];
-    if (symptoms) sections.push(`SYMPTÔMES: ${symptoms}`);
-    if (duration) sections.push(`DURÉE: ${duration}`);
-    if (medicalHistory) sections.push(`ANTÉCÉDENTS: ${medicalHistory}`);
-    if (currentMedications) sections.push(`TRAITEMENTS: ${currentMedications}`);
-    if (allergies) sections.push(`ALLERGIES: ${allergies}`);
-    if (notes) sections.push(`NOTES: ${notes}`);
-    return sections.join("\n\n");
-  };
-
-  const handleSubmit = async () => {
-    if (!file || !selectedModel) {
-      setError("Veuillez sélectionner un type d'examen et une image.");
-      return;
-    }
-    if (!validateMedicalForm()) return;
-
-    setLoading(true);
-    setError("");
-    setUploadProgress(0);
-
-    try {
-      const token = localStorage.getItem("medai-token");
-      
-      if (!token) {
-        throw new Error("Session expirée. Veuillez vous reconnecter.");
-      }
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("model_key", selectedModel.key);
-      formData.append("patient_notes", buildMedicalNotes());
-
-      // Simulation de progression
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => prev >= 90 ? 90 : prev + 10);
-      }, 200);
-
-      const response = await fetch(`${API_URL}/consultations`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        },
-        body: formData,
-      });
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        let errorMessage = `Erreur ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch (e) {}
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      
-      setResult({
-        ...data,
-        consultation_id: data.consultation_id,
-        created_at: new Date().toISOString(),
-        model: selectedModel,
-      });
-      setStep(3);
-      
-    } catch (e) {
-      setError(e.message || "Une erreur est survenue. Veuillez réessayer.");
-    } finally {
-      setLoading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
-    }
-  };
-
-  const resetForm = () => {
-    setStep(1);
-    setModel(null);
-    setFile(null);
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(null);
-    setSymptoms("");
-    setDuration("");
-    setMedicalHistory("");
-    setCurrentMedications("");
-    setAllergies("");
-    setNotes("");
-    setConsentAccepted(false);
-    setResult(null);
-    setError("");
-    setImageQuality(null);
-  };
-
-  if (authLoading) {
-    return (
-      <div className="pd3">
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", flexDirection: "column", gap: 20 }}>
-          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
-            <Icons.Sparkles size={48} color="#D4A500" />
-          </motion.div>
-          <p style={{ color: "var(--txt2)", fontWeight: 500 }}>Chargement de l'interface médicale...</p>
+    <motion.div
+      whileHover={{ y: -3, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => onSelect && onSelect(safeDoctor)}
+      style={{
+        background: isSelected ? "linear-gradient(135deg, #0A2647, #1B3B6F)" : "#fff",
+        border: isSelected ? "2px solid #D4A500" : "1.5px solid #E5E7EB",
+        borderRadius: 16,
+        padding: "16px 20px",
+        cursor: "pointer",
+        position: "relative",
+        transition: "all 0.2s ease",
+      }}
+    >
+      {isSelected && (
+        <div style={{
+          position: "absolute", top: 10, right: 10,
+          width: 24, height: 24, borderRadius: "50%",
+          background: "#D4A500", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon.Check />
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 14,
+          background: isSelected ? "rgba(212,165,0,0.15)" : "#F1F5F9",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "1.1rem", fontWeight: 700,
+          color: isSelected ? "#D4A500" : "#0A1628",
+        }}>
+          {initial}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, color: isSelected ? "#fff" : "#0A1628", fontSize: "0.92rem" }}>
+            {fullName}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: isSelected ? "#FFD700" : "#64748B", fontWeight: 600 }}>
+            {specialty}
+          </div>
         </div>
       </div>
-    );
-  }
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {(address || ville) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: isSelected ? "rgba(255,255,255,0.6)" : "#64748B" }}>
+            <Icon.Map /> {address ? `${String(address).slice(0, 40)}...` : ville}
+          </div>
+        )}
+        {phone && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: isSelected ? "rgba(255,255,255,0.6)" : "#64748B" }}>
+            <Icon.Phone /> {phone}
+          </div>
+        )}
+        {distance != null && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 8px", borderRadius: 10, background: isSelected ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.08)", color: "#10B981", fontSize: "0.68rem", fontWeight: 700 }}>
+            <Icon.Map /> {distance} km
+          </div>
+        )}
+        {workload != null && (
+          <div style={{ fontSize: "0.65rem", color: isSelected ? "rgba(255,255,255,0.4)" : "#94A3B8" }}>
+            {workload} consultation(s) en cours
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
-  if (!user || user.role !== "Patient") return null;
+// ══════════════════════════════════════════════════════════════════
+// COMPOSANT PRINCIPAL
+// ══════════════════════════════════════════════════════════════════
+export default function ConsultationRequest() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const token = localStorage.getItem("medai-token");
 
-  const currentDate = new Date();
-  const greeting = currentDate.getHours() < 12 ? "Bonjour" : currentDate.getHours() < 18 ? "Bon après-midi" : "Bonsoir";
+  // -- Etat du chat ------------------------------------------------
+  const [messages, setMessages] = useState([
+    {
+      role: "bot",
+      content:
+        "Bonjour ! Je suis votre assistant sante\n\n" +
+        "Decrivez-moi vos symptomes en quelques phrases.\n\n" +
+        "Vous pouvez aussi **joindre une image medicale** (radiographie, scanner, IRM, fond d'oeil) " +
+        "si vous en avez deja une - cela m'aidera a mieux vous orienter.",
+    },
+  ]);
+  const [inputText, setInputText] = useState("");
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
+  // -- Resultat de l'analyse ---------------------------------------
+  const [recommendation, setRecommendation] = useState(null);
+  const [doctors, setDoctors] = useState([]);
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+
+  // -- Etape de creation de consultation -------------------------
+  const [step, setStep] = useState("chat");
+  const [createdConsultationId, setCreatedConsultationId] = useState(null);
+
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
+  const chooseDoctorFileRef = useRef(null);
+
+  // Scroll vers le bas a chaque nouveau message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Geolocalisation au chargement
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        () => {}
+      );
+    }
+  }, []);
+
+  // -- Gestion de l'image -----------------------------------------
+  const handleImageChange = (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    setImage(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev?.target?.result || null);
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (chooseDoctorFileRef.current) chooseDoctorFileRef.current.value = "";
+  };
+
+  // -- Envoi du message au chatbot ---------------------------------
+  const sendMessage = async () => {
+    const text = String(inputText || "").trim();
+    if (!text && !image) return;
+    if (isLoading) return;
+
+    const userMsg = {
+      role: "user",
+      content: text || "(Image medicale jointe)",
+      imagePreview: imagePreview || null,
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInputText("");
+    setIsLoading(true);
+
+    try {
+      let data = null;
+      if (image) {
+        const form = new FormData();
+        form.append("text", text || "Image medicale jointe");
+        form.append("image", image);
+        if (userLocation) {
+          form.append("user_lat", String(userLocation.lat));
+          form.append("user_lon", String(userLocation.lon));
+        }
+        const res = await fetch(`${API}/chatbot/analyze-with-image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Erreur HTTP ${res.status}`);
+        }
+        data = await res.json();
+      } else {
+        const res = await fetch(`${API}/chatbot/analyze`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text,
+            user_lat: userLocation?.lat ?? null,
+            user_lon: userLocation?.lon ?? null,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Erreur HTTP ${res.status}`);
+        }
+        data = await res.json();
+      }
+
+      // SECURITE : s'assurer que data est un objet valide
+      if (!data || typeof data !== "object") {
+        throw new Error("Reponse invalide du serveur");
+      }
+
+      const botMsg = {
+        role: "bot",
+        content: data.message || "Analyse terminee.",
+        type: data.type || "unknown",
+      };
+      setMessages((prev) => [...prev, botMsg]);
+
+      // SECURITE : verifier que recommendation existe et est un objet
+      const hasRecommendation = data.type === "recommendation" && data.recommendation && typeof data.recommendation === "object";
+
+      if (hasRecommendation) {
+        setRecommendation(data.recommendation);
+        // SECURITE : s'assurer que doctors est un tableau
+        const safeDoctors = Array.isArray(data.doctors) ? data.doctors : [];
+        setDoctors(safeDoctors);
+
+        if (safeDoctors.length > 0) {
+          setStep("choose_doctor");
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "bot",
+              content:
+                "J'ai analyse vos symptomes.\n\n" +
+                "Veuillez maintenant **choisir un medecin** parmi les specialistes " +
+                "recommandes ci-dessous, puis fournir votre image medicale pour " +
+                "soumettre votre dossier.",
+            },
+          ]);
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "bot",
+              content:
+                "Aucun medecin disponible dans notre reseau pour ce domaine.\n\n" +
+                "Veuillez contacter votre administration ou reessayer plus tard.",
+            },
+          ]);
+          removeImage();
+        }
+      } else {
+        removeImage();
+      }
+    } catch (err) {
+      console.error("Erreur sendMessage:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "bot",
+          content: "Une erreur s'est produite. Veuillez reessayer.\n\nDetails : " + (err?.message || "Erreur inconnue"),
+        },
+      ]);
+      removeImage();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  // -- Soumission de la consultation -------------------------------
+  const submitConsultation = async () => {
+    // CORRECTION : verifier qu'on a bien une image (soit du chat, soit uploadee maintenant)
+    if (!selectedDoctor || !recommendation) {
+      alert("Veuillez selectionner un medecin.");
+      return;
+    }
+    if (!image) {
+      alert("Veuillez joindre une image medicale.");
+      return;
+    }
+
+    setStep("submitting");
+
+    try {
+      const form = new FormData();
+      form.append("model_key", recommendation.model_key || "");
+      form.append("doctor_id", String(selectedDoctor.id || ""));
+      const symptomsText = (messages || [])
+        .filter((m) => m && m.role === "user")
+        .map((m) => m.content || "")
+        .join("\n");
+      form.append("symptoms", symptomsText);
+      form.append("patient_notes", "");
+      form.append("file", image);
+
+      const res = await fetch(`${API}/consultations/from-chatbot`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Erreur lors de la creation");
+      }
+
+      const data = await res.json();
+      setCreatedConsultationId(data?.consultation_id || null);
+      setStep("done");
+    } catch (err) {
+      console.error("Erreur submitConsultation:", err);
+      setStep("confirm");
+      alert("Erreur : " + (err?.message || "Erreur inconnue"));
+    }
+  };
+
+  // -- Helpers securises pour le rendu -----------------------------
+  const safeDoctors = Array.isArray(doctors) ? doctors : [];
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  const safeRecommendation = recommendation && typeof recommendation === "object" ? recommendation : null;
+  const safeSelectedDoctor = selectedDoctor && typeof selectedDoctor === "object" ? selectedDoctor : null;
+  const modelKey = safeRecommendation?.model_key || "";
+  const modelConfig = MODEL_CONFIG[modelKey] || { color: "#D4A500", bg: "rgba(212,165,0,0.08)", icon: "?", label: "Inconnu" };
+
+  // CORRECTION : verifier si une image valide est disponible
+  const hasValidImage = image && imagePreview;
+
+  // -- Rendu -------------------------------------------------------
   return (
-    <div className="pd3">
-      {/* NAVIGATION */}
-      <motion.nav className={`pd3-nav ${isScrolled ? "scrolled" : ""}`} initial={{ y: -80 }} animate={{ y: 0 }} transition={{ duration: 0.5, type: "spring", stiffness: 100 }}>
-        <div className="pd3-nav-brand" onClick={() => navigate("/patient")}>
-          <div className="pd3-nav-logo"><div className="pd3-nav-logo-inner"><Icons.Lungs size={22} color="#0A1628" /></div></div>
-          <span className="pd3-nav-name">Med<span className="accent">AI</span></span>
-        </div>
-        <div className="pd3-nav-links">
-          <button className="pd3-nav-link active" style={{ background: "none", border: "none", cursor: "pointer" }}>Nouvelle consultation</button>
-        </div>
-        <div className="pd3-nav-actions">
-          <button className="pd3-btn pd3-btn-outline pd3-btn-sm" onClick={() => navigate("/patient")}>
-            <Icons.User size={15} /> Tableau de bord
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%)",
+      padding: "24px 16px",
+      fontFamily: "'Inter', sans-serif",
+    }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-enter { animation: fade-in 0.3s ease; }
+      `}</style>
+
+      {/* -- En-tete -- */}
+      <div style={{ maxWidth: 900, margin: "0 auto 24px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button
+            onClick={() => navigate("/patient")}
+            style={{
+              background: "white", border: "1.5px solid #E5E7EB", borderRadius: 12,
+              width: 40, height: 40, display: "flex", alignItems: "center",
+              justifyContent: "center", cursor: "pointer", color: "#0A1628",
+            }}
+          >
+            <Icon.ArrowLeft />
           </button>
-        </div>
-      </motion.nav>
-
-      {/* HERO SECTION */}
-      <motion.section className="pd3-hero" style={{ minHeight: "40vh", position: "relative" }}>
-        <div className="pd3-hero-grid" />
-        <div className="pd3-hero-orb pd3-hero-orb-1" />
-        <div className="pd3-hero-orb pd3-hero-orb-2" />
-        <div className="pd3-hero-orb pd3-hero-orb-3" />
-        <div className="pd3-hero-ring pd3-hero-ring-1" />
-        <div className="pd3-hero-ring pd3-hero-ring-2" />
-        <div className="pd3-hero-ring pd3-hero-ring-3" />
-        <Particles />
-        
-        <div className="pd3-hero-content" style={{ padding: "100px 64px 60px", minHeight: "40vh" }}>
           <div>
-            <motion.div initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="pd3-hero-status"><span className="pd3-status-pulse" /><span>NOUVELLE CONSULTATION</span><span className="pd3-status-sep" /><span>CERTIFIÉ CE MÉDICAL</span></div>
-            </motion.div>
-            <motion.h1 className="pd3-hero-welcome" style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              {greeting},<br /><span className="highlight">Demande médicale</span>
-            </motion.h1>
-            <motion.div className="pd3-hero-date" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <Icons.Calendar size={14} color="rgba(255,255,255,0.5)" /> {currentDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} <span style={{ margin: "0 8px", opacity: 0.3 }}>•</span> {currentDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-            </motion.div>
-            <motion.p className="pd3-hero-subtitle" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-              Remplissez ce formulaire pour soumettre votre image médicale à notre équipe de spécialistes.
-            </motion.p>
-            <motion.div className="pd3-hero-actions" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-              <button className="pd3-btn pd3-btn-gold pd3-btn-lg" onClick={() => navigate("/patient")}>
-                <Icons.Folder size={18} /> Voir mes dossiers
-              </button>
-            </motion.div>
+            <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0A1628", margin: 0 }}>
+              Nouvelle consultation
+            </h1>
+            <p style={{ fontSize: "0.8rem", color: "#64748B", margin: "4px 0 0" }}>
+              Decrivez vos symptomes - le systeme detecte automatiquement l'examen adapte
+            </p>
           </div>
-          <motion.div className="pd3-hero-visual" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-            <div className="pd3-hero-card">
-              <div className="pd3-hero-card-header"><span className="pd3-card-title">ANALYSE EN TEMPS RÉEL</span><span className="pd3-card-badge"><span className="pd3-status-pulse" /> IA Active</span></div>
-              <div className="pd3-mini-chart">
-                {[35, 55, 40, 70, 45, 65, 80, 50, 75, 60, 85, 55, 70, 90, 65, 50, 75, 60, 80, 55].map((h, i) => (
-                  <motion.div key={i} className={`pd3-chart-bar ${i >= 14 ? "highlight" : ""}`} style={{ height: `${h}%` }} initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ delay: 0.6 + i * 0.04, duration: 0.5 }} />
-                ))}
-              </div>
-              <div className="pd3-mini-stats">
-                <motion.div className="pd3-mini-stat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}><div className="pd3-mini-stat-value">100%</div><div className="pd3-mini-stat-label">SÉCURITÉ</div></motion.div>
-                <motion.div className="pd3-mini-stat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}><div className="pd3-mini-stat-value">24/7</div><div className="pd3-mini-stat-label">SUPPORT</div></motion.div>
-                <motion.div className="pd3-mini-stat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }}><div className="pd3-mini-stat-value">48h</div><div className="pd3-mini-stat-label">RÉPONSE</div></motion.div>
-              </div>
-              <motion.div className="pd3-progress-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
-                <div className="pd3-progress-header"><span className="pd3-progress-label">Complétude du formulaire</span><span className="pd3-progress-value">{step === 1 ? "0%" : step === 2 ? "50%" : "100%"}</span></div>
-                <div className="pd3-progress-bar"><motion.div className="pd3-progress-fill" initial={{ width: 0 }} animate={{ width: step === 1 ? "0%" : step === 2 ? "50%" : "100%" }} transition={{ delay: 1.2, duration: 1 }} /></div>
-              </motion.div>
-              <div className="pd3-live-indicator"><div className="pd3-live-dot" /><span className="pd3-live-text">SYSTÈME OPÉRATIONNEL</span><span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>98.5% uptime</span></div>
+          {safeRecommendation && (
+            <div style={{
+              marginLeft: "auto",
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 16px", borderRadius: 20,
+              background: modelConfig.bg,
+              border: `1.5px solid ${modelConfig.color}30`,
+            }}>
+              <span style={{ fontSize: "1.2rem", fontWeight: 700, color: modelConfig.color }}>
+                {modelConfig.icon}
+              </span>
+              <span style={{
+                fontSize: "0.78rem", fontWeight: 700,
+                color: modelConfig.color,
+              }}>
+                {safeRecommendation.model_name || modelConfig.label}
+              </span>
             </div>
-            <motion.div className="pd3-float-card pd3-float-1" animate={{ y: [0, -14, 0] }} transition={{ repeat: Infinity, duration: 4.5 }}>
-              <div className="pd3-float-card-icon" style={{ background: "rgba(232,184,48,0.12)", color: "#FFD700" }}><Icons.Brain size={20} /></div>
-              <div><div className="pd3-float-card-value">98.5%</div><div className="pd3-float-card-label">Précision IA</div></div>
-            </motion.div>
-            <motion.div className="pd3-float-card pd3-float-2" animate={{ y: [0, -10, 0], x: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1.2 }}>
-              <div className="pd3-float-card-icon" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}><Icons.Heart size={20} /></div>
-              <div><div className="pd3-float-card-value">&lt; 30s</div><div className="pd3-float-card-label">Analyse rapide</div></div>
-            </motion.div>
-          </motion.div>
+          )}
         </div>
-      </motion.section>
+      </div>
 
-      {/* BODY */}
-      <div className="pd3-body" style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto", padding: "48px 24px" }}>
-        
-        {/* Progression */}
-        <Reveal delay={0.05}>
+      {/* -- Corps -- */}
+      <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* -- Zone de chat -- */}
+        <div style={{
+          background: "white", borderRadius: 24,
+          border: "1px solid #E5E7EB", overflow: "hidden",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+        }}>
+          {/* Messages */}
           <div style={{
-            display: "flex", alignItems: "center", background: "var(--card)", padding: "16px 24px",
-            borderRadius: "var(--radius-lg)", marginBottom: 32, border: "1px solid var(--border)",
-            boxShadow: "var(--shadow-sm)"
+            height: step === "chat" ? 440 : 280,
+            overflowY: "auto", padding: "24px",
+            display: "flex", flexDirection: "column", gap: 16,
+            transition: "height 0.3s ease",
           }}>
-            {[
-              { step: 1, label: "Type d'examen" },
-              { step: 2, label: "Données cliniques" },
-              { step: 3, label: "Confirmation" }
-            ].map((s, i) => (
-              <div key={s.step} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+            {safeMessages.map((msg, idx) => {
+              if (!msg || typeof msg !== "object") return null;
+              const isUser = msg.role === "user";
+              return (
+                <div
+                  key={idx}
+                  className="msg-enter"
+                  style={{
+                    display: "flex",
+                    justifyContent: isUser ? "flex-end" : "flex-start",
+                    alignItems: "flex-start", gap: 10,
+                  }}
+                >
+                  {!isUser && (
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 12, flexShrink: 0,
+                      background: "linear-gradient(135deg, #0A2647, #1B3B6F)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#FFD700",
+                    }}>
+                      <Icon.Bot />
+                    </div>
+                  )}
                   <div style={{
-                    width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center",
-                    justifyContent: "center", fontWeight: 700,
-                    background: step > s.step ? "var(--success)" : step === s.step ? "var(--info)" : "var(--border-light)",
-                    color: step >= s.step ? "white" : "var(--txt3)",
-                    boxShadow: step === s.step ? "0 0 0 4px rgba(59,130,246,0.2)" : "none"
+                    maxWidth: "75%",
+                    padding: "12px 16px",
+                    borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                    background: isUser
+                      ? "linear-gradient(135deg, #0A2647, #1B3B6F)"
+                      : "#F8FAFC",
+                    border: isUser ? "none" : "1px solid #E5E7EB",
+                    color: isUser ? "#fff" : "#374151",
+                    fontSize: "0.88rem", lineHeight: 1.6,
                   }}>
-                    {step > s.step ? "✓" : s.step}
+                    {msg.imagePreview && (
+                      <img
+                        src={msg.imagePreview}
+                        alt="Image jointe"
+                        style={{ maxWidth: 200, maxHeight: 160, borderRadius: 8, marginBottom: 8, display: "block" }}
+                      />
+                    )}
+                    {formatMessage(msg.content)}
                   </div>
-                  <span style={{
-                    fontSize: "0.7rem", marginTop: 6, color: step >= s.step ? "var(--navy)" : "var(--txt3)",
-                    fontWeight: step === s.step ? 600 : 400
-                  }}>{s.label}</span>
+                  {isUser && (
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 12, flexShrink: 0,
+                      background: "rgba(212,165,0,0.12)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#D4A500",
+                    }}>
+                      <Icon.User />
+                    </div>
+                  )}
                 </div>
-                {i < 2 && <div style={{ flex: 1, height: 2, background: step > i + 1 ? "var(--success)" : "var(--border)", marginLeft: 8, marginRight: 8 }} />}
+              );
+            })}
+            {isLoading && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 12,
+                  background: "linear-gradient(135deg, #0A2647, #1B3B6F)",
+                  display: "flex", alignItems: "center", justifyContent: "center", color: "#FFD700",
+                }}>
+                  <Icon.Bot />
+                </div>
+                <div style={{ display: "flex", gap: 4, padding: "10px 14px", background: "#F8FAFC", borderRadius: 12, border: "1px solid #E5E7EB" }}>
+                  {[0, 150, 300].map((d) => (
+                    <div key={d} style={{
+                      width: 8, height: 8, borderRadius: "50%", background: "#D4A500",
+                      animation: `fade-in 0.8s ease ${d}ms infinite alternate`,
+                    }} />
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        </Reveal>
 
-        {/* Erreur */}
-        {error && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "14px 20px",
-            background: "rgba(239,68,68,0.1)", border: "1px solid #FECACA", borderRadius: "var(--radius-md)",
-            marginBottom: 24, color: "var(--danger)"
-          }}>
-            <Icons.AlertCircle size={20} color="var(--danger)" />
-            <span style={{ flex: 1 }}>{error}</span>
-            <button onClick={() => setError("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--danger)" }}>✕</button>
-          </motion.div>
-        )}
-
-        {/* ÉTAPE 1 - Sélection examen */}
-        {step === 1 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div className="pd3-metric" style={{ padding: 32, marginBottom: 0 }}>
-              <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--navy)", marginBottom: 20 }}>
-                1. Sélectionnez votre examen
-              </h2>
-              
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {MODEL_OPTIONS.map((model, idx) => (
-                  <motion.button
-                    key={model.key}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    onClick={() => { setModel(model); setStep(2); }}
-                    className="pd3-action"
+          {/* Zone de saisie */}
+          {step === "chat" && (
+            <div style={{
+              borderTop: "1px solid #F1F5F9",
+              padding: "16px 20px",
+              background: "#FAFAFA",
+            }}>
+              {imagePreview && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <img src={imagePreview} alt="preview" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1px solid #E5E7EB" }} />
+                  <div>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#0A1628" }}>{image?.name || "Image"}</div>
+                    <div style={{ fontSize: "0.65rem", color: "#64748B" }}>Image medicale jointe</div>
+                  </div>
+                  <button onClick={removeImage} style={{ marginLeft: "auto", background: "#FEE2E2", border: "none", borderRadius: 8, width: 28, height: 28, cursor: "pointer", color: "#EF4444", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon.X />
+                  </button>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10 }}>
+                <textarea
+                  ref={textareaRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e?.target?.value || "")}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Decrivez vos symptomes... (Ex: J'ai des maux de tete persistants depuis 3 jours avec des vertiges)"
+                  rows={2}
+                  disabled={isLoading}
+                  style={{
+                    flex: 1, padding: "12px 16px", borderRadius: 14,
+                    border: "1.5px solid #E5E7EB", fontSize: "0.88rem",
+                    fontFamily: "inherit", resize: "none", outline: "none",
+                    background: "white", color: "#374151",
+                    transition: "border-color 0.2s",
+                  }}
+                  onFocus={(e) => { if (e?.target) e.target.style.borderColor = "#D4A500"; }}
+                  onBlur={(e) => { if (e?.target) e.target.style.borderColor = "#E5E7EB"; }}
+                />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                    title="Joindre une image medicale"
                     style={{
-                      padding: "20px 24px",
-                      border: `2px solid ${selectedModel?.key === model.key ? model.color : "var(--border)"}`,
-                      textAlign: "left",
-                      cursor: "pointer"
+                      width: 44, height: 44, borderRadius: 12,
+                      background: imagePreview ? "rgba(212,165,0,0.15)" : "#F1F5F9",
+                      border: imagePreview ? "1.5px solid #D4A500" : "1.5px solid #E5E7EB",
+                      cursor: "pointer", color: imagePreview ? "#D4A500" : "#64748B",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                     }}
                   >
-                    <div className="pd3-action-top" style={{ marginBottom: 0 }}>
-                      <div className="pd3-action-icon" style={{ background: model.bg, color: model.color, width: 56, height: 56 }}>
-                        {model.icon}
-                      </div>
-                      <div className="pd3-action-arrow" style={{ opacity: 1, background: model.bg, color: model.color }}>
-                        <Icons.ArrowRight size={14} color={model.color} />
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 14 }}>
-                      <div className="pd3-action-label" style={{ fontSize: "1rem", color: model.color }}>{model.label}</div>
-                      <div style={{ fontSize: "0.7rem", color: "var(--txt3)", marginBottom: 8 }}>{model.fullName}</div>
-                      <div className="pd3-action-desc" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{model.desc}</div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {model.specialties.map(spec => (
-                          <span key={spec} className="pd3-badge" style={{ background: model.bg, color: model.color, border: "none" }}>{spec}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.button>
+                    <Icon.Image />
+                  </button>
+                  <button
+                    onClick={sendMessage}
+                    disabled={isLoading || (!inputText.trim() && !image)}
+                    style={{
+                      width: 44, height: 44, borderRadius: 12,
+                      background: (!inputText.trim() && !image) || isLoading
+                        ? "#F1F5F9"
+                        : "linear-gradient(135deg, #D4A500, #B8941E)",
+                      border: "none", cursor: "pointer",
+                      color: (!inputText.trim() && !image) || isLoading ? "#94A3B8" : "white",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    {isLoading ? <Icon.Loader /> : <Icon.Send />}
+                  </button>
+                </div>
+              </div>
+              <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+              <p style={{ fontSize: "0.65rem", color: "#94A3B8", margin: "8px 0 0", textAlign: "center" }}>
+                Entree pour envoyer - Shift+Entree pour nouvelle ligne - Formats image : JPG, PNG, WEBP
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* -- Choix du medecin -- */}
+        <AnimatePresence>
+          {step === "choose_doctor" && safeDoctors.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              style={{
+                background: "white", borderRadius: 24,
+                border: "1px solid #E5E7EB", padding: 28,
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  background: "rgba(212,165,0,0.1)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1.4rem", fontWeight: 700, color: "#D4A500",
+                }}>
+                  {modelConfig.icon}
+                </div>
+                <div>
+                  <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0A1628", margin: 0 }}>
+                    Choisissez votre medecin
+                  </h2>
+                  <p style={{ fontSize: "0.78rem", color: "#64748B", margin: "4px 0 0" }}>
+                    {safeDoctors.length} specialiste{safeDoctors.length > 1 ? "s" : ""} disponible{safeDoctors.length > 1 ? "s" : ""} - Tries par disponibilite
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, marginBottom: 20 }}>
+                {safeDoctors.map((doc, idx) => (
+                  <DoctorCard
+                    key={doc?.id || idx}
+                    doctor={doc}
+                    selected={safeSelectedDoctor}
+                    onSelect={setSelectedDoctor}
+                  />
                 ))}
               </div>
 
-              <div className="pd3-empty" style={{ marginTop: 24, padding: "16px 20px", background: "rgba(239,68,68,0.08)" }}>
-                <p style={{ fontSize: "0.75rem", color: "var(--danger)", margin: 0 }}>
-                  <strong>⚠️ Urgence médicale ?</strong> {LEGAL_INFO.emergencyDisclaimer}
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ÉTAPE 2 - Formulaire clinique */}
-        {step === 2 && selectedModel && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div className="pd3-metric" style={{ padding: 32 }}>
-              
-              {/* Badge modèle sélectionné */}
-              <div className="pd3-section-row" style={{ marginBottom: 24 }}>
-                <div className="pd3-section-row-title">
-                  <div className="pd3-action-icon" style={{ background: selectedModel.bg, color: selectedModel.color, width: 40, height: 40 }}>
-                    {selectedModel.icon}
-                  </div>
-                  <span style={{ color: selectedModel.color }}>{selectedModel.label}</span>
-                </div>
-                <button onClick={() => { setStep(1); setFile(null); setPreview(null); }} className="pd3-section-link" style={{ cursor: "pointer" }}>
-                  Changer ←
-                </button>
-              </div>
-
-              {/* Upload image */}
-              <div style={{ marginBottom: 28 }}>
-                <div className="pd3-section-row-title" style={{ marginBottom: 12 }}>
-                  <Icons.Upload size={16} color="var(--gold-dk)" />
-                  <span>Image médicale <span style={{ color: "var(--danger)" }}>*</span></span>
-                </div>
-                {!preview ? (
-                  <div
-                    onClick={() => fileRef.current?.click()}
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
-                    className="pd3-empty"
-                    style={{
-                      border: `2px dashed ${dragOver ? selectedModel.color : "var(--border)"}`,
-                      cursor: "pointer", transition: "all 0.2s"
-                    }}
+              <AnimatePresence>
+                {safeSelectedDoctor && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    style={{ overflow: "hidden" }}
                   >
-                    <input ref={fileRef} type="file" accept="image/jpeg,image/png" onChange={e => handleFile(e.target.files[0])} style={{ display: "none" }} />
-                    <div className="pd3-empty-icon" style={{ background: selectedModel.bg, width: 64, height: 64 }}>
-                      <Icons.Upload size={28} color={selectedModel.color} />
+                    <div style={{
+                      borderTop: "1px solid #F1F5F9", paddingTop: 20, marginTop: 4,
+                    }}>
+                      <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0A1628", marginBottom: 14 }}>
+                        Joignez votre image medicale *
+                      </h3>
+                      <p style={{ fontSize: "0.8rem", color: "#64748B", marginBottom: 14 }}>
+                        {safeRecommendation && (
+                          <>
+                            Pour l&apos;examen <strong>{safeRecommendation.model_name || ""}</strong>,
+                            veuillez joindre l&apos;image medicale correspondante.
+                          </>
+                        )}
+                      </p>
+
+                      {/* CORRECTION : Afficher l'image du chat si deja jointe */}
+                      {hasValidImage ? (
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 14px", background: "#EFF6FF",
+                          border: "1.5px solid #BFDBFE", borderRadius: 10,
+                          marginBottom: 14,
+                        }}>
+                          <Icon.Check />
+                          <span style={{ fontSize: "0.75rem", color: "#1E40AF" }}>
+                            <strong>{image.name}</strong> - Image medicale jointe lors du chat. Elle sera utilisee pour la consultation.
+                          </span>
+                        </div>
+                      ) : (
+                        <label style={{
+                          display: "flex", flexDirection: "column", alignItems: "center",
+                          justifyContent: "center", gap: 10, padding: "32px",
+                          border: "2px dashed #D4A500", borderRadius: 16,
+                          background: "rgba(212,165,0,0.03)", cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
+                          onMouseEnter={(e) => { if (e?.currentTarget) e.currentTarget.style.background = "rgba(212,165,0,0.08)"; }}
+                          onMouseLeave={(e) => { if (e?.currentTarget) e.currentTarget.style.background = "rgba(212,165,0,0.03)"; }}
+                        >
+                          <Icon.Stethoscope />
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontWeight: 600, color: "#0A1628", fontSize: "0.9rem" }}>
+                              Cliquez pour selectionner votre image
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: 4 }}>
+                              Formats acceptes : JPG, PNG, WEBP - Taille max : 5 Mo
+                            </div>
+                          </div>
+                          <input type="file" ref={chooseDoctorFileRef} accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+                        </label>
+                      )}
+
+                      {/* Afficher le preview si image disponible */}
+                      {imagePreview && (
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 16,
+                          padding: "16px 20px", background: "#F0FDF4",
+                          border: "1.5px solid #BBF7D0", borderRadius: 14,
+                          marginTop: 14,
+                        }}>
+                          <img src={imagePreview} alt="preview" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 10 }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, color: "#059669", fontSize: "0.85rem" }}>
+                              <Icon.Check /> Image prete a envoyer
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: 3 }}>{image?.name || "Image"}</div>
+                          </div>
+                          <button onClick={removeImage} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#EF4444", fontSize: "0.75rem", fontWeight: 600 }}>
+                            Changer
+                          </button>
+                        </div>
+                      )}
+
+                      <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setStep("confirm")}
+                        disabled={!image}
+                        style={{
+                          width: "100%", marginTop: 18,
+                          padding: "14px 24px", borderRadius: 14, border: "none",
+                          background: !image ? "#F1F5F9" : "linear-gradient(135deg, #D4A500, #B8941E)",
+                          color: !image ? "#94A3B8" : "white",
+                          fontSize: "0.9rem", fontWeight: 700, cursor: !image ? "not-allowed" : "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                        }}
+                      >
+                        Verifier et envoyer la demande -&gt;
+                      </motion.button>
                     </div>
-                    <div className="pd3-empty-title">Déposez votre image ici</div>
-                    <div className="pd3-empty-desc">ou cliquez pour parcourir</div>
-                    <div style={{ fontSize: "0.7rem", color: "var(--txt3)", marginTop: 8 }}>
-                      JPEG, PNG · Max 10 Mo · Min 300x300 px
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* -- Confirmation -- */}
+        <AnimatePresence>
+          {step === "confirm" && safeSelectedDoctor && safeRecommendation && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              style={{
+                background: "white", borderRadius: 24,
+                border: "1px solid #E5E7EB", padding: 28,
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+              }}
+            >
+              <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#0A1628", marginBottom: 20 }}>
+                Recapitulatif de votre demande
+              </h2>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", background: "#F8FAFC", borderRadius: 14, border: "1px solid #F1F5F9" }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: modelConfig.bg,
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", fontWeight: 700,
+                    color: modelConfig.color,
+                  }}>
+                    {modelConfig.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Examen recommande</div>
+                    <div style={{ fontWeight: 700, color: "#0A1628" }}>{safeRecommendation.model_name || ""}</div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Confiance : {Math.round((safeRecommendation.confidence || 0) * 100)}%</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", background: "#F8FAFC", borderRadius: 14, border: "1px solid #F1F5F9" }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: "rgba(10,38,71,0.08)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontWeight: 700, fontSize: "1.1rem", color: "#0A2647",
+                  }}>
+                    {String(safeSelectedDoctor.full_name || safeSelectedDoctor.name || "M").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Medecin selectionne</div>
+                    <div style={{ fontWeight: 700, color: "#0A1628" }}>
+                      Dr. {safeSelectedDoctor.full_name || safeSelectedDoctor.name || ""}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                      {safeSelectedDoctor.specialty || safeSelectedDoctor.specialite || ""}
                     </div>
                   </div>
-                ) : (
-                  <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--navy)" }}>
-                    <img src={preview} alt="Aperçu" style={{ width: "100%", maxHeight: 280, objectFit: "contain" }} />
-                    <div className="pd3-section-row" style={{ padding: 12, background: "var(--card)", borderTop: "1px solid var(--border)" }}>
-                      <div className="pd3-section-row-title">
-                        <span className="pd3-badge pd3-badge-analyzed">✓ Image chargée</span>
-                        {imageQuality && !imageQuality.isAdequate && (
-                          <span className="pd3-badge" style={{ background: "rgba(245,158,11,0.1)", color: "var(--warning)" }}>⚠️ {imageQuality.suggestions[0]}</span>
-                        )}
-                      </div>
-                      <button onClick={() => { setFile(null); setPreview(null); setImageQuality(null); }} className="pd3-section-link" style={{ color: "var(--danger)", cursor: "pointer" }}>
-                        Remplacer
-                      </button>
+                </div>
+
+                {imagePreview && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", background: "#F8FAFC", borderRadius: 14, border: "1px solid #F1F5F9" }}>
+                    <img src={imagePreview} alt="preview" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10 }} />
+                    <div>
+                      <div style={{ fontSize: "0.72rem", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Image medicale</div>
+                      <div style={{ fontWeight: 600, color: "#0A1628", fontSize: "0.85rem" }}>{image?.name || "Image"}</div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Formulaire clinique */}
-              <div style={{ marginBottom: 28 }}>
-                <div className="pd3-section-row-title" style={{ marginBottom: 12 }}>
-                  <Icons.Folder size={16} color="var(--gold-dk)" />
-                  <span>Données cliniques <span style={{ color: "var(--danger)" }}>*</span></span>
-                </div>
-                <div className="pd3-metrics-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <div style={{ gridColumn: "span 2" }}>
-                    <textarea
-                      value={symptoms}
-                      onChange={e => setSymptoms(e.target.value)}
-                      placeholder="Décrivez précisément vos symptômes..."
-                      rows={3}
-                      style={{
-                        width: "100%", padding: "12px 14px", border: "1.5px solid var(--border)",
-                        borderRadius: "var(--radius-md)", fontSize: "0.85rem", fontFamily: "inherit",
-                        resize: "vertical", outline: "none", background: "var(--bg)"
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={duration}
-                      onChange={e => setDuration(e.target.value)}
-                      placeholder="Durée (ex: 5 jours)"
-                      style={{
-                        width: "100%", padding: "12px 14px", border: "1.5px solid var(--border)",
-                        borderRadius: "var(--radius-md)", fontSize: "0.85rem", outline: "none",
-                        background: "var(--bg)"
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={medicalHistory}
-                      onChange={e => setMedicalHistory(e.target.value)}
-                      placeholder="Antécédents médicaux"
-                      style={{
-                        width: "100%", padding: "12px 14px", border: "1.5px solid var(--border)",
-                        borderRadius: "var(--radius-md)", fontSize: "0.85rem", outline: "none",
-                        background: "var(--bg)"
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={currentMedications}
-                      onChange={e => setCurrentMedications(e.target.value)}
-                      placeholder="Traitements en cours"
-                      style={{
-                        width: "100%", padding: "12px 14px", border: "1.5px solid var(--border)",
-                        borderRadius: "var(--radius-md)", fontSize: "0.85rem", outline: "none",
-                        background: "var(--bg)"
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={allergies}
-                      onChange={e => setAllergies(e.target.value)}
-                      placeholder="Allergies"
-                      style={{
-                        width: "100%", padding: "12px 14px", border: "1.5px solid var(--border)",
-                        borderRadius: "var(--radius-md)", fontSize: "0.85rem", outline: "none",
-                        background: "var(--bg)"
-                      }}
-                    />
-                  </div>
-                  <div style={{ gridColumn: "span 2" }}>
-                    <textarea
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      placeholder="Informations complémentaires..."
-                      rows={2}
-                      style={{
-                        width: "100%", padding: "12px 14px", border: "1.5px solid var(--border)",
-                        borderRadius: "var(--radius-md)", fontSize: "0.85rem", fontFamily: "inherit",
-                        resize: "vertical", outline: "none", background: "var(--bg)"
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Info modèle */}
-              <div className="pd3-health-card" style={{ marginBottom: 24, padding: 20, background: selectedModel.bg }}>
-                <div className="pd3-section-row-title" style={{ color: selectedModel.color, marginBottom: 10 }}>
-                  <span>📋</span> Pathologies détectables
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                  {selectedModel.pathologies.map(p => (
-                    <span key={p} className="pd3-badge" style={{ background: "white", color: selectedModel.color, border: `1px solid ${selectedModel.color}30` }}>{p}</span>
-                  ))}
-                </div>
-                <div style={{ fontSize: "0.7rem", color: selectedModel.color }}>
-                  <strong>⚠️ Critères d'urgence :</strong> {selectedModel.urgencyCriteria.join(", ")}
-                </div>
-              </div>
-
-              {/* Consentement */}
-              <div style={{ marginBottom: 24, padding: 16, background: "var(--bg)", borderRadius: "var(--radius-lg)" }}>
-                <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
-                  <input type="checkbox" checked={consentAccepted} onChange={e => setConsentAccepted(e.target.checked)} style={{ marginTop: 2 }} />
-                  <span style={{ fontSize: "0.8rem", color: "var(--txt2)" }}>
-                    J'accepte le traitement de mes données médicales conformément au RGPD et certifie l'exactitude des informations fournies.
-                  </span>
-                </label>
-                <small style={{ display: "block", marginTop: 8, fontSize: "0.65rem", color: "var(--txt3)" }}>{LEGAL_INFO.dataRetention}</small>
-              </div>
-
-              {/* Actions */}
               <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={() => setStep(1)} className="pd3-btn pd3-btn-outline" style={{ flex: 1, cursor: "pointer" }}>
-                  ← Retour
-                </button>
                 <button
-                  onClick={handleSubmit}
-                  disabled={!file || loading || !consentAccepted}
-                  className="pd3-btn pd3-btn-gold"
+                  onClick={() => setStep("choose_doctor")}
                   style={{
-                    flex: 2,
-                    background: (!file || !consentAccepted) ? "var(--border)" : selectedModel.gradient,
-                    opacity: (!file || !consentAccepted) ? 0.6 : 1,
-                    cursor: (!file || !consentAccepted) ? "not-allowed" : "pointer"
+                    flex: 1, padding: "12px 20px", borderRadius: 12,
+                    border: "1.5px solid #E5E7EB", background: "white",
+                    color: "#0A1628", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit",
                   }}
                 >
-                  {loading ? (
-                    <>⏳ Envoi en cours... {uploadProgress}%</>
-                  ) : (
-                    <>Soumettre la demande <Icons.ArrowRight size={16} color="var(--navy)" /></>
-                  )}
+                  &lt;- Modifier
                 </button>
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={submitConsultation}
+                  style={{
+                    flex: 2, padding: "12px 20px", borderRadius: 12,
+                    border: "none", background: "linear-gradient(135deg, #D4A500, #B8941E)",
+                    color: "white", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    fontFamily: "inherit",
+                  }}
+                >
+                  <Icon.Send />
+                  Envoyer la demande au medecin
+                </motion.button>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              {loading && uploadProgress > 0 && (
-                <div className="pd3-progress-bar" style={{ marginTop: 16 }}>
-                  <div className="pd3-progress-fill" style={{ width: `${uploadProgress}%`, background: selectedModel.color }} />
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+        {/* -- Envoi en cours -- */}
+        <AnimatePresence>
+          {step === "submitting" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{
+                background: "white", borderRadius: 24, border: "1px solid #E5E7EB",
+                padding: "48px 28px", textAlign: "center",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <Icon.Loader />
+              </div>
+              <h3 style={{ fontWeight: 700, color: "#0A1628", marginBottom: 8 }}>Envoi en cours...</h3>
+              <p style={{ color: "#64748B", fontSize: "0.85rem" }}>Votre demande est transmise au medecin.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* ÉTAPE 3 - Confirmation */}
-        {step === 3 && result && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}>
-            <div className="pd3-health-card" style={{ textAlign: "center", padding: 48, background: "var(--gradient-nav)" }}>
+        {/* -- Succes -- */}
+        <AnimatePresence>
+          {step === "done" && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              style={{
+                background: "linear-gradient(135deg, #ECFDF5, #D1FAE5)",
+                borderRadius: 24, border: "1.5px solid #6EE7B7",
+                padding: "40px 28px", textAlign: "center",
+                boxShadow: "0 4px 24px rgba(16,185,129,0.1)",
+              }}
+            >
               <div style={{
-                width: 80, height: 80, borderRadius: "50%", background: "rgba(16,185,129,0.15)",
-                border: "3px solid var(--success)", display: "flex", alignItems: "center",
-                justifyContent: "center", margin: "0 auto 24px"
+                width: 64, height: 64, borderRadius: "50%",
+                background: "#10B981", margin: "0 auto 20px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 8px 24px rgba(16,185,129,0.3)",
               }}>
-                <Icons.Check size={40} color="var(--success)" />
+                <Icon.Check />
               </div>
-              <h2 className="pd3-section-title" style={{ color: "white", marginBottom: 12 }}>Demande transmise avec succès !</h2>
-              <p style={{ color: "rgba(255,255,255,0.7)", marginBottom: 32 }}>Votre dossier médical a été enregistré. Un médecin spécialiste va analyser votre demande.</p>
-
-              <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: "var(--radius-lg)", padding: 20, marginBottom: 32, textAlign: "left" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                  <span style={{ color: "rgba(255,255,255,0.6)" }}>Référence dossier :</span>
-                  <strong style={{ color: "white" }}>#MED-{result.consultation_id}-{new Date().getFullYear()}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                  <span style={{ color: "rgba(255,255,255,0.6)" }}>Examen :</span>
-                  <strong style={{ color: "white" }}>{result.model?.label}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                  <span style={{ color: "rgba(255,255,255,0.6)" }}>Date d'envoi :</span>
-                  <strong style={{ color: "white" }}>{new Date().toLocaleString("fr-FR")}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0" }}>
-                  <span style={{ color: "rgba(255,255,255,0.6)" }}>Statut :</span>
-                  <span className="pd3-badge pd3-badge-pending">En attente d'assignation médicale</span>
-                </div>
-              </div>
-
-              <div style={{ textAlign: "left", marginBottom: 32 }}>
-                <h4 style={{ color: "white", fontWeight: 700, marginBottom: 12 }}>📌 Prochaines étapes</h4>
-                <ul style={{ marginLeft: 20, color: "rgba(255,255,255,0.7)", fontSize: "0.85rem", lineHeight: 1.8 }}>
-                  <li>Un médecin spécialiste examinera votre dossier sous 24-48h</li>
-                  <li>L'analyse IA sera déclenchée après acceptation médicale</li>
-                  <li>Vous recevrez une notification sur votre espace patient</li>
-                  <li>Un rendez-vous de consultation sera programmé selon l'urgence détectée</li>
-                </ul>
-              </div>
-
-              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                <button onClick={resetForm} className="pd3-btn pd3-btn-outline" style={{ background: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.2)", color: "white", cursor: "pointer" }}>
-                  Nouvelle demande
+              <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#065F46", marginBottom: 10 }}>
+                Demande envoyee avec succes !
+              </h2>
+              <p style={{ color: "#064E3B", fontSize: "0.9rem", marginBottom: 24, lineHeight: 1.6 }}>
+                Votre demande a ete transmise a <strong>Dr. {safeSelectedDoctor?.full_name || safeSelectedDoctor?.name || ""}</strong>.<br />
+                Vous serez notifie des qu&apos;il l&apos;accepte et commence l&apos;analyse.
+              </p>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => {
+                    const cid = createdConsultationId;
+                    if (cid) navigate(`/patient/consultation/${cid}`);
+                    else navigate("/patient");
+                  }}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12,
+                    background: "#059669", color: "white", border: "none",
+                    fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Voir mon dossier -&gt;
                 </button>
-                <button onClick={() => navigate("/patient")} className="pd3-btn pd3-btn-gold" style={{ cursor: "pointer" }}>
-                  Tableau de bord
+                <button
+                  onClick={() => navigate("/patient")}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12,
+                    background: "white", color: "#065F46",
+                    border: "1.5px solid #6EE7B7",
+                    fontWeight: 600, fontSize: "0.9rem", cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Retour au tableau de bord
                 </button>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* FOOTER */}
-      <footer className="hp-footer">
-        <div className="hp-footer-inner">
-          <div className="hp-footer-grid">
-            <div className="hp-footer-brand">
-              <div className="hp-nav-logo" style={{ marginBottom: 16 }}>
-                <div className="hp-logo-icon"><Icons.Lungs size={18} color="white" /></div>
-                <span style={{ color: "#fff" }}>Med<span style={{ color: "#FFD700" }}>AI</span></span>
-              </div>
-              <p>Plateforme médicale de diagnostic assisté par IA. Transformant la radiologie avec l'apprentissage profond depuis 2024.</p>
-              <div className="hp-footer-socials">{["LI", "TW", "GH", "YT", "IN"].map((s, i) => <div className="hp-footer-social" key={i}>{s}</div>)}</div>
-            </div>
-            <div><h4>PRODUIT</h4>{["Analyse IA", "Radiologues", "API Access", "Mobile App", "Tarifs"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
-            <div><h4>ENTREPRISE</h4>{["À propos", "Carrières", "Recherche", "Blog", "Contact"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
-            <div><h4>RESSOURCES</h4>{["Documentation", "Études de cas", "Whitepapers", "Support", "Statut"].map(x => <a className="hp-footer-link" href="#" key={x}>{x}</a>)}</div>
-          </div>
-          <div className="hp-footer-bottom">
-            <span>© 2025 MedAI — Plateforme médicale certifiée · Tous droits réservés</span>
-            <div className="hp-footer-bottom-links">{["Confidentialité", "Conditions", "Sécurité", "HIPAA", "RGPD", "Contact"].map(x => <a href="#" key={x}>{x}</a>)}</div>
-          </div>
-        </div>
-      </footer>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

@@ -328,7 +328,86 @@ class TransferCreate(BaseModel):
 # ROUTES CONSULTATIONS
 # ══════════════════════════════════════════════════════════════════
 
-# ── Patient : créer une demande ────────────────────────────────────
+# ── Patient : créer via chatbot (nouveau flux) ─────────────────────
+@router.post("/from-chatbot", status_code=201)
+async def create_consultation_from_chatbot(
+    model_key:     str        = Form(...),
+    doctor_id:     int        = Form(...),
+    patient_notes: str        = Form(""),
+    symptoms:      str        = Form(""),
+    file:          UploadFile = File(...),
+    current_user: dict        = Depends(get_current_user),
+):
+    """
+    Crée une consultation depuis le chatbot symptômes.
+    Le modèle IA est déterminé automatiquement par l'analyseur.
+    Le patient choisit un médecin parmi les recommandations.
+    L'image médicale est fournie par le patient.
+    """
+    if normalize_role(current_user.get("role", "")) not in ("Patient", "Administrateur"):
+        raise HTTPException(403, "Accès réservé aux patients.")
+    if model_key not in VALID_MODELS:
+        raise HTTPException(400, f"Modèle invalide. Valeurs: {VALID_MODELS}")
+
+    # Vérifier que le médecin choisi existe, est approuvé et a le bon domaine
+    doctor = fetch_one(
+        "SELECT id, full_name, domains, specialty FROM users WHERE id = %s AND role = 'Medecin' AND status = 'approved'",
+        (doctor_id,)
+    )
+    if not doctor:
+        raise HTTPException(404, "Médecin introuvable ou non disponible.")
+
+    # Vérifier que le médecin couvre ce domaine
+    doc_domains = doctor.get("domains", [])
+    if isinstance(doc_domains, str):
+        try:
+            doc_domains = json.loads(doc_domains)
+        except Exception:
+            doc_domains = []
+    if model_key not in doc_domains:
+        raise HTTPException(400, f"Ce médecin ne couvre pas le domaine '{model_key}'.")
+
+    # Sauvegarder l'image
+    ext      = Path(file.filename or "image.jpg").suffix or ".jpg"
+    filename = f"consult_{current_user['id']}_{int(datetime.now().timestamp())}{ext}"
+    dest     = UPLOADS_DIR / filename
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Construire les notes patient (symptômes + notes libres)
+    full_notes = symptoms
+    if patient_notes:
+        full_notes = f"{symptoms}\n\nNotes complémentaires : {patient_notes}" if symptoms else patient_notes
+
+    # Insérer en DB avec le médecin déjà assigné et statut 'pending'
+    row = execute(
+        """INSERT INTO consultations
+               (patient_id, doctor_id, model_key, image_path, patient_notes, status)
+           VALUES (%s, %s, %s, %s, %s, 'pending') RETURNING id""",
+        (current_user["id"], doctor_id, model_key, str(dest), full_notes),
+        returning=True
+    )
+    consult_id = row[0]
+
+    # Notifier UNIQUEMENT le médecin choisi
+    create_notification(
+        doctor_id, "new_consultation",
+        "Nouvelle demande de consultation",
+        f"{current_user['full_name']} vous a choisi pour une analyse "
+        f"({model_key.upper()}). Ref #{consult_id}",
+        {"consultation_id": consult_id}
+    )
+
+    return {
+        "message":         f"Demande envoyée au Dr. {doctor['full_name']}.",
+        "consultation_id": consult_id,
+        "doctor_name":     doctor["full_name"],
+        "doctor_specialty": doctor.get("specialty", ""),
+        "status":          "pending",
+    }
+
+
+# ── Patient : créer une demande (ancien flux conservé) ────────────
 @router.post("", status_code=201)
 async def create_consultation(
     model_key:     str        = Form(...),
@@ -336,6 +415,11 @@ async def create_consultation(
     file:          UploadFile = File(...),
     current_user: dict        = Depends(get_current_user),
 ):
+    """
+    Crée une consultation (flux direct avec image déjà disponible).
+    Notifie uniquement les médecins du bon domaine — sans choix de médecin.
+    Conservé pour compatibilité ascendante.
+    """
     if normalize_role(current_user.get("role", "")) not in ("Patient", "Medecin", "Administrateur"):
         raise HTTPException(403, "Accès refusé.")
     if model_key not in VALID_MODELS:
@@ -357,7 +441,7 @@ async def create_consultation(
     )
     consult_id = row[0]
 
-    # Notifier tous les médecins du bon domaine
+    # Notifier les médecins du bon domaine
     doctors = fetch_all(
         "SELECT id FROM users WHERE role='Medecin' AND status='approved' AND domains LIKE %s",
         (f'%"{model_key}"%',)

@@ -1830,14 +1830,7 @@ export default function PatientDashboard({ initialTab = "overview" }) {
       bg: "rgba(139,92,246,0.08)", 
       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg> 
     },
-    { 
-      label: "Téléconsultations", 
-      desc: "Appels à venir", 
-      path: "/patient/teleconsultation/upcoming", 
-      color: "#EF4444", 
-      bg: "rgba(239,68,68,0.08)", 
-      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="14" height="14" rx="2"/><polyline points="16 9 22 5 22 19 16 15"/></svg> 
-    },
+    
   ];
 
   const recent = (consultations || []).slice(0, 4);
@@ -2052,7 +2045,6 @@ export default function PatientDashboard({ initialTab = "overview" }) {
               { id:"results", label:"Résultats", icon:<I.Star size={16}/> },
               { id:"prescriptions", label:"Ordonnances", icon:<I.FileText size={16}/> },
               { id:"reminders", label:"Rappels", icon:<I.Clock size={16}/> },
-              { id:"upcoming_calls", label:"Appels", icon:<I.Video size={16}/> },
               { id:"messages", label:"Messages", icon:<I.Message size={16}/> },
             ].map(tab=>(
               <button key={tab.id} className={`pd3-tab ${activeTab===tab.id?"active":""}`} onClick={()=>setActiveTab(tab.id)}>
